@@ -176,20 +176,19 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_ct_gesys_schema);
 
-   /*  
-    console.log("\nmappedData - ge_ct");
+    console.log("\nSTART: mappedData - ge_ct\n");
     console.log(System.sme);
     console.log(mappedData);
     console.log(mappedData[mappedData.length - 1]); 
-    */
+    console.log("\nEND: mappedData - ge_ct\n");
 
     // ** End Parse
 
     // ** Begin Persist
 
-    // const query = pgp.helpers.insert(mappedData, pg_cs.log.ge.ge_ct_gesys);
+    const query = pgp.helpers.insert(mappedData, pg_cs.log.ge.ge_ct_gesys);
 
-    // await db.any(query);
+    await db.any(query);
 
     // ** End Persist
 

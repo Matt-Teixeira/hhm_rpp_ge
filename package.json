@@ -4,9 +4,19 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "ge_ct": "node index.js GE_CT",
+    "ge_cv": "node index.js GE_CV",
+    "ge_mri": "node index.js GE_MRI"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "luxon": "^3.6.1",
+    "pg-promise": "^11.13.0",
+    "pm2": "^6.0.5",
+    "redis": "^4.7.0",
+    "uuid": "^11.1.0"
+  }
 }

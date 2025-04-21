@@ -4,7 +4,7 @@ const { ge_regex } = require("../../parse/parsers");
 const mapDataToSchema = require("../../persist/map-data-to-schema");
 const { ge_ct_gesys_schema } = require("../../persist/pg-schemas");
 const generateDateTime = require("../../processing/generateDateTimes");
-const extract = require("../../processing/ge_ct/extract_metadata");
+const extract_tube_usage = require("../../processing/ge_ct/extract-tube_usage");
 const { build_upsert_str } = require("../../tooling");
 const { pg_column_sets: pg_cs } = require("../../utils/db/sql/pg-helpers_hhm");
 
@@ -176,11 +176,13 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_ct_gesys_schema);
 
+    /*     
     console.log("\nSTART: mappedData - ge_ct\n");
     console.log(System.sme);
     console.log(mappedData);
-    console.log(mappedData[mappedData.length - 1]); 
+    console.log(mappedData[mappedData.length - 1]);
     console.log("\nEND: mappedData - ge_ct\n");
+     */
 
     // ** End Parse
 
@@ -207,10 +209,10 @@ async function ge_ct_gesys(System, capture_datetime) {
     );
 
     // await System.push_file_dt_queue(System.run_log, file_metadata);
-
+    
     // Insert metadata
     if (extraction_data.length > 0)
-      await extract(System.job_id, extraction_data, System.run_log);
+      await extract_tube_usage(System.job_id, extraction_data, System.run_log);
 
     // Update Redis Cache
     await System.updateRedisFileSize();

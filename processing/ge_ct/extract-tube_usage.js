@@ -7,11 +7,11 @@ const {
 } = require("../../utils/logger/enums");
 const { pg_column_sets: pg_cs } = require("../../utils/db/sql/pg-helpers_hhm");
 
-async function extract(job_id, extraction_data, run_log) {
+async function extract_tube_usage(job_id, extraction_data, run_log) {
   let note = {
     job_id
   };
-  await addLogEvent(I, run_log, "extract", cal, note, null);
+  await addLogEvent(I, run_log, "extract_tube_usage", cal, note, null);
   const data = [];
   try {
     const scan_seconds_re =
@@ -45,8 +45,8 @@ async function extract(job_id, extraction_data, run_log) {
       sme: data[0].system_id
     };
     console.log(error);
-    await addLogEvent(E, run_log, "extract", cat, note, error);
+    await addLogEvent(E, run_log, "extract_tube_usage", cat, note, error);
   }
 }
 
-module.exports = extract;
+module.exports = extract_tube_usage;

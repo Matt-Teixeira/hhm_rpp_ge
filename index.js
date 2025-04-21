@@ -2,7 +2,7 @@
 require("dotenv").config();
 
 // PARSEING JOBS
-const { ge_ct_parsers } = require("./jobs");
+const { ge_ct_parsers, ge_cv_parsers } = require("./jobs");
 
 // DATABASE
 const pgPool = require("./utils/db/pg-pool");
@@ -43,7 +43,7 @@ async function run_job(job_id, system, run_log) {
         await ge_ct_parsers(job_id, system, run_log);
         break;
       case "CV/IR":
-        // await ge_cv_parsers(job_id, system, run_log);
+        await ge_cv_parsers(job_id, system, run_log);
         break;
       default:
         break;

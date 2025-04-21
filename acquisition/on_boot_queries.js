@@ -62,7 +62,6 @@ const queries = {
       sys.manufacturer = 'GE'
       AND sys.modality = 'CV/IR'
       AND ac.run_group = 1
-      AND sys.id = 'SME00569'
   GROUP BY
       sys.id,
       ac.system_id,
@@ -96,6 +95,7 @@ const queries = {
       sys.manufacturer = 'GE'
       AND sys.modality = 'MRI'
       AND ac.run_group = 1
+      AND sys.id = 'SME01123'
   GROUP BY
       sys.id,
       ac.system_id,

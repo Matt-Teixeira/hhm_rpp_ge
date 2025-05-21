@@ -33,22 +33,6 @@ async function ge_mri_gesys(System, capture_datetime) {
 
     await System.getCurrentFileSize();
 
-    const last_mod = (
-      await System.getLastModifiedTime(System.complete_file_path)
-    ).toISOString();
-
-    const file_metadata = {
-      system_id: System.sme,
-      file_name: System.file_config.file_name,
-      last_mod,
-      source: "hhm"
-    };
-
-    if (System.delta === 0) {
-      await System.push_file_dt_queue(System.run_log, file_metadata);
-      return;
-    }
-
     if (!System.current_file_size) return;
 
     await System.getFileData("read_file");

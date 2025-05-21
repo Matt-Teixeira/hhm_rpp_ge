@@ -207,8 +207,6 @@ async function ge_ct_gesys(System, capture_datetime) {
       note,
       null
     );
-
-    // await System.push_file_dt_queue(System.run_log, file_metadata);
     
     // Insert metadata
     if (extraction_data.length > 0)

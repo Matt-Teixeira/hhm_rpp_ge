@@ -59,6 +59,8 @@ async function on_boot() {
 
   let shell_value = [process.argv[2]];
 
+
+
   try {
     let note = {
       LOGGER: process.env.LOGGER,
@@ -89,7 +91,6 @@ async function on_boot() {
       await run_job(job_id, system, run_log);
     }
     // await dbInsertLogEvents(pgp, run_log);
-    console.log(run_log.log_events);
     await writeLogEvents(run_log);
   } catch (error) {
     console.log(error);

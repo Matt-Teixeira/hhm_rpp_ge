@@ -53,6 +53,9 @@ async function getCurrentFileSize(sme, exec_path, file_path, file, run_log) {
       exec_path,
       `${file_path}/${file}`
     );
+
+    console.log("\ncurrentFileSize ****** *****");
+    console.log(currentFileSize);
     redisClient.quit();
 
     // If file does not exist in dir, stdout returns new line character '\n'. Set size to null

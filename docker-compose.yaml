@@ -1,0 +1,71 @@
+# no "version" key
+
+x-common-env: &common_env
+# Load environment variables from .env in the project root
+  env_file:
+    - .env
+
+  # Allow containers to reach services on the host via this hostname
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  # Runtime env vars
+  environment:
+    # Don't write into root's $HOME inside the image; use a tmp home
+    HOME: /tmp
+
+    # Keep npm's cache ephemeral (avoids permission issues on bind mounts)
+    NPM_CONFIG_CACHE: /tmp/.npm
+
+x-common-mounts: &common_mounts
+  working_dir: /workspace
+  volumes:
+  # --- Bind mounts (host paths must exist) ---
+
+    # 1) Project source → live edit on host reflects in container
+    - ./:/workspace
+    
+    # 2) Cache node_modules on host (survives container removal)
+    - /opt/resources/node_mod_cache/dev/hhm_rpp_ge:/workspace/node_modules
+
+    # 3) Centralized run logs on host
+    - /opt/run-logs/hhm_rpp_ge:/opt/run-logs/hhm_rpp_ge
+
+    # 4) ACQ files from first app (READ ONLY)
+    - ${DATA_STORE_DEV}:${DATA_STORE_DEV}:ro
+
+# ---------- Services ----------
+services:
+  # Lightweight container for running the app as-is
+  app:
+    # Base Node image (moves with LTS). For reproducibility, consider pinning:
+    # image: node:22-bookworm (10/30/25)
+    image: node:lts
+
+    # Merge in common env + mounts
+    <<: [*common_env, *common_mounts]
+    networks:
+      - redis_net              # <-- attach to the external Redis network
+    environment:
+      # Prefer hostname over container IP
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: "${REDIS_PORT}"
+
+# Tooling container that has extra CLI deps baked in: build from docker/Dockerfile.runtime
+  app_tools:
+    image: utility-app_tools:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime # extends node:lts, adds lftp/rsync
+      args:
+        APP_UID: "${APP_UID}"
+        APP_GID: "${APP_GID}"
+    <<: [*common_env, *common_mounts]
+    networks:
+      - redis_net
+
+# Declare the external network from the Redis compose project
+networks:
+  redis_net:
+    external: true
+    name: redis-admin_redis_net   # <-- replace with the exact name you found

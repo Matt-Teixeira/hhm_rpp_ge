@@ -12,9 +12,11 @@ async function execReadFileSize(exec_path, file_path) {
       [file_path],
       execOptions
     );
+
+    console.log(newData);
     return newData;
   } catch (error) {
-    
+    console.log(error);
     return null;
   }
 }

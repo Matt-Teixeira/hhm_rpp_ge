@@ -2,10 +2,11 @@ const System = require("./System");
 const fsp = require("node:fs").promises;
 const fs = require("node:fs");
 const readline = require("readline");
+const path = require("path");
 const {
   getRedisFileSize,
   getCurrentFileSize,
-  updateRedisFileSize
+  updateRedisFileSize,
 } = require("../redis/redisHelpers");
 const { getLastModifiedTime } = require("../tooling");
 
@@ -18,6 +19,7 @@ class GE_CT_CV_MRI extends System {
   fileSizePath = "./read/sh/readFileSize.sh";
   tailPath = "./read/sh/tail.sh";
   lastModPath = "./read/sh/get_file_last_mod.sh";
+  data_acqu_path = process.env.DATA_STORE_DEV;
 
   prev_file_size;
   current_file_size;
@@ -33,7 +35,7 @@ class GE_CT_CV_MRI extends System {
     let note = {
       job_id: this.job_id,
       sme: this.sme,
-      file: this.file_config.file_name
+      file: this.file_config.file_name,
     };
     try {
       this.prev_file_size = await getRedisFileSize(
@@ -67,13 +69,18 @@ class GE_CT_CV_MRI extends System {
     let note = {
       job_id: this.job_id,
       sme: this.sme,
-      file: this.file_config.file_name
+      file: this.file_config.file_name,
     };
     try {
+      let acqu_path = `${this.data_acqu_path}/${this.sme}`;
+
+      console.log("\nACQU PATH: ");
+      console.log(acqu_path);
+
       this.current_file_size = await getCurrentFileSize(
         this.sme,
         this.fileSizePath,
-        this.sysConfigData.debian_server_path,
+        acqu_path, //this.sysConfigData.debian_server_path,
         this.file_config.file_name,
         this.run_log
       );
@@ -130,7 +137,7 @@ class GE_CT_CV_MRI extends System {
     let note = {
       job_id: this.job_id,
       sme: this.sme,
-      file: this.file_config.file_name
+      file: this.file_config.file_name,
     };
     try {
       if (this.current_file_size === null) {
@@ -156,7 +163,7 @@ class GE_CT_CV_MRI extends System {
       job_id: this.job_id,
       sme: this.sme,
       file: this.file_config.file_name,
-      delta: this.delta
+      delta: this.delta,
     };
     this.addLogEvent(
       this.I,
@@ -171,7 +178,7 @@ class GE_CT_CV_MRI extends System {
     let note = {
       job_id: this.job_id,
       sme: this.sme,
-      file: this.file_config.file_name
+      file: this.file_config.file_name,
     };
     try {
       await updateRedisFileSize(
@@ -197,9 +204,8 @@ class GE_CT_CV_MRI extends System {
     let note = {
       job_id: this.job_id,
       sme: this.sme,
-      file: this.file_config.file_name
+      file: this.file_config.file_name,
     };
-    console.log(note);
     await this.addLogEvent(
       this.I,
       this.run_log,
@@ -226,7 +232,7 @@ class GE_CT_CV_MRI extends System {
         if (type === "read_stream") {
           this.file_data = readline.createInterface({
             input: fs.createReadStream(this.complete_file_path),
-            crlfDelay: Infinity
+            crlfDelay: Infinity,
           });
         }
 
@@ -258,7 +264,7 @@ class GE_CT_CV_MRI extends System {
         if (this.delta === 0) {
           // Get file's last mod datetime
           const file_mod_datetime = await execLastMod(this.lastModPath, [
-            this.complete_file_path
+            this.complete_file_path,
           ]);
           note.message = `No new file data. Delta: ${this.delta}`;
           note.last_mod = file_mod_datetime;

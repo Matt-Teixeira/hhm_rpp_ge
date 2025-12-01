@@ -4,9 +4,9 @@ async function initRedis() {
   // SETUP ENV BASED RESOURCES -> REDIS CLIENT, JOB SCHEDULES
   const clienConfig = {
     socket: {
-      port: 6379,
-      host: process.env.REDIS_IP
-    }
+      port: process.env.REDIS_PORT,
+      host: process.env.REDIS_HOST,
+    },
   };
 
   const redisClient = redis.createClient(clienConfig);

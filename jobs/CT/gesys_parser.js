@@ -20,7 +20,7 @@ async function ge_ct_gesys(System, capture_datetime) {
   let note = {
     job_id: System.job_id,
     system_id: System.sme,
-    file: System.file_config.file_name
+    file: System.file_config.file_name,
   };
 
   try {
@@ -39,6 +39,11 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     await System.getCurrentFileSize();
 
+    console.log("\nSystem.current_file_size");
+    console.log(System.current_file_size);
+
+    return;
+
     if (!System.current_file_size) return;
 
     await System.getFileData("read_file");
@@ -51,7 +56,7 @@ async function ge_ct_gesys(System, capture_datetime) {
       system_id: System.sme,
       file_name: System.file_config.file_name,
       last_mod,
-      source: "hhm"
+      source: "hhm",
     };
 
     // LOG AND NOTE ZERO (0) delta
@@ -83,7 +88,7 @@ async function ge_ct_gesys(System, capture_datetime) {
         sme: System.sme,
         file: System.file_config.file_name,
         re: `${ge_regex.ct.gesys[parsers[0]]}`,
-        message: "NO MATCH FOUND - Big Group"
+        message: "NO MATCH FOUND - Big Group",
       };
       await System.addLogEvent(
         System.W,
@@ -108,7 +113,7 @@ async function ge_ct_gesys(System, capture_datetime) {
           sr_group: data[data.length - 1].sr,
           re: `${ge_regex.ct.gesys[parsers[1]]}`,
           message: "NO MATCH FOUND - Small Group",
-          file_data: match
+          file_data: match,
         };
         await System.addLogEvent(
           System.W,
@@ -146,7 +151,7 @@ async function ge_ct_gesys(System, capture_datetime) {
           time: matchGroups.groups.host_time,
           prev_epoch: data[data.length - 1].epoch,
           sr_group: data[data.length - 1].sr,
-          message: "datetime object null"
+          message: "datetime object null",
         };
         await System.addLogEvent(
           System.W,
@@ -169,7 +174,7 @@ async function ge_ct_gesys(System, capture_datetime) {
         extraction_data.push({
           system_id: matchGroups.groups.system_id,
           message: matchGroups.groups.message,
-          host_datetime: matchGroups.groups.host_datetime
+          host_datetime: matchGroups.groups.host_datetime,
         });
       }
     }
@@ -207,7 +212,7 @@ async function ge_ct_gesys(System, capture_datetime) {
       note,
       null
     );
-    
+
     // Insert metadata
     if (extraction_data.length > 0)
       await extract_tube_usage(System.job_id, extraction_data, System.run_log);

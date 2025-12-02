@@ -28,7 +28,7 @@ class GE_CT_CV_MRI extends System {
 
   constructor(sysConfigData, file_config, job_id, run_log) {
     super(sysConfigData, file_config, job_id, run_log);
-    this.complete_file_path = `${sysConfigData.debian_server_path}/${file_config.file_name}`;
+    this.complete_file_path = `${this.data_acqu_path}/${sysConfigData.id}/${file_config.file_name}`;
   }
 
   async getRedisFileSize() {
@@ -73,9 +73,6 @@ class GE_CT_CV_MRI extends System {
     };
     try {
       let acqu_path = `${this.data_acqu_path}/${this.sme}`;
-
-      console.log("\nACQU PATH: ");
-      console.log(acqu_path);
 
       this.current_file_size = await getCurrentFileSize(
         this.sme,

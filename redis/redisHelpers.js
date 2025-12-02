@@ -3,7 +3,7 @@ const initRedis = require("./index");
 const [addLogEvent] = require("../utils/logger/log");
 const {
   type: { I, W, E },
-  tag: { cal, det, cat, seq, qaf }
+  tag: { cal, det, cat, seq, qaf },
 } = require("../utils/logger/enums");
 
 async function updateRedisFileSize(sme, exec_path, file_path, file, run_log) {
@@ -54,8 +54,6 @@ async function getCurrentFileSize(sme, exec_path, file_path, file, run_log) {
       `${file_path}/${file}`
     );
 
-    console.log("\ncurrentFileSize ****** *****");
-    console.log(currentFileSize);
     redisClient.quit();
 
     // If file does not exist in dir, stdout returns new line character '\n'. Set size to null
@@ -134,7 +132,7 @@ async function getRedisLinePositions(sme, file, run_log) {
       await addLogEvent(W, run_log, "getRedisLinePositions", det, note, null);
       return {
         eal: null,
-        events: null
+        events: null,
       };
     }
 
@@ -151,13 +149,13 @@ async function updateRedisLinePositions(sme, file, eal, events) {
     sme,
     file,
     eal,
-    events
+    events,
   };
   const redisClient = await initRedis();
   try {
     let testData = {
       eal,
-      events
+      events,
     };
 
     testData = JSON.stringify(testData);
@@ -196,7 +194,7 @@ async function get_file_dt_queue(run_log) {
       "lrange",
       "file_dt:queue",
       "0",
-      "1000"
+      "1000",
     ]);
     await redisClient.quit();
     const data = [];
@@ -230,5 +228,5 @@ module.exports = {
   updateRedisLinePositions,
   getRedisLinePositions,
   get_file_dt_queue,
-  clear_file_dt_queue
+  clear_file_dt_queue,
 };

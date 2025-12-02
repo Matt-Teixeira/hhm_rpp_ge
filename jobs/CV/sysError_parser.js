@@ -19,7 +19,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
   let note = {
     job_id: System.job_id,
     system_id: System.sme,
-    file: System.file_config.file_name
+    file: System.file_config.file_name,
   };
 
   try {
@@ -67,7 +67,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
           system_id: System.sme,
           message: "NO MATCH FOUND",
           line_num,
-          line_data: line
+          line_data: line,
         };
         await System.addLogEvent(
           System.W,
@@ -92,7 +92,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
             system_id: System.sysConfigData.id,
             line: line,
             re: `${ge_regex.cv[parsers[0]]}`,
-            message: "NO MATCH FOUND"
+            message: "NO MATCH FOUND",
           };
           await System.addLogEvent(
             System.W,
@@ -125,7 +125,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
             system_id: System.sme,
             line: line,
             match_group: matches.groups,
-            message: "datetime object null"
+            message: "datetime object null",
           };
           await System.addLogEvent(
             System.W,
@@ -151,12 +151,13 @@ async function ge_cv_sys_error(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_cv_syserror_schema);
 
-    /* 
-    console.log("\nmappedData - ge_cv");
-    console.log(System.sme);
+    /*
+    console.log("\nSTART: mappedData - ge_cv\n");
+    console.log(`Length for ${System.sme}: ${mappedData.length - 1}`);
+    console.log(mappedData[0]);
     console.log(mappedData[mappedData.length - 1]);
-    console.log(mappedData);
-   */
+    console.log("\nEND: mappedData - ge_cv\n"); 
+  */
 
     // ** End Parse
 
@@ -195,7 +196,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
     console.log(error);
     let note = {
       job_id: System.job_id,
-      system_id: System.sysConfigData.id
+      system_id: System.sysConfigData.id,
     };
     await System.addLogEvent(
       System.E,

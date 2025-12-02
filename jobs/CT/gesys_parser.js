@@ -39,11 +39,6 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     await System.getCurrentFileSize();
 
-    console.log("\nSystem.current_file_size");
-    console.log(System.current_file_size);
-
-    return;
-
     if (!System.current_file_size) return;
 
     await System.getFileData("read_file");
@@ -181,13 +176,13 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_ct_gesys_schema);
 
-    /*     
+    /* 
     console.log("\nSTART: mappedData - ge_ct\n");
-    console.log(System.sme);
-    console.log(mappedData);
+    console.log(`Length for ${System.sme}: ${mappedData.length - 1}`);
+    console.log(mappedData[0]);
     console.log(mappedData[mappedData.length - 1]);
-    console.log("\nEND: mappedData - ge_ct\n");
-     */
+    console.log("\nEND: mappedData - ge_ct\n"); 
+    */
 
     // ** End Parse
 

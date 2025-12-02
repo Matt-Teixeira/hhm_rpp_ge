@@ -14,7 +14,7 @@ async function ge_mri_gesys(System, capture_datetime) {
   const data = [];
 
   let note = {
-    job_id: System.job_id
+    job_id: System.job_id,
   };
 
   try {
@@ -52,7 +52,7 @@ async function ge_mri_gesys(System, capture_datetime) {
         sme: System.sme,
         file: System.file_config.file_name,
         re: `${ge_regex.mri.gesys[parsers[0]]}`,
-        message: "NO MATCH FOUND"
+        message: "NO MATCH FOUND",
       };
       await System.addLogEvent(
         System.W,
@@ -77,7 +77,7 @@ async function ge_mri_gesys(System, capture_datetime) {
           sr_group: data[data.length - 1].sr,
           re: `${ge_regex.mri.gesys[parsers[1]]}`,
           message: "NO MATCH FOUND - Small Group",
-          file_data: match
+          file_data: match,
         };
         await System.addLogEvent(
           System.W,
@@ -111,7 +111,7 @@ async function ge_mri_gesys(System, capture_datetime) {
         let note = {
           job_id: System.job_id,
           sme: System.sysConfigData.id,
-          message: "datetime object null"
+          message: "datetime object null",
         };
         await System.addLogEvent(
           System.W,
@@ -130,12 +130,14 @@ async function ge_mri_gesys(System, capture_datetime) {
     }
 
     const mappedData = mapDataToSchema(data, ge_mri_gesys_schema);
-    /* 
-    console.log("\nmappedData - ge_mri");
-    console.log(System.sme);
+
+    /*
+    console.log("\nSTART: mappedData - ge_mri\n");
+    console.log(`Length for ${System.sme}: ${mappedData.length - 1}`);
+    console.log(mappedData[0]);
     console.log(mappedData[mappedData.length - 1]);
-    console.log(mappedData);
- */
+    console.log("\nEND: mappedData - ge_mri\n"); 
+  */
 
     // ** End Parse
 
@@ -174,7 +176,7 @@ async function ge_mri_gesys(System, capture_datetime) {
   } catch (error) {
     let note = {
       job_id: System.job_id,
-      sme: System.sysConfigData.id
+      sme: System.sysConfigData.id,
     };
     await System.addLogEvent(
       System.E,

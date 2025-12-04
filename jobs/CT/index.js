@@ -14,6 +14,8 @@ const ge_ct_parsers = async (job_id, sysConfigData, run_log) => {
     system_id: sysConfigData.id
   };
 
+  const data_acqu_path = process.env.DATA_STORE_DEV;
+
   try {
     await addLogEvent(I, run_log, "ge_ct_parsers", cal, note, null);
 
@@ -34,7 +36,7 @@ const ge_ct_parsers = async (job_id, sysConfigData, run_log) => {
 
       // SAVE LOG
 
-      let path = `${sysConfigData.debian_server_path}/${file.file_name}`;
+      let path = `${data_acqu_path}/${sysConfigData.id}/${file.file_name}`;
 
       await gzip_n_save(
         job_id,

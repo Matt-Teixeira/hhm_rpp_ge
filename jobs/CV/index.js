@@ -5,14 +5,15 @@ const { dt_now } = require("../../tooling/dates");
 const [addLogEvent] = require("../../utils/logger/log");
 const {
   type: { I, W, E },
-  tag: { cal, cat }
+  tag: { cal, cat },
 } = require("../../utils/logger/enums");
 
 const ge_cv_parsers = async (job_id, sysConfigData, run_log) => {
   let note = {
     job_id: job_id,
-    sme: sysConfigData.id
+    sme: sysConfigData.id,
   };
+  const data_acqu_path = process.env.DATA_STORE_DEV;
   try {
     await addLogEvent(I, run_log, "ge_cv_parsers", cal, note, null);
     for await (const file of sysConfigData.log_config) {
@@ -29,7 +30,7 @@ const ge_cv_parsers = async (job_id, sysConfigData, run_log) => {
 
       // SAVE LOG
 
-      let path = `${sysConfigData.debian_server_path}/${file.file_name}`;
+      let path = `${data_acqu_path}/${sysConfigData.id}/${file.file_name}`;
 
       await gzip_n_save(
         job_id,

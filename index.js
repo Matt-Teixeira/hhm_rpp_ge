@@ -16,11 +16,11 @@ const [
   addLogEvent,
   writeLogEvents,
   dbInsertLogEvents,
-  makeAppRunLog
+  makeAppRunLog,
 ] = require("./utils/logger/log");
 const {
   type: { I, W, E },
-  tag: { cal, det, cat, seq, qaf }
+  tag: { cal, det, cat, seq, qaf },
 } = require("./utils/logger/enums");
 
 // UTIL
@@ -29,7 +29,7 @@ const { v4: uuidv4 } = require("uuid");
 async function run_job(job_id, system, run_log) {
   let note = {
     job_id,
-    system_id: system.id
+    system_id: system.id,
   };
 
   try {
@@ -59,15 +59,13 @@ async function on_boot() {
 
   let shell_value = [process.argv[2]];
 
-
-
   try {
     let note = {
       LOGGER: process.env.LOGGER,
       REDIS_IP: process.env.REDIS_IP,
       PG_USER: process.env.PG_USER,
       PG_DB: process.env.PG_DB,
-      argv: process.argv
+      argv: process.argv,
     };
     await addLogEvent(I, run_log, "on_boot", cal, note, null);
 
@@ -90,12 +88,12 @@ async function on_boot() {
 
       await run_job(job_id, system, run_log);
     }
-    // await dbInsertLogEvents(pgp, run_log);
+    await dbInsertLogEvents(pgp, run_log);
     await writeLogEvents(run_log);
   } catch (error) {
     console.log(error);
     await addLogEvent(E, run_log, "on_boot", cat, null, error);
-    // await dbInsertLogEvents(pgp, run_log);
+    await dbInsertLogEvents(pgp, run_log);
     await writeLogEvents(run_log);
   }
 }

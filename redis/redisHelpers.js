@@ -21,15 +21,15 @@ async function updateRedisFileSize(sme, exec_path, file_path, file, run_log) {
     await redisClient.quit();
     return;
   } catch (error) {
+    console.log(error);
     await redisClient.quit();
     await addLogEvent(E, run_log, "execReadFileSize", cat, note, error);
   }
 }
 
 async function getRedisFileSize(sme, file, run_log) {
+  const redisClient = await initRedis();
   try {
-    const redisClient = await initRedis();
-
     const getKey = `${sme}.${file}`;
 
     let fileSize = await redisClient.get(getKey);
@@ -37,11 +37,11 @@ async function getRedisFileSize(sme, file, run_log) {
     if (fileSize === "") return null;
     // if key does not exitst in redis, null will be returned, otherwise a string will be returned.
     if (typeof fileSize === "string") fileSize = parseInt(fileSize);
-    redisClient.quit();
+    await redisClient.quit();
     return fileSize;
   } catch (error) {
+    await redisClient.quit();
     await addLogEvent(E, run_log, "getRedisFileSize", cat, note, error);
-    redisClient.quit();
   }
 }
 
@@ -54,7 +54,7 @@ async function getCurrentFileSize(sme, exec_path, file_path, file, run_log) {
       `${file_path}/${file}`
     );
 
-    redisClient.quit();
+    await redisClient.quit();
 
     // If file does not exist in dir, stdout returns new line character '\n'. Set size to null
     if (currentFileSize === "\n") {
@@ -66,25 +66,24 @@ async function getCurrentFileSize(sme, exec_path, file_path, file, run_log) {
     return currentFileSize;
   } catch (error) {
     console.log(error);
-    await addLogEvent(E, run_log, "getCurrentFileSize", cat, note, error);
     await redisClient.quit();
+    await addLogEvent(E, run_log, "getCurrentFileSize", cat, note, error);
   }
 }
 
 async function passForProcessing(sme, array, run_log) {
   let note = { sme, array };
+  const redisClient = await initRedis();
   try {
-    const redisClient = await initRedis();
-
     const key = "dp:queue";
     for await (let datum of array) {
       await redisClient.sendCommand(["LPUSH", key, JSON.stringify(datum)]);
     }
 
-    redisClient.quit();
+    await redisClient.quit();
   } catch (error) {
+    await redisClient.quit();
     await addLogEvent(E, run_log, "passForProcessing", cat, note, error);
-    redisClient.quit();
   }
 }
 
@@ -101,8 +100,8 @@ async function getRedisLine(sme, file, run_log) {
     }
     return line;
   } catch (error) {
-    await addLogEvent(E, run_log, "getRedisLine", cat, note, error);
     await redisClient.quit();
+    await addLogEvent(E, run_log, "getRedisLine", cat, note, error);
   }
 }
 
@@ -115,8 +114,8 @@ async function updateRedisLine(sme, file, first_line, run_log) {
     await redisClient.quit();
     return;
   } catch (error) {
-    await addLogEvent(E, run_log, "updateRedisLine", cat, note, error);
     await redisClient.quit();
+    await addLogEvent(E, run_log, "updateRedisLine", cat, note, error);
   }
 }
 
@@ -139,8 +138,8 @@ async function getRedisLinePositions(sme, file, run_log) {
     line = JSON.parse(line);
     return line;
   } catch (error) {
-    await addLogEvent(E, run_log, "getRedisLinePositions", cat, note, error);
     await redisClient.quit();
+    await addLogEvent(E, run_log, "getRedisLinePositions", cat, note, error);
   }
 }
 
@@ -165,26 +164,10 @@ async function updateRedisLinePositions(sme, file, eal, events) {
     await redisClient.quit();
     return;
   } catch (error) {
+    await redisClient.quit();
     await addLogEvent(E, run_log, "updateRedisLinePositions", cat, note, error);
-    await redisClient.quit();
   }
 }
-
-/* 
-async function push_file_dt_queue(run_log, system) {
-  const redisClient = await initRedis();
-  try {
-    await redisClient.sendCommand([
-      "RPUSH",
-      "file_dt:queue",
-      JSON.stringify(system)
-    ]);
-    await redisClient.quit();
-  } catch (error) {
-    await addLogEvent(E, run_log, "push_file_dt_queue", cat, { system }, error);
-  }
-}
-  */
 
 async function get_file_dt_queue(run_log) {
   await addLogEvent(I, run_log, "get_file_dt_queue", cal, null, null);

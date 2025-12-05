@@ -55,9 +55,8 @@ async function run_job(job_id, system, run_log) {
 }
 
 async function on_boot() {
+  console.time("App Run Time");
   const run_log = await makeAppRunLog();
-
-  let shell_value = [process.argv[2]];
 
   try {
     let note = {
@@ -69,33 +68,56 @@ async function on_boot() {
     };
     await addLogEvent(I, run_log, "on_boot", cal, note, null);
 
-    let queryString = boot_queires[shell_value];
+    const shell_value = process.argv[2];
+    const queryString = boot_queires[shell_value];
 
     const systems = await pgPool.any(queryString);
 
-    // FOR DEV TESTING TO REACH DEV DATA_ACQU FILES @ /home/matt-teixeira/hep3/hhm_data_acquisition
     if (process.env.DEV_ENV === "dev") {
-      let dv_path = "/home/matt-teixeira/hep3/hhm_data_acquisition";
-      for (let system of systems) {
+      const dv_path = "/home/matt-teixeira/hep3/hhm_data_acquisition";
+      for (const system of systems) {
         system.debian_server_path = `${dv_path}/files/${system.id}`;
       }
     }
 
     console.log(systems);
 
-    for await (const system of systems) {
+    for (const system of systems) {
       const job_id = uuidv4();
-
       await run_job(job_id, system, run_log);
     }
+
     await dbInsertLogEvents(pgp, run_log);
     await writeLogEvents(run_log);
+
+    console.log("\n********** END **********");
+    console.timeEnd("App Run Time");
   } catch (error) {
     console.log(error);
     await addLogEvent(E, run_log, "on_boot", cat, null, error);
     await dbInsertLogEvents(pgp, run_log);
     await writeLogEvents(run_log);
+  } finally {
+    // close Postgres
+    try {
+      if (pgPool?.end) {
+        await pgPool.end();
+      }
+    } catch (e) {
+      console.error("Error closing pgPool:", e);
+    }
+
+    try {
+      if (pgp?.end) {
+        pgp.end();
+      }
+    } catch (e) {
+      console.error("Error closing pgp:", e);
+    }
+
+    process.exit()
   }
 }
+
 
 on_boot();

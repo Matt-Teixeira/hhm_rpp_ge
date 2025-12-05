@@ -181,7 +181,7 @@ class GE_CT_CV_MRI extends System {
       await updateRedisFileSize(
         this.sme,
         this.updateSizePath,
-        this.sysConfigData.debian_server_path,
+        `${this.data_acqu_path}/${this.sme}`,
         this.file_config.file_name,
         this.run_log
       );

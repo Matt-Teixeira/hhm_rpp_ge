@@ -3,13 +3,13 @@ const pgp = require("pg-promise")();
 const [addLogEvent] = require("../../utils/logger/log");
 const {
   type: { I, W, E },
-  tag: { cal, det, cat }
+  tag: { cal, det, cat },
 } = require("../../utils/logger/enums");
 const { pg_column_sets: pg_cs } = require("../../utils/db/sql/pg-helpers_hhm");
 
 async function extract_tube_usage(job_id, extraction_data, run_log) {
   let note = {
-    job_id
+    job_id,
   };
   await addLogEvent(I, run_log, "extract_tube_usage", cal, note, null);
   const data = [];
@@ -24,7 +24,7 @@ async function extract_tube_usage(job_id, extraction_data, run_log) {
           system_id: group.system_id,
           name: "scan_seconds",
           value: match.groups.scan_seconds,
-          host_datetime: group.host_datetime
+          host_datetime: group.host_datetime,
         });
       }
     }
@@ -42,7 +42,7 @@ async function extract_tube_usage(job_id, extraction_data, run_log) {
   } catch (error) {
     let note = {
       job_id,
-      sme: data[0].system_id
+      sme: data[0].system_id,
     };
     console.log(error);
     await addLogEvent(E, run_log, "extract_tube_usage", cat, note, error);

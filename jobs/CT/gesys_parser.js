@@ -43,17 +43,6 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     await System.getFileData("read_file");
 
-    const last_mod = (
-      await System.getLastModifiedTime(System.complete_file_path)
-    ).toISOString();
-
-    const file_metadata = {
-      system_id: System.sme,
-      file_name: System.file_config.file_name,
-      last_mod,
-      source: "hhm",
-    };
-
     // LOG AND NOTE ZERO (0) delta
     if (System.delta === 0) {
       note = { delta: System.delta };
@@ -176,13 +165,11 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_ct_gesys_schema);
 
-    /* 
     console.log("\nSTART: mappedData - ge_ct\n");
     console.log(`Length for ${System.sme}: ${mappedData.length - 1}`);
     console.log(mappedData[0]);
     console.log(mappedData[mappedData.length - 1]);
-    console.log("\nEND: mappedData - ge_ct\n"); 
-    */
+    console.log("\nEND: mappedData - ge_ct\n");
 
     // ** End Parse
 
@@ -222,6 +209,7 @@ async function ge_ct_gesys(System, capture_datetime) {
     const upsert_str = build_upsert_str(System.sme, resent_host_datetime);
 
     await db.any(upsert_str);
+    return;
   } catch (error) {
     console.log(error);
     await System.addLogEvent(

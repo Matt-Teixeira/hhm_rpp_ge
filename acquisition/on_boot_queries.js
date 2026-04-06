@@ -95,6 +95,7 @@ const queries = {
       sys.manufacturer = 'GE'
       AND sys.modality = 'MRI'
       AND ac.run_group = 1
+      AND sys.id = 'SME16339'
   GROUP BY
       sys.id,
       ac.system_id,

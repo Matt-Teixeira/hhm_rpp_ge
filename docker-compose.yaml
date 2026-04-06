@@ -26,7 +26,7 @@ x-common-mounts: &common_mounts
     - ./:/workspace
     
     # 2) Cache node_modules on host (survives container removal)
-    - /opt/resources/node_mod_cache/dev/hhm_rpp_ge:/workspace/node_modules
+    - /opt/resources/node_mod_cache/hhm_rpp_ge:/workspace/node_modules
 
     # 3) Centralized run logs on host
     - /opt/run-logs/hhm_rpp_ge:/opt/run-logs/hhm_rpp_ge
@@ -51,21 +51,28 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: "${REDIS_PORT}"
 
-# Tooling container that has extra CLI deps baked in: build from docker/Dockerfile.runtime
+# Reuse the util-hybride-ep image built by data_acquisition (gosu entrypoint)
   app_tools:
-    image: utility-app_tools:latest
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.runtime # extends node:lts, adds lftp/rsync
-      args:
-        APP_UID: "${APP_UID}"
-        APP_GID: "${APP_GID}"
+    image: util-hybride-ep:latest
     <<: [*common_env, *common_mounts]
+    volumes:
+      - ./:/workspace
+      - /opt/resources/node_mod_cache/hhm_rpp_ge:/workspace/node_modules
+      - /opt/run-logs/hhm_rpp_ge:/opt/run-logs/hhm_rpp_ge
+      - ${DATA_STORE_DEV}:${DATA_STORE_DEV}:ro
+      # Entrypoint lives here (/opt/resources/entrypoint.sh)
+      - /opt/resources:/opt/resources:ro
+    environment:
+      RUN_USER: ${RUN_USER}
+      NPM_CONFIG_CACHE: /tmp/.npm
     networks:
       - redis_net
+      - pg_net
 
-# Declare the external network from the Redis compose project
+# Declare external networks
 networks:
   redis_net:
     external: true
-    name: redis-admin_redis_net   # <-- replace with the exact name you found
+    name: redis-admin_redis_net
+  pg_net:
+    external: true

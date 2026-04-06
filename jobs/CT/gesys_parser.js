@@ -165,11 +165,13 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_ct_gesys_schema);
 
+    /*
     console.log("\nSTART: mappedData - ge_ct\n");
-    console.log(`Length for ${System.sme}: ${mappedData.length - 1}`);
+    console.log(`Length - ${System.sme}: ${mappedData.length - 1}`);
     console.log(mappedData[0]);
     console.log(mappedData[mappedData.length - 1]);
     console.log("\nEND: mappedData - ge_ct\n");
+    */
 
     // ** End Parse
 

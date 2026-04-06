@@ -73,15 +73,6 @@ async function on_boot() {
 
     const systems = await pgPool.any(queryString);
 
-    if (process.env.DEV_ENV === "dev") {
-      const dv_path = "/home/matt-teixeira/hep3/hhm_data_acquisition";
-      for (const system of systems) {
-        system.debian_server_path = `${dv_path}/files/${system.id}`;
-      }
-    }
-
-    console.log(systems);
-
     for (const system of systems) {
       const job_id = uuidv4();
       await run_job(job_id, system, run_log);
@@ -115,7 +106,7 @@ async function on_boot() {
       console.error("Error closing pgp:", e);
     }
 
-    process.exit()
+    process.exit();
   }
 }
 

@@ -131,13 +131,13 @@ async function ge_mri_gesys(System, capture_datetime) {
 
     const mappedData = mapDataToSchema(data, ge_mri_gesys_schema);
 
-    /*
+    
     console.log("\nSTART: mappedData - ge_mri\n");
     console.log(`Length for ${System.sme}: ${mappedData.length - 1}`);
     console.log(mappedData[0]);
     console.log(mappedData[mappedData.length - 1]);
     console.log("\nEND: mappedData - ge_mri\n"); 
-  */
+  
 
     // ** End Parse
 

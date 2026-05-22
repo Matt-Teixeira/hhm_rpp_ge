@@ -27,6 +27,7 @@ const queries = {
       sys.manufacturer = 'GE'
       AND sys.modality LIKE '%CT'
       AND ac.run_group = 1
+      AND sys.process_log IS TRUE
   GROUP BY
       sys.id,
       ac.system_id,
@@ -62,6 +63,7 @@ const queries = {
       sys.manufacturer = 'GE'
       AND sys.modality = 'CV/IR'
       AND ac.run_group = 1
+      AND sys.process_log IS TRUE
   GROUP BY
       sys.id,
       ac.system_id,
@@ -95,6 +97,7 @@ const queries = {
       sys.manufacturer = 'GE'
       AND sys.modality = 'MRI'
       AND ac.run_group = 1
+      AND sys.process_log IS TRUE
   GROUP BY
       sys.id,
       ac.system_id,

@@ -27,3 +27,9 @@ Siemens_Files
 capture_with_re.js
 
 configWriter/*.sql
+
+# IGNORE ALL LOGS
+logger/*-log.*
+
+# IGNORE ALL DIRS UNDER logger
+logger/*/

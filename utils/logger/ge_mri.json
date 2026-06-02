@@ -1,0 +1,262 @@
+[
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.334Z",
+        "type": "INFO",
+        "func": "on_boot",
+        "tag": "CALL",
+        "note": {
+            "LOGGER": "dev",
+            "argv": [
+                "/usr/local/bin/node",
+                "/workspace/index.js",
+                "GE_MRI"
+            ]
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.374Z",
+        "type": "INFO",
+        "func": "run_job",
+        "tag": "CALL",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "system_id": "SME21922"
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.374Z",
+        "type": "INFO",
+        "func": "ge_mri_parsers",
+        "tag": "CALL",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "sme": "SME21922"
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.402Z",
+        "type": "INFO",
+        "func": "ge_mri_gesys",
+        "tag": "CALL",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "number_of_rows": 233,
+            "first_row": {
+                "system_id": "SME21922",
+                "epoch": "1779110622",
+                "record_number_concurrent": "0",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "18",
+                "host_date": "18-May-2026",
+                "host_time": "13:23:42",
+                "year": "2026",
+                "message_number": "2218088",
+                "misc_param_2": "2",
+                "type": "GNSVLMR2\tifcc",
+                "data_1": "IfccScanMgr.cc",
+                "num_1": "748",
+                "server": null,
+                "task_id": null,
+                "task_epoc": null,
+                "object": null,
+                "exception_class": null,
+                "severity": null,
+                "function": null,
+                "psd": null,
+                "coil": null,
+                "scan": null,
+                "message": "Data Mining: IFCC failed to log data into the file DataMine.dat due to one of the following reasons: fopen, stat, malloc, file size.\n\r",
+                "sr": "236",
+                "en": "236",
+                "host_datetime": "2026-05-18T13:23:42.000-04:00",
+                "capture_datetime": "2026-05-20T11:17:37.374-04:00"
+            },
+            "last_row": {
+                "system_id": "SME21922",
+                "epoch": "1779272194",
+                "record_number_concurrent": "0",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "20",
+                "host_date": "20-May-2026",
+                "host_time": "10:16:34",
+                "year": "2026",
+                "message_number": "2218650",
+                "misc_param_2": "1",
+                "type": "GNSVLMR2\tscn",
+                "data_1": "RxManagerCB.c",
+                "num_1": "481",
+                "server": null,
+                "task_id": null,
+                "task_epoc": null,
+                "object": null,
+                "exception_class": null,
+                "severity": null,
+                "function": null,
+                "psd": null,
+                "coil": null,
+                "scan": null,
+                "message": "Scn: No of Successful Scan = 0 , No of Failed Scan = 0\n\r",
+                "sr": "156",
+                "en": "156",
+                "host_datetime": "2026-05-20T10:16:34.000-04:00",
+                "capture_datetime": "2026-05-20T11:17:37.374-04:00"
+            },
+            "message": "Successful Insert"
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.414Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getRedisFileSize",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "sme": "SME21922",
+            "file": "gesys_GNSVLMR2.log",
+            "prev_file_size": 14447197
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.434Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getCurrentFileSize",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "sme": "SME21922",
+            "file": "gesys_GNSVLMR2.log",
+            "current_file_size": 14494544
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.434Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getFileSizeDelta",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "sme": "SME21922",
+            "file": "gesys_GNSVLMR2.log",
+            "delta": 47347
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.434Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getFileData",
+        "tag": "CALL",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "sme": "SME21922",
+            "file": "gesys_GNSVLMR2.log",
+            "delta": 47347
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.434Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getFileData",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "sme": "SME21922",
+            "file": "gesys_GNSVLMR2.log",
+            "delta": 47347
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.559Z",
+        "type": "INFO",
+        "func": "ge_mri_gesys",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "509a8800-1bc7-4aca-87e1-cedd3ca21991",
+            "number_of_rows": 233,
+            "first_row": {
+                "system_id": "SME21922",
+                "epoch": "1779110622",
+                "record_number_concurrent": "0",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "18",
+                "host_date": "18-May-2026",
+                "host_time": "13:23:42",
+                "year": "2026",
+                "message_number": "2218088",
+                "misc_param_2": "2",
+                "type": "GNSVLMR2\tifcc",
+                "data_1": "IfccScanMgr.cc",
+                "num_1": "748",
+                "server": null,
+                "task_id": null,
+                "task_epoc": null,
+                "object": null,
+                "exception_class": null,
+                "severity": null,
+                "function": null,
+                "psd": null,
+                "coil": null,
+                "scan": null,
+                "message": "Data Mining: IFCC failed to log data into the file DataMine.dat due to one of the following reasons: fopen, stat, malloc, file size.\n\r",
+                "sr": "236",
+                "en": "236",
+                "host_datetime": "2026-05-18T13:23:42.000-04:00",
+                "capture_datetime": "2026-05-20T11:17:37.374-04:00"
+            },
+            "last_row": {
+                "system_id": "SME21922",
+                "epoch": "1779272194",
+                "record_number_concurrent": "0",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "20",
+                "host_date": "20-May-2026",
+                "host_time": "10:16:34",
+                "year": "2026",
+                "message_number": "2218650",
+                "misc_param_2": "1",
+                "type": "GNSVLMR2\tscn",
+                "data_1": "RxManagerCB.c",
+                "num_1": "481",
+                "server": null,
+                "task_id": null,
+                "task_epoc": null,
+                "object": null,
+                "exception_class": null,
+                "severity": null,
+                "function": null,
+                "psd": null,
+                "coil": null,
+                "scan": null,
+                "message": "Scn: No of Successful Scan = 0 , No of Failed Scan = 0\n\r",
+                "sr": "156",
+                "en": "156",
+                "host_datetime": "2026-05-20T10:16:34.000-04:00",
+                "capture_datetime": "2026-05-20T11:17:37.374-04:00"
+            },
+            "message": "Successful Insert"
+        }
+    },
+    {
+        "run_id": "844d256c-c6ef-4df4-a12a-f9717eaabca3",
+        "dt": "2026-05-20T15:17:37.781Z",
+        "type": "INFO",
+        "func": "dbInsertLogEvents",
+        "tag": "DETAILS",
+        "note": {
+            "txt": "DB INSERT SUCCESSFUL"
+        }
+    }
+]

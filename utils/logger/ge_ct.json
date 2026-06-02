@@ -1,0 +1,276 @@
+[
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.518Z",
+        "type": "INFO",
+        "func": "on_boot",
+        "tag": "CALL",
+        "note": {
+            "LOGGER": "dev",
+            "argv": [
+                "/usr/local/bin/node",
+                "/workspace/index.js",
+                "GE_CT"
+            ]
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.560Z",
+        "type": "INFO",
+        "func": "run_job",
+        "tag": "CALL",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "system_id": "SME20608"
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.560Z",
+        "type": "INFO",
+        "func": "ge_ct_parsers",
+        "tag": "CALL",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "system_id": "SME20608"
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.586Z",
+        "type": "INFO",
+        "func": "ge_ct_gesys",
+        "tag": "CALL",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "system_id": "SME20608",
+            "file": "gesys_PETCC.log",
+            "number_of_rows": 3667,
+            "first_row": {
+                "system_id": "SME20608",
+                "epoch": "1779109828",
+                "record_number_concurrent": "0",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "18",
+                "host_date": "18-May-2026",
+                "host_time": "13:10:28",
+                "year": "2026",
+                "message_number": "200109109",
+                "misc_param_2": "4",
+                "type": "PETCC\tscanRx",
+                "data_1": "UIRx.cxx",
+                "num_1": "12538",
+                "date_2": null,
+                "host": null,
+                "ermes_number": null,
+                "exception_class": null,
+                "severity": null,
+                "file": null,
+                "line_number": null,
+                "scan_type": null,
+                "warning": null,
+                "end_msg": null,
+                "message": "Start: Prospective Exam: 14524 : Protocol: 6.1\n",
+                "sr": "190",
+                "en": "190",
+                "host_datetime": "2026-05-18T13:10:28.000-04:00",
+                "capture_datetime": "2026-05-20T11:15:54.560-04:00"
+            },
+            "last_row": {
+                "system_id": "SME20608",
+                "epoch": "1779274278",
+                "record_number_concurrent": "7",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "20",
+                "host_date": "20-May-2026",
+                "host_time": "10:51:18",
+                "year": "2026",
+                "message_number": "200001830",
+                "misc_param_2": "4",
+                "type": "PETCC\tUNKNOWN",
+                "data_1": "../../source/ecommL_func.c",
+                "num_1": "107",
+                "date_2": null,
+                "host": null,
+                "ermes_number": null,
+                "exception_class": null,
+                "severity": null,
+                "file": null,
+                "line_number": null,
+                "scan_type": null,
+                "warning": null,
+                "end_msg": null,
+                "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_cross_reference.\n",
+                "sr": "206",
+                "en": "206",
+                "host_datetime": "2026-05-20T10:51:18.000-04:00",
+                "capture_datetime": "2026-05-20T11:15:54.560-04:00"
+            },
+            "message": "Successful Insert"
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.598Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getRedisFileSize",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "sme": "SME20608",
+            "file": "gesys_PETCC.log",
+            "prev_file_size": 1211647
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.613Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getCurrentFileSize",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "sme": "SME20608",
+            "file": "gesys_PETCC.log",
+            "current_file_size": 2292865
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.614Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getFileSizeDelta",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "sme": "SME20608",
+            "file": "gesys_PETCC.log",
+            "delta": 1081218
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.614Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getFileData",
+        "tag": "CALL",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "sme": "SME20608",
+            "file": "gesys_PETCC.log",
+            "delta": 1081218
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:54.614Z",
+        "type": "INFO",
+        "func": "GE_CT_CV_MRI: getFileData",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "sme": "SME20608",
+            "file": "gesys_PETCC.log",
+            "delta": 1081218
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:55.394Z",
+        "type": "INFO",
+        "func": "ge_ct_gesys",
+        "tag": "DETAILS",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12",
+            "system_id": "SME20608",
+            "file": "gesys_PETCC.log",
+            "number_of_rows": 3667,
+            "first_row": {
+                "system_id": "SME20608",
+                "epoch": "1779109828",
+                "record_number_concurrent": "0",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "18",
+                "host_date": "18-May-2026",
+                "host_time": "13:10:28",
+                "year": "2026",
+                "message_number": "200109109",
+                "misc_param_2": "4",
+                "type": "PETCC\tscanRx",
+                "data_1": "UIRx.cxx",
+                "num_1": "12538",
+                "date_2": null,
+                "host": null,
+                "ermes_number": null,
+                "exception_class": null,
+                "severity": null,
+                "file": null,
+                "line_number": null,
+                "scan_type": null,
+                "warning": null,
+                "end_msg": null,
+                "message": "Start: Prospective Exam: 14524 : Protocol: 6.1\n",
+                "sr": "190",
+                "en": "190",
+                "host_datetime": "2026-05-18T13:10:28.000-04:00",
+                "capture_datetime": "2026-05-20T11:15:54.560-04:00"
+            },
+            "last_row": {
+                "system_id": "SME20608",
+                "epoch": "1779274278",
+                "record_number_concurrent": "7",
+                "misc_param_1": "1",
+                "month": "May",
+                "day": "20",
+                "host_date": "20-May-2026",
+                "host_time": "10:51:18",
+                "year": "2026",
+                "message_number": "200001830",
+                "misc_param_2": "4",
+                "type": "PETCC\tUNKNOWN",
+                "data_1": "../../source/ecommL_func.c",
+                "num_1": "107",
+                "date_2": null,
+                "host": null,
+                "ermes_number": null,
+                "exception_class": null,
+                "severity": null,
+                "file": null,
+                "line_number": null,
+                "scan_type": null,
+                "warning": null,
+                "end_msg": null,
+                "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_cross_reference.\n",
+                "sr": "206",
+                "en": "206",
+                "host_datetime": "2026-05-20T10:51:18.000-04:00",
+                "capture_datetime": "2026-05-20T11:15:54.560-04:00"
+            },
+            "message": "Successful Insert"
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:55.394Z",
+        "type": "INFO",
+        "func": "extract_tube_usage",
+        "tag": "CALL",
+        "note": {
+            "job_id": "12189e0e-5e95-4488-aa95-ee56e106da12"
+        }
+    },
+    {
+        "run_id": "749e2bad-6cca-426b-bff9-f374d143780b",
+        "dt": "2026-05-20T15:15:55.475Z",
+        "type": "INFO",
+        "func": "dbInsertLogEvents",
+        "tag": "DETAILS",
+        "note": {
+            "txt": "DB INSERT SUCCESSFUL"
+        }
+    }
+]

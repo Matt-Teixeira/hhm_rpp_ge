@@ -4,6 +4,7 @@ node_modules/
 *.txt
 *.txe
 *.output
+*.crt
 
 node_modules/
 .env
@@ -13,7 +14,6 @@ db/backup/*.tar
 deltaStore
 *.pem
 test_data/
-utils/
 
 # Generated Files
 

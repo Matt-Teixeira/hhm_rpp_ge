@@ -1,0 +1,5 @@
+# IGNORE ALL LOGS
+logger/*-log.*
+
+# IGNORE ALL DIRS UNDER logger
+logger/*/

@@ -51,17 +51,17 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: "${REDIS_PORT}"
 
-# Reuse the util-hybride-ep image built by data_acquisition (gosu entrypoint)
+# Reduced app image (see docker/Dockerfile): baked gosu entrypoint, no
+# acquisition tooling (lftp/rsync/sshpass/mdbtools/expect) since this app
+# only reads ACQ files + talks to PG/Redis.
   app_tools:
-    image: util-hybride-ep:latest
+    image: hhm_rpp:staging
     <<: [*common_env, *common_mounts]
     volumes:
       - ./:/workspace
       - /opt/resources/node_mod_cache/hhm_rpp_ge:/workspace/node_modules
       - /opt/run-logs/hhm_rpp_ge:/opt/run-logs/hhm_rpp_ge
       - ${DATA_STORE_DEV}:${DATA_STORE_DEV}:ro
-      # Entrypoint lives here (/opt/resources/entrypoint.sh)
-      - /opt/resources:/opt/resources:ro
     environment:
       RUN_USER: ${RUN_USER}
       NPM_CONFIG_CACHE: /tmp/.npm

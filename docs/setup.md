@@ -9,6 +9,15 @@ git switch -c DEV_docker --track origin/DEV_docker
 git clone git@github.com:AvanteHS-RTT/utils.git
 # Switch to docker branch
 git switch -c DEV_docker --track origin/DEV_docker
+
+
+docker build -f docker/Dockerfile \
+  --build-arg DOCKER_GID=$(getent group docker | cut -d: -f3) \
+  --build-arg UID_0=$(id -u svc) \
+  --build-arg UID_1=$(id -u jonathan-pope) \
+  --build-arg UID_2=$(id -u matt-teixeira) \
+  -t hhm_rpp:staging .
+
 ```
 
 ## Run a job

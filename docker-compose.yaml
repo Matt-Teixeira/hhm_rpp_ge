@@ -55,7 +55,22 @@ services:
 # acquisition tooling (lftp/rsync/sshpass/mdbtools/expect) since this app
 # only reads ACQ files + talks to PG/Redis.
   app_tools:
-    image: hhm_rpp:staging
+    # This repo OWNS the shared `hhm_rpp` image, consumed as-is by
+    # hhm_rpp_philips and hhm_rpp_siemens (neither has a Dockerfile). It was
+    # previously built by hand and had no build stanza here, which is why a
+    # fresh host had no way to produce it. Build with:
+    #   docker compose build app_tools
+    image: hhm_rpp:${IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      # Host identity comes from .env so this file stays host-agnostic and the
+      # dev and staging branches can share it. See .env.example.
+      args:
+        DOCKER_GID: ${DOCKER_GID}
+        UID_0: ${UID_0}
+        UID_1: ${UID_1}
+        UID_2: ${UID_2}
     <<: [*common_env, *common_mounts]
     volumes:
       - ./:/workspace

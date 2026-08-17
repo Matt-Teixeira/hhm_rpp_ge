@@ -108,21 +108,43 @@ const dbInsertLogEvents = async (pgp, run_log) => {
 
     const note = { txt: "DB INSERT SUCCESSFUL" };
     addLogEvent(I, run_log, "dbInsertLogEvents", det, note, null);
+    return true;
   } catch (error) {
+    // FAIL LOUDLY: THIS ROW IS THE FLEET'S OBSERVABILITY PLANE. REPORT TO
+    // STDERR (CRON MAIL / docker logs) AND TELL THE CALLER IT FAILED SO THE
+    // RUN CANNOT EXIT 0 WHILE MONITORING IS BLIND. THE ERROR EVENT IS STILL
+    // APPENDED SO A SUBSEQUENT writeLogEvents CAPTURES IT ON DISK.
+    console.error(
+      `[logger] dbInsertLogEvents: insert into util.app_run_logs failed for run ${run_id}: ${
+        error.message || error
+      }`
+    );
     addLogEvent(E, run_log, "dbInsertLogEvents", cat, null, error);
+    return false;
   }
 };
 
 const writeLogEvents = async (run_log) => {
   const { log_events } = run_log;
 
-  try {
-    // WRITE LOGS TO DISK
-    write_stream.write(JSON.stringify(log_events));
-    write_stream.end();
-  } catch (error) {
-    console.log(`writeLogEvents ERROR`);
-  }
+  // EXPRESS/HTTP MODE NEVER OPENS A WRITE STREAM; NOTHING TO FLUSH.
+  if (!write_stream) return true;
+
+  // AWAIT THE STREAM'S finish/error SO THE PROCESS CANNOT EXIT BEFORE THE
+  // RUN LOG HITS DISK. STREAM ERRORS (EACCES ON /opt/run-logs, ENOSPC, ...)
+  // ARE ASYNC -- THE OLD SYNC try/catch NEVER SAW THEM. REPORT AND RETURN
+  // false INSTEAD OF SWALLOWING (OR CRASHING ON AN UNHANDLED 'error').
+  const ok = await new Promise((resolve) => {
+    write_stream.on("error", (error) => {
+      console.error(
+        `[logger] writeLogEvents: failed to write run log to ${path}: ${
+          error.message || error
+        }`
+      );
+      resolve(false);
+    });
+    write_stream.end(JSON.stringify(log_events), () => resolve(true));
+  });
 
   // PROVIDE BASIC DEV STATS
   if (process.env.LOGGER === "dev") {
@@ -132,6 +154,8 @@ const writeLogEvents = async (run_log) => {
     );
     console.log(`WROTE ${log_events.length} EVENTS TO DISK`);
   }
+
+  return ok;
 };
 
 const destroyAppRunLog = async (run_log) => {

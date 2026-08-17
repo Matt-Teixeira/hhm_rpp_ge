@@ -1,0 +1,8 @@
+# Deny-by-default build context (audit SEC-10).
+# The image build COPYs exactly one file from this repo: docker/entrypoint.sh.
+# Source code, .env, .git, logs, and data are bind-mounted at runtime and must
+# never enter the build context. If a future Dockerfile COPYs more, add
+# explicit !exceptions below — never delete the leading "*".
+*
+!docker/Dockerfile
+!docker/entrypoint.sh

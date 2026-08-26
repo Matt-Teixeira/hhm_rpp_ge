@@ -1,65 +1,17 @@
 # no "version" key
+#
+# ONE service on purpose. The legacy `app` service (stock node:lts, root,
+# HOME=/tmp, no pg_net) was deleted 2026-08-26: it could not reach Postgres
+# and existed only for the retired node_mod_cache warm-up.
 
-x-common-env: &common_env
-# Load environment variables from .env in the project root
-  env_file:
-    - .env
-
-  # Allow containers to reach services on the host via this hostname
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-
-  # Runtime env vars
-  environment:
-    # Don't write into root's $HOME inside the image; use a tmp home
-    HOME: /tmp
-
-    # Keep npm's cache ephemeral (avoids permission issues on bind mounts)
-    NPM_CONFIG_CACHE: /tmp/.npm
-
-x-common-mounts: &common_mounts
-  working_dir: /workspace
-  volumes:
-  # --- Bind mounts (host paths must exist) ---
-
-    # 1) Project source → live edit on host reflects in container
-    - ./:/workspace
-    
-    # 2) Cache node_modules on host (survives container removal)
-    - /opt/resources/node_mod_cache/hhm_rpp_ge:/workspace/node_modules
-
-    # 3) Centralized run logs on host
-    - /opt/run-logs/hhm_rpp_ge:/opt/run-logs/hhm_rpp_ge
-
-    # 4) ACQ files from first app (READ ONLY)
-    - ${DATA_STORE_DEV}:${DATA_STORE_DEV}:ro
-
-# ---------- Services ----------
 services:
-  # Lightweight container for running the app as-is
-  app:
-    # Base Node image (moves with LTS). For reproducibility, consider pinning:
-    # image: node:22-bookworm (10/30/25)
-    image: node:lts
-
-    # Merge in common env + mounts
-    <<: [*common_env, *common_mounts]
-    networks:
-      - redis_net              # <-- attach to the external Redis network
-    environment:
-      # Prefer hostname over container IP
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: "${REDIS_PORT}"
-
-# Reduced app image (see docker/Dockerfile): baked gosu entrypoint, no
-# acquisition tooling (lftp/rsync/sshpass/mdbtools/expect) since this app
-# only reads ACQ files + talks to PG/Redis.
+  # Runtime service AND owner of the shared image: hhm_rpp:${IMAGE_TAG} is
+  # built HERE (docker/Dockerfile — baked gosu entrypoint dropping to
+  # RUN_USER, default svc) and consumed as-is by hhm_rpp_philips and
+  # hhm_rpp_siemens (neither has a Dockerfile, on purpose). Dev trees build
+  # hhm_rpp:<username>; the release copy builds hhm_rpp:svc, and
+  # build-release.sh re-points the `staging` alias for un-migrated philips.
   app_tools:
-    # This repo OWNS the shared `hhm_rpp` image, consumed as-is by
-    # hhm_rpp_philips and hhm_rpp_siemens (neither has a Dockerfile). It was
-    # previously built by hand and had no build stanza here, which is why a
-    # fresh host had no way to produce it. Build with:
-    #   docker compose build app_tools
     image: hhm_rpp:${IMAGE_TAG}
     build:
       context: .
@@ -71,14 +23,30 @@ services:
         UID_0: ${UID_0}
         UID_1: ${UID_1}
         UID_2: ${UID_2}
-    <<: [*common_env, *common_mounts]
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    working_dir: /workspace
     volumes:
+      # 1) Project source → live edit on host reflects in container.
+      #    node_modules is IN-TREE (installed by build.sh as the host user),
+      #    so it rides along in this mount — no separate cache mount.
       - ./:/workspace
-      - /opt/resources/node_mod_cache/hhm_rpp_ge:/workspace/node_modules
-      - /opt/run-logs/hhm_rpp_ge:/opt/run-logs/hhm_rpp_ge
+
+      # 2) Run logs. Host destination is env-dependent; defaults to the DEV
+      #    path so a missing LOG_DIR fails safe (never writes /opt/run-logs).
+      - ${LOG_DIR:-./utils/logger/logs}:/workspace/utils/logger/logs
+
+      # 3) ACQ files (read-only). Same path on host and container because the
+      #    code builds absolute paths from DATA_STORE_DEV on both sides.
       - ${DATA_STORE_DEV}:${DATA_STORE_DEV}:ro
     environment:
-      RUN_USER: ${RUN_USER}
+      # Intentionally unset in .env: empty -> baked entrypoint defaults to svc
+      # (one place decides the production identity). Dev runs pass it on the
+      # command line. ':-' silences the compose WARN.
+      RUN_USER: ${RUN_USER:-}
+      # Keep npm's cache ephemeral (avoids permission issues on bind mounts)
       NPM_CONFIG_CACHE: /tmp/.npm
     networks:
       - redis_net

@@ -13,18 +13,17 @@ const makeAppRunLog = async () => {
 
   // EXPRESS HTTP APP ISN'T EPHERMAL
   if (process.env.APP_NAME !== "express-http") {
-    switch (process.env.RUN_ENV) {
-      case "dev":
-        path = `./utils/logger/${process.env.APP_NAME}-log.${process.env.LOGGER}.${run_id}.json`;
-        break;
+    // ALWAYS the container/dev-tree path. Where this lands on the HOST is the
+    // compose LOG_DIR mount's decision (dev tree by default, /opt/run-logs/
+    // <app> in a release via #RELEASE:LOG_DIR) — the code never switches on
+    // environment, so a missing LOG_DIR fails safe to the dev path.
+    // USER_ID tags the file (dev = username, release = svc).
+    const log_dir = "./utils/logger/logs";
+    path = `${log_dir}/${process.env.APP_NAME}-log.${process.env.USER_ID}.${run_id}.json`;
 
-      case "staging":
-        path = `/opt/run-logs/${process.env.APP_NAME}/${process.env.APP_NAME}-log.${process.env.LOGGER}.${run_id}.json`;
-        break;
-      default:
-        path = `/opt/run-logs/${process.env.APP_NAME}/${process.env.APP_NAME}-log.${process.env.LOGGER}.${run_id}.json`;
-        break;
-    }
+    // Covers non-Docker runs; in Docker the bind mount already exists (and
+    // build.sh pre-creates the host source so it is never root-owned).
+    fs.mkdirSync(log_dir, { recursive: true });
 
     write_stream = fs.createWriteStream(path, {
       flags: "a",
@@ -67,7 +66,7 @@ const addLogEvent = async (type, run_log, func, tag, note, err) => {
     log_event["err_msg"] = err.stack ? err.stack : err;
 
     // CONSOLE LOG ERROR TO DEV
-    if (process.env.LOGGER === "dev") {
+    if (process.env.LOGGER_MODE === "log_and_console") {
       console.log(log_event.err_msg);
     }
   }
@@ -147,7 +146,7 @@ const writeLogEvents = async (run_log) => {
   });
 
   // PROVIDE BASIC DEV STATS
-  if (process.env.LOGGER === "dev") {
+  if (process.env.LOGGER_MODE === "log_and_console") {
     console.log(`\nFIRST LOG EVENT: ${JSON.stringify(log_events[0])}`);
     console.log(
       `LAST LOG EVENT: ${JSON.stringify(log_events[log_events.length - 1])}\n`

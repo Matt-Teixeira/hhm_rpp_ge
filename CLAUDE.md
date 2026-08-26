@@ -1,17 +1,12 @@
 # CLAUDE.md
 
-> **MIGRATION IN PROGRESS (started 2026-08-26)** — aligning to the fleet
-> dev/release paradigm (`data_acquisition/docs/migration_CLAUDE.md` Part 1;
-> fourth app, after data_acquisition 2026-08-24, monday 2026-08-25,
-> hhm_rpp_siemens 2026-08-25). Until this banner comes off, sections below may
-> describe pre-migration state; each is corrected in the commit that changes
-> it. The live tree at `/opt/apps/hhm_rpp_ge` is **FROZEN** as of this commit —
-> all code work happens in the dev clone `~/apps/hhm_rpp_ge`, and production
-> cron keeps running the old code until `build-release.sh` replaces
-> `/opt/apps/hhm_rpp_ge` in one step. Migration checklist authority:
-> migration_CLAUDE.md **Part 3** (no rival checklist here, on purpose —
-> the old `docs/run.md`/`docs/setup.md` were deleted in this commit as
-> pre-paradigm rivals).
+> **Migrated to the fleet dev/release paradigm 2026-08-26** (fourth app, after
+> data_acquisition, monday, hhm_rpp_siemens). Conventions:
+> `data_acquisition/docs/migration_CLAUDE.md` Part 1. Dev clone:
+> `~/apps/hhm_rpp_ge`; `/opt/apps/hhm_rpp_ge` is build output produced ONLY by
+> `build-release.sh`. Cutover verified over two cron cycles (2026-08-26 13:15 +
+> 13:45 UTC: all three families, all `RELEASE_SHA=a957a59`, zero `dev-tree`,
+> warns in the pre-migration band).
 
 **hhm_rpp_ge** is a Node.js parser: it incrementally reads GE equipment log
 files (fetched to `/opt/resources/acqu_files/<SME>/` by data_acquisition every
@@ -48,20 +43,23 @@ Incremental mechanism: Redis key `<SME>.<file_name>` holds the last seen
 double-insert — cron entries must use `flock -n` (pre-migration entries do
 not; fixed at cutover).
 
-## Schedule (pre-migration, matt-teixeira's USER crontab — verbatim)
+## Schedule (matt-teixeira's USER crontab — hardened 2026-08-26)
 
 ```cron
-15,45 * * * * cd /opt/apps/hhm_rpp_ge && docker compose run --rm app_tools bash -lc "npm run ge_ct"
-15,45 * * * * cd /opt/apps/hhm_rpp_ge && docker compose run --rm app_tools bash -lc "npm run ge_cv"
-15,45 * * * * cd /opt/apps/hhm_rpp_ge && docker compose run --rm app_tools bash -lc "npm run ge_mri"
+15,45 * * * * sleep 0  && cd /opt/apps/hhm_rpp_ge && /usr/bin/flock -n /tmp/hhm_rpp_ge.ge_ct.lock  /usr/bin/docker compose run --rm -T app_tools node index.js GE_CT  >/opt/run-logs/hhm_rpp_ge/cron.ge_ct.out 2>&1
+15,45 * * * * sleep 20 && cd /opt/apps/hhm_rpp_ge && /usr/bin/flock -n /tmp/hhm_rpp_ge.ge_cv.lock  /usr/bin/docker compose run --rm -T app_tools node index.js GE_CV  >/opt/run-logs/hhm_rpp_ge/cron.ge_cv.out 2>&1
+15,45 * * * * sleep 40 && cd /opt/apps/hhm_rpp_ge && /usr/bin/flock -n /tmp/hhm_rpp_ge.ge_mri.lock /usr/bin/docker compose run --rm -T app_tools node index.js GE_MRI >/opt/run-logs/hhm_rpp_ge/cron.ge_mri.out 2>&1
 ```
 
-Per the fleet standing decision these entries STAY in the user crontab
-(consolidation into svc's crontab is data_acquisition BACKLOG 6f, a separate
-follow-up); at cutover they are hardened in place at the same cadence:
-absolute `/usr/bin/docker` + `/usr/bin/flock -n`, `-T`, direct
-`node index.js GE_*` argv (identical `argv[2]`, so ops-dashboard's job label
-is unaffected), bounded single-`>` `.out` files, small stagger.
+Cadence unchanged from the legacy entries (`:15,:45`, ~2 min after
+data_acquisition's `:00/:30` fetch completes). Direct `node index.js GE_*`
+argv keeps `argv[2]` identical to the old npm-run mapping, so ops-dashboard's
+job label is unaffected. `flock -n` because the Redis cursor advances after
+insert — overlap would double-insert. Per the fleet standing decision these
+entries STAY in the user crontab (consolidation into svc's crontab is
+data_acquisition BACKLOG 6f, a separate follow-up). The schedule is host
+configuration — changing a cadence needs no release. Pre-cutover backup:
+`~/cron-bk/user-crontab.bak-2026-08-26-pre-ge-cutover`.
 
 ## Exit-code / run-record contract (KEEP — consumers depend on it)
 
@@ -72,9 +70,10 @@ is unaffected), bounded single-`>` `.out` files, small stagger.
   regress to exit-0-on-failure.**
 - **Event 0's note shape is load-bearing**: ops-dashboard derives this app's
   job label from `verbose_log->0->'note'->'argv'->>2`. Do not reshape `argv`.
-- Run record: `util.app_run_logs` (app_name `hhm_rpp_ge`) + JSON file per run.
-  Pre-migration the file tag is the `LOGGER` env (`dev`); post-migration it is
-  `USER_ID` (your username in dev, `svc` in a release).
+- Run record: `util.app_run_logs` (app_name `hhm_rpp_ge`) + JSON file per run,
+  tagged by `USER_ID` (your username in dev, `svc` in a release). Rows before
+  2026-08-26 ~13:00 UTC carry the retired `LOGGER` tag (`dev`) in filenames
+  and no `RELEASE_SHA` in event 0 — that is history, not a bug.
 
 ## KNOWN WARTS (deliberate — do not "fix" casually; per-item sign-off to remove)
 

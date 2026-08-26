@@ -104,6 +104,38 @@ is unaffected), bounded single-`>` `.out` files, small stagger.
   (pg-pool returns before the CA branch). Kept: flipping to `verify-ca` later
   needs it in place.
 
+## Running
+
+```bash
+bash preflight-check.sh          # expect ZERO warnings
+bash build.sh                    # deps in-tree + dev log dir + builds hhm_rpp:<USER_ID>
+
+# Development — from the dev tree (~/apps/hhm_rpp_ge), as yourself
+RUN_USER=<you> docker compose run --rm app_tools node index.js GE_CT   # or GE_CV / GE_MRI
+
+# Production — from the release copy, RUN_USER omitted (entrypoint defaults to svc)
+cd /opt/apps/hhm_rpp_ge && docker compose run --rm app_tools node index.js GE_CT
+
+# Release (also re-points hhm_rpp:staging for philips — see build-release.sh)
+bash build-release.sh            # refuses on a dirty tree; stamps RELEASE_SHA
+```
+
+Run logs: dev → `./utils/logger/logs/`, release → `/opt/run-logs/hhm_rpp_ge/`
+(`hhm_rpp_ge-log.<USER_ID>.<run_id>.json`; read with `cat`, never open in an
+editor). A dev run is a REAL run: it advances the same Redis cursors and
+inserts into the same staging tables as production — time dev smokes away
+from the `:15/:45` cron ticks so two runs of one family never overlap.
+
+### Dev-phase verification (2026-08-26, pre-cutover)
+
+- preflight: 52 OK / 0 warnings / 0 errors.
+- Dev smoke `GE_CV` as matt-teixeira: success exit 0, 2 warns (normal band),
+  log in-tree tagged `matt-teixeira`, DB row `RELEASE_SHA=dev-tree`,
+  `/opt/run-logs/hhm_rpp_ge` untouched.
+- SIGTERM mid-run (`GE_CT`): both sinks flushed exactly once (1 DB row),
+  fatal `E_SIGNAL`, outcome failed, honest exit 1.
+- Clean-tree guard: untracked file → refusal, exit 1, `$DEST` untouched.
+
 ## Environment / secrets
 
 - `.env` is gitignored; `.env.example` is the tracked record of required keys.

@@ -92,7 +92,7 @@ else
             error ".env: $key is empty or missing"
         else
             case "$key" in
-                *PW*|*PASSWORD*|*SECRET*) ok ".env: $key set (masked)" ;;
+                *PW*|*PASSWORD*|*TOKEN*|*KEY*|*SECRET*) ok ".env: $key set (masked)" ;;
                 *) ok ".env: $key=$v" ;;
             esac
         fi

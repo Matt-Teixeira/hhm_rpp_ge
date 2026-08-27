@@ -18,11 +18,13 @@ long-running service.
 
 **This repo OWNS the shared image `hhm_rpp:<tag>`** (built from
 `docker/Dockerfile`), consumed as-is by hhm_rpp_philips and hhm_rpp_siemens —
-neither has a Dockerfile, on purpose. Migration plan for the tag (settled with
-the siemens migration 2026-08-25): dev builds tag `hhm_rpp:<username>`, the
-release builds `hhm_rpp:svc` and re-points the `staging` alias at the same
-image for un-migrated philips; siemens then flips its `IMAGE_TAG` to `svc` in
-one commit + re-release.
+neither has a Dockerfile, on purpose. Tag scheme (settled with the siemens
+migration 2026-08-25): dev builds tag `hhm_rpp:<username>`, the release builds
+`hhm_rpp:svc`, and all three consumers carry `IMAGE_TAG=svc` in their release
+`.env`s. The transitional `staging` alias (kept for philips until its
+2026-08-26 migration) was retired 2026-08-27: the re-tag step is gone from
+`build-release.sh` and the tag itself removed (`hhm_rpp:pre-ge-migration`
+remains the named rollback handle).
 
 ## Run arguments (job families)
 
@@ -115,7 +117,7 @@ RUN_USER=<you> docker compose run --rm app_tools node index.js GE_CT   # or GE_C
 # Production — from the release copy, RUN_USER omitted (entrypoint defaults to svc)
 cd /opt/apps/hhm_rpp_ge && docker compose run --rm app_tools node index.js GE_CT
 
-# Release (also re-points hhm_rpp:staging for philips — see build-release.sh)
+# Release
 bash build-release.sh            # refuses on a dirty tree; stamps RELEASE_SHA
 ```
 

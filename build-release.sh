@@ -7,9 +7,10 @@
 #
 # ONE ADDITION vs siemens: THIS repo owns the shared hhm_rpp image. Step 5's
 # build.sh runs against the transformed .env (IMAGE_TAG=svc), so it BUILDS
-# hhm_rpp:svc — and step 6 re-points the `staging` alias at that same image
-# for un-migrated hhm_rpp_philips (its cron runs hhm_rpp:staging every 30
-# min). REMOVE step 6 when philips migrates onto hhm_rpp:svc.
+# hhm_rpp:svc — the image philips and siemens also run (both carry
+# IMAGE_TAG=svc in their release .envs). The transitional `staging` alias
+# re-tag that lived here as step 6 was removed 2026-08-27, after philips'
+# migration left the alias with zero consumers.
 #
 # Flow:
 #   1. Clean-tree guard      — refuse to release a dirty tree (untracked counts)
@@ -17,7 +18,6 @@
 #   3. Transform .env        — apply #RELEASE:KEY=VALUE, strip markers
 #   4. Stamp RELEASE_SHA     — into the DEPLOYED .env only (idempotent)
 #   5. chown + build as svc  — hhm_rpp:svc image + in-tree node_modules
-#   6. Retag staging alias   — philips follows the same image (transitional)
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -160,15 +160,6 @@ sudo chmod 700 "$SVC_HOME"
 sudo -u "$RELEASE_USER" env HOME="$SVC_HOME" bash -c "cd '$DEST' && ./build.sh"
 
 sudo chown -R "${RELEASE_USER}:docker" "$DEST"
-
-# --- 6. Retag staging alias (TRANSITIONAL — remove when philips migrates) -----
-# hhm_rpp_philips still runs hhm_rpp:staging from its user-crontab entries.
-# Point that alias at the image just built so every consumer runs identical
-# bytes. The previously-tagged image is NOT deleted — it stays reachable by
-# ID for rollback (tag it by hand before the first release for a named
-# handle, e.g. hhm_rpp:pre-ge-migration).
-sudo -u "$RELEASE_USER" env HOME="$SVC_HOME" docker tag hhm_rpp:svc hhm_rpp:staging
-echo "==> staging alias re-pointed at hhm_rpp:svc (for un-migrated philips)"
 
 echo "==> release complete: $DEST  commit: $GIT_SHA  (image hhm_rpp:svc built here)"
 echo "    verify: grep '^RELEASE_SHA=' $DEST/.env ; (cd $DEST && bash preflight-check.sh)"

@@ -183,6 +183,39 @@ else
     fi
 fi
 
+# ----------------------------------------------- release currency (fleet-wide)
+# FLEET-FINDINGS §4.1: two sessions shipped a release believing it contained
+# work that existed only in the dev tree. Currency is a continuous property —
+# check it on every preflight, from either copy.
+section "Release currency"
+if [ -d .git ]; then
+    REL_DIR="/opt/apps/$(basename "$(pwd)")"
+    REL_SHA="$(grep '^RELEASE_SHA=' "$REL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"[:space:]")"
+    HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)"
+    if [ -z "$HEAD_SHA" ]; then
+        warn "cannot read git HEAD here — release currency not checked"
+    elif [ -z "$REL_SHA" ]; then
+        warn "no RELEASE_SHA at $REL_DIR/.env — release copy missing or never released"
+    elif [ "$(git rev-parse --quiet --verify "$REL_SHA^{commit}" 2>/dev/null)" = "$HEAD_SHA" ]; then
+        ok "release copy is current (RELEASE_SHA=$REL_SHA = HEAD)"
+        [ -n "$(git status --porcelain 2>/dev/null)" ] && info "note: this tree has uncommitted changes — they are in NO release"
+    else
+        BEHIND="$(git rev-list --count "$REL_SHA..HEAD" 2>/dev/null)"
+        if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ] 2>/dev/null; then
+            warn "release copy is $BEHIND commit(s) behind HEAD (RELEASE_SHA=$REL_SHA) — /opt/apps runs OLD code until build-release.sh"
+        else
+            warn "deployed RELEASE_SHA=$REL_SHA is not an ancestor of HEAD (rebase? branch switch?) — verify what /opt/apps is running"
+        fi
+    fi
+else
+    REL_SHA="$(env_val RELEASE_SHA)"
+    if [ -n "$REL_SHA" ]; then
+        ok "release copy stamped RELEASE_SHA=$REL_SHA"
+    else
+        error "no RELEASE_SHA in this .env — this copy was not produced by build-release.sh"
+    fi
+fi
+
 # ------------------------------------------------------------------ 8. summary
 section "Summary"
 echo "  $OKS ok, $WARNINGS warnings, $ERRORS errors"

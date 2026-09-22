@@ -15,20 +15,20 @@ function buildSsl() {
     return { rejectUnauthorized: false };
   }
 
-  // verify-ca / verify-full
-  const caPath = process.env.PG_SSL_PATH;
-  if (caPath) {
-    const resolved = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
-    if (fs.existsSync(resolved)) {
-      return { ca: fs.readFileSync(resolved, "utf8"), rejectUnauthorized: true };
-    } else {
-      console.warn(`[pg] PG_SSL_PATH not found at ${resolved}; falling back to 'require'.`);
-      return { rejectUnauthorized: false };
+  // verify-ca / verify-full — FAIL CLOSED: a verify mode without a readable CA
+  // is a configuration error, never a silent downgrade to an unverified
+  // connection (that would turn a typo into an unauthenticated TLS session).
+  if (mode === "verify-ca" || mode === "verify-full") {
+    const caPath = process.env.PG_SSL_PATH;
+    if (!caPath) {
+      throw new Error(`[pg] PG_SSLMODE=${mode} requires PG_SSL_PATH to be set`);
     }
-  } else {
-    console.warn("[pg] PG_SSLMODE=verify-* but PG_SSL_PATH not set; falling back to 'require'.");
-    return { rejectUnauthorized: false };
+    const resolved = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
+    // readFileSync throws if the path is missing/unreadable — exactly what we want.
+    return { ca: fs.readFileSync(resolved, "utf8"), rejectUnauthorized: true };
   }
+
+  throw new Error(`[pg] unknown PG_SSLMODE '${mode}' (use disable | require | verify-ca | verify-full)`);
 }
 
 // First process.env are mapped to docker instance params

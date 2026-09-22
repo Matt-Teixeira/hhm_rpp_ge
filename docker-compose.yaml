@@ -41,6 +41,10 @@ services:
       # 3) ACQ files (read-only). Same path on host and container because the
       #    code builds absolute paths from DATA_STORE_DEV on both sides.
       - ${DATA_STORE_DEV}:${DATA_STORE_DEV}:ro
+
+      # 4) PostgreSQL server certificate (read-only). PG_SSLMODE=verify-full
+      #    reads it at PG_SSL_PATH; the pool fails closed if it is missing.
+      - /opt/resources/ssl:/opt/resources/ssl:ro
     environment:
       # Intentionally unset in .env: empty -> baked entrypoint defaults to svc
       # (one place decides the production identity). Dev runs pass it on the

@@ -140,9 +140,12 @@ from the `:15/:45` cron ticks so two runs of one family never overlap.
 ## Environment / secrets
 
 - `.env` is gitignored; `.env.example` is the tracked record of required keys.
-- PG + Redis credentials come from root-only `/opt/resources/secrets/`; this
-  app **is registered** in the host rotation script
-  (`/opt/resources/scripts/rotate-envs-20260817.sh`), which rewrites BOTH
-  copies (`/opt/apps/hhm_rpp_ge/.env` and `~/apps/hhm_rpp_ge/.env`) by
-  matching the current value — both copies must keep values matching the
-  reference (verified matching 2026-08-26).
+- PostgreSQL: the app connects as its own role `hhm_rpp_ge_rw` (member of the
+  shared group `apps_rw`, not a superuser; server runbook 4.0.4). Its password lives
+  in root-only `/root/hhm_rpp_ge_rw_pw`. `pg_manage_v2/db/roles/apply-app-role.sh
+  hhm_rpp_ge` writes `PGUSER`/`PGPASSWORD` into the clone's `.env` (`--rotate` for
+  a new password, `--rollback` to go back to `postgres`); `build-release.sh` carries
+  them to `/opt/apps/hhm_rpp_ge/.env`. Never paste the password by hand.
+- Redis: the password is in root-only `/opt/resources/secrets/redis_auth.conf` and
+  is pasted into the clone's `.env` by hand. There is no rotation script on the dev
+  server; after any secret change, update the clone and release so both copies match.

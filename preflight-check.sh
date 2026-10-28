@@ -188,9 +188,21 @@ fi
 # work that existed only in the dev tree. Currency is a continuous property —
 # check it on every preflight, from either copy.
 section "Release currency"
+# RELEASE_AT (UTC, stamped by build-release.sh beside RELEASE_SHA) feeds the
+# orchestrator's release-drift view. Absent = released before the stamp existed.
+check_release_at() {
+    if [ -z "$1" ]; then
+        warn "no RELEASE_AT in the release .env — released before RELEASE_AT stamping; re-run build-release.sh"
+    elif echo "$1" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'; then
+        ok "release stamped RELEASE_AT=$1"
+    else
+        warn "malformed RELEASE_AT='$1' (want YYYY-MM-DDTHH:MM:SSZ) — was it edited by hand?"
+    fi
+}
 if [ -d .git ]; then
     REL_DIR="/opt/apps/$(basename "$(pwd)")"
     REL_SHA="$(grep '^RELEASE_SHA=' "$REL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"[:space:]")"
+    REL_AT="$(grep '^RELEASE_AT=' "$REL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"[:space:]")"
     HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)"
     if [ -z "$HEAD_SHA" ]; then
         warn "cannot read git HEAD here — release currency not checked"
@@ -207,10 +219,12 @@ if [ -d .git ]; then
             warn "deployed RELEASE_SHA=$REL_SHA is not an ancestor of HEAD (rebase? branch switch?) — verify what /opt/apps is running"
         fi
     fi
+    [ -n "$REL_SHA" ] && check_release_at "$REL_AT"
 else
     REL_SHA="$(env_val RELEASE_SHA)"
     if [ -n "$REL_SHA" ]; then
         ok "release copy stamped RELEASE_SHA=$REL_SHA"
+        check_release_at "$(env_val RELEASE_AT | tr -d "'\"[:space:]")"
     else
         error "no RELEASE_SHA in this .env — this copy was not produced by build-release.sh"
     fi

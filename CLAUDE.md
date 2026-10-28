@@ -118,8 +118,16 @@ RUN_USER=<you> docker compose run --rm app_tools node index.js GE_CT   # or GE_C
 cd /opt/apps/hhm_rpp_ge && docker compose run --rm app_tools node index.js GE_CT
 
 # Release
-bash build-release.sh            # refuses on a dirty tree; stamps RELEASE_SHA
+bash build-release.sh            # refuses on a dirty tree; stamps RELEASE_SHA + RELEASE_AT
 ```
+
+`RELEASE_SHA` and `RELEASE_AT` (UTC, `YYYY-MM-DDTHH:MM:SSZ`, for the
+orchestrator's release-drift view) are injected into the deployed `.env` by
+`build-release.sh` — never set them by hand; a dev `.env` has neither and dev
+runs log `RELEASE_SHA=dev-tree`. Only `RELEASE_SHA` goes into the boot
+`env_note`. Preflight warns when the release `.env` has `RELEASE_SHA` but no
+(or a malformed) `RELEASE_AT` — releases before 2026-10-28 have none; re-release
+to clear it. Verify a release: `grep -E '^RELEASE_(SHA|AT)=' /opt/apps/hhm_rpp_ge/.env`.
 
 Run logs: dev → `./utils/logger/logs/`, release → `/opt/run-logs/hhm_rpp_ge/`
 (`hhm_rpp_ge-log.<USER_ID>.<run_id>.json`; read with `cat`, never open in an

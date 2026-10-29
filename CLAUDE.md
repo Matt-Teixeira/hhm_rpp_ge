@@ -130,7 +130,7 @@ runs log `RELEASE_SHA=dev-tree`. Only `RELEASE_SHA` goes into the boot
 to clear it. Verify a release: `grep -E '^RELEASE_(SHA|AT)=' /opt/apps/hhm_rpp_ge/.env`.
 
 Run logs: dev → `./utils/logger/logs/`, release → `/opt/run-logs/hhm_rpp_ge/`
-(`hhm_rpp_ge-log.<USER_ID>.<run_id>.json`; read with `cat`, never open in an
+(`hhm_rpp_ge-log.<USER_ID>.<New York stamp>.json`; read with `cat`, never open in an
 editor). A dev run is a REAL run: it advances the same Redis cursors and
 inserts into the same staging tables as production — time dev smokes away
 from the `:15/:45` cron ticks so two runs of one family never overlap.

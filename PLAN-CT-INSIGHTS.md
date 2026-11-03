@@ -58,8 +58,11 @@ schema, rule registry per source), but nothing is built for them yet.
   - The first run after deploy has no stored header, so it behaves as
     before. The header is stored from then on.
 
-  Cleanup (§11.6) is approved, keeping the 49 rows referenced by
-  detections. It waits until the user confirms the fix is live in prod.
+  **Fix live in prod:** the 19:45 UTC CT run on 2026-11-03 wrote header
+  keys and inserted 456 rows with 0 duplicates.
+
+  **Cleanup done 2026-11-03 19:54 UTC** (§11.6). 154,945 duplicate rows
+  were deleted; the 49 rows referenced by detections were kept.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -651,7 +654,39 @@ By capture partition:
 
 SME00882, SME00875, SME21924 and SME11229 have none.
 
-### 11.6 Cleanup: approved 2026-11-03 (keep the 49 detection-referenced rows); runs after the user confirms the fix is live
+### 11.6 Cleanup: DONE 2026-11-03 19:54 UTC
+
+Run log (cutoff `2026-11-03T19:45:00Z`, the first run on the fixed
+parser):
+
+| Step | Time (UTC) | Result |
+|---|---|---|
+| Preview | 19:53 | 154,994 duplicates, 49 kept, 154,945 to delete; identical to the approved numbers |
+| Archive, dry run | 19:54 | 154,994 rows, rolled back |
+| Archive, `--apply` | 19:54 | `archive_log.ge_ct_gesys_dups_20261103`, 154,994 rows (49 flagged `referenced_by_detection`) |
+| Delete, dry run | 19:54 | all 7 partitions: pre-checks 0/0/0/0, deleted = expected, rolled back; table still 3,101,660 rows |
+| Delete, `--apply` | 19:54:55–59 | all 7 partitions committed, **154,945 rows deleted** |
+
+Deleted per partition:
+
+| Partition | Rows |
+|---|---|
+| 2026_05 | 40,231 |
+| 2026_06 | 27,406 |
+| 2026_07 | 28,455 |
+| 2026_08 | 23,927 |
+| 2026_09 | 19,824 |
+| 2026_10 | 11,508 |
+| 2026_11 | 3,594 |
+
+Verified afterwards:
+- `log.ge_ct_gesys` = 2,946,715 rows, exactly 3,101,660 − 154,945.
+- Remaining exact duplicates = 49, which are the kept rows.
+- All 358 gesys detections still resolve to a source row.
+- `verify`: 0 archived rows still in the log, 0 missing keepers.
+- Restore path: insert from the archive table (SQL in the tool header).
+
+Original plan (kept for the record):
 
 Tool: `maintenance/dedupe_ge_ct_gesys.js`. It has separate steps, uses
 typed confirmation, and runs as a dry run (BEGIN … ROLLBACK) unless

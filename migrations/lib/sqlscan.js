@@ -343,10 +343,25 @@ function parseTop(shape, line) {
     return { verb: "TRUNCATE" };
   }
   if ((m = RX.grant.exec(shape))) {
-    const tgt = m[2];
-    if (/IN\s+SCHEMA/i.test(shape) || /\bON\s+SCHEMA\b/i.test(shape)) {
-      if (normName(tgt) !== "insight") throw new ScanError(`${m[1]} on schema ${tgt}: only "insight"`, line);
-    } else requireAllowed(tgt, m[1].toUpperCase(), line);
+    // Check EVERY object in the list between ON and TO/FROM, not just the first.
+    const list = /\bON\s+(?:(?:TABLE|SEQUENCE|FUNCTION|SCHEMA|ALL\s+TABLES\s+IN\s+SCHEMA|ALL\s+SEQUENCES\s+IN\s+SCHEMA|ALL\s+FUNCTIONS\s+IN\s+SCHEMA)\s+)?(.+?)\s+(?:TO|FROM)\s/i.exec(shape);
+    if (!list) throw new ScanError(`${m[1]}: cannot find the object list`, line);
+    const isSchema = /IN\s+SCHEMA/i.test(shape) || /\bON\s+SCHEMA\b/i.test(shape);
+    let depth = 0, cur = "";
+    const items = [];
+    for (const ch of list[1]) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+      if (ch === "," && depth === 0) { items.push(cur.trim()); cur = ""; continue; }
+      cur += ch;
+    }
+    items.push(cur.trim());
+    for (const it of items) {
+      const nm = it.replace(/\(.*\)$/s, "").trim();
+      if (isSchema) {
+        if (normName(nm) !== "insight") throw new ScanError(`${m[1]} on schema ${nm}: only "insight"`, line);
+      } else requireAllowed(nm, m[1].toUpperCase(), line);
+    }
     return { verb: m[1].toUpperCase() };
   }
   if (/^(GRANT|REVOKE)\b/i.test(shape)) throw new ScanError("GRANT/REVOKE form not allowed (role membership changes are refused)", line);

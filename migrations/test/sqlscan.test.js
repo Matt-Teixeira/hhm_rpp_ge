@@ -65,6 +65,9 @@ test("refuses writes outside insight / api.ge_ct_*", () => {
   refuse("GRANT SELECT ON log.ge_ct_gesys TO public", /outside/);
   refuse("GRANT SELECT ON ALL TABLES IN SCHEMA log TO x", /only "insight"/);
   refuse("GRANT avantehs_admin TO someone", /not allowed/);
+  refuse("GRANT SELECT ON insight.a, log.ge_ct_gesys TO r", /outside/);
+  refuse("REVOKE ALL ON insight.a, public.systems FROM r", /outside/);
+  refuse("GRANT USAGE ON SCHEMA insight, log TO r", /only "insight"/);
   refuse("COMMENT ON TABLE log.ge_ct_gesys IS 'x'", /outside/);
 });
 
@@ -128,4 +131,8 @@ test("allows the expected insight / api.ge_ct_* forms", () => {
   allow("ALTER SEQUENCE insight.s OWNED BY insight.t.id");
   allow("COMMENT ON COLUMN insight.a.x IS 'x'");
   allow("GRANT SELECT ON api.ge_ct_x_v TO some_reader");
+  allow("GRANT SELECT, INSERT, UPDATE, DELETE ON insight.a, insight.b TO insight_writer");
+  allow("REVOKE ALL ON insight.a, insight.b FROM insight_writer");
+  allow("GRANT USAGE, SELECT ON SEQUENCE insight.s TO insight_writer");
+  allow("GRANT USAGE ON SCHEMA insight TO insight_writer");
 });

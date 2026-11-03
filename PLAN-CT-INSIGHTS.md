@@ -63,6 +63,8 @@ schema, rule registry per source), but nothing is built for them yet.
 
   **Cleanup done 2026-11-03 19:54 UTC** (§11.6). 154,945 duplicate rows
   were deleted; the 49 rows referenced by detections were kept.
+- **Phase 2 re-evaluated (§12); decisions made.** Work started: login
+  script, migration 003, then the rule registry.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -157,18 +159,20 @@ retired later once `fse_dispatch` moves over.
 All DDL lives in tracked migration files: `migrations/NNN_*.sql` in this
 repo. Applied to prod through the guarded runner in §10. Note that `.gitignore` ignores `utils/`
 wholesale, so **new code must not live under `utils/`** or it won't be
-versioned.
+versioned. Production is the non-docker `prod` branch on `vm-debian`
+(Node v16.20.2), promoted dev → staging → prod. The `*_docker` branches
+belong to a separate server.
 
 | Table | Grain / key | Purpose |
 |---|---|---|
 | `insight.metric_catalog` | `metric_key` | Label, unit, category (utilization / tube / reliability / compliance / environment / inventory), description, `customer_visible`, `rule_version`. Drives labels in every consumer. |
-| `insight.ge_ct_facts` | one row per (log record × metric). Unique `(system_id, epoch, rnc, metric_key, host_datetime)`. Monthly partitions on `host_datetime` (same convention as `alert.detections`). | Extracted values: `value_num`, `value_text`, `exam_no`, `attrs jsonb` (e.g. kV/mA, sensor L/C/R), `source_id` → gesys `id`. Idempotent upsert = free dedupe + safe re-runs. |
-| `insight.ge_ct_daily` | `(system_id, local_day, metric_key)` | n, sum, min, max, last. Day is **site-local** (`sites.time_zone_id`). Recomputed for touched days only. |
+| `insight.ge_ct_facts` | one row per (log record × metric). Unique `(system_id, epoch, rnc, metric_key, host_datetime)`. Monthly partitions on `host_datetime` (same convention as `alert.detections`), pre-created by migration through 2028‑12 (§12). | Extracted values: `value_num`, `value_text`, `exam_no`, `attrs jsonb` (e.g. kV/mA, sensor L/C/R), `host_local` (device wall clock), `source_id` → gesys `id`. The upsert is idempotent and replaces a fact only when the rule version is newer (§12). |
+| `insight.ge_ct_daily` | `(system_id, local_day, metric_key)` | n, sum, min, max, last. The day comes from the **device wall clock** (`host_local`), not `sites.time_zone_id`, which is NULL for 19 of 31 reporting systems (§12). Recomputed for touched days only. |
 | `insight.ge_ct_exams` | `(system_id, exam_no, started_at)` | One row per exam: first/last activity, series, scans, images, aborts during exam. Basis for per-exam rates. |
 | `insight.ge_ct_tube_segments` | `(system_id, segment_start)` | Tube lifetimes derived from the cumulative mA·s counter: start/latest mA·s, mA·s/day, readings, `ended_reason` (replacement). |
 | `insight.system_capabilities` | `(system_id, metric_key)` | first_seen, last_seen, n. Separates **"this model doesn't log it"** from **"zero events"**. Required for the model-specific metrics. |
 | `insight.findings` | `(system_id, finding_key, opened_at)` | status open/resolved, severity, window, observed vs baseline, `evidence jsonb` (fact ids, weekly series), `rule_version`, last_evaluated. |
-| `insight.job_state` | `job_name` | Watermark (last processed gesys `id`), last run stats. Run logs go to `util.app_run_logs` like the rest of the app. |
+| `insight.job_state` | `job_name` | Watermark (last processed gesys `id`), last run stats. This is the only DB-visible run record: on the production server (`vm-debian`) the app writes run logs to local JSON files, and `dbInsertLogEvents` is commented out in `index.js`. |
 | `insight.unmatched_templates` | `(process, template_hash)` | Weekly digest of high-volume message templates no rule matches, so new firmware wording gets noticed. |
 
 **Consumer contract = views in `api`** (schema already exists):
@@ -299,8 +303,8 @@ plumbing. Confirm with whoever owns the alert processor before wiring it.
 index.js              # on_boot(): after the system loop, if GE_CT → await run_ct_insight(run_log)
 insight/
   index.js            # run_ct_insight(run_log, opts): lock → extract → derive → findings → release
-  cli.js              # manual only: npm run ct_insight -- --backfill [--from-id N] [--system SME...]
-  db.js               # pool + column sets (NOT under utils/)
+  cli.js              # manual only: --backfill [--from-id N] [--system SME...] | --rebuild-metric KEY | --coverage
+  db.js               # own pool as insight_writer (INSIGHT_PG_USER/INSIGHT_PG_PW), NOT utils/db/pg-pool
   rules/ge_ct.js      # rule registry
   rules/__fixtures__/ # real message samples per rule
   extract.js          # stream gesys by id batches → match rules → upsert facts
@@ -309,7 +313,7 @@ insight/
   tube.js             # counter → segments, replacement detection
   capabilities.js
   findings.js         # rule evaluation, open/resolve
-  unmatched.js        # weekly template digest
+  unmatched.js        # template digest; also the Phase 2 --coverage report
   test/*.test.js      # node:test, no DB needed for rule tests
 migrations/
   001_insight_schema.sql
@@ -327,10 +331,25 @@ days that got new facts this run:
    digest, plus a findings pass over every system so quiet systems can
    resolve
 
-Batch sizing: 50k gesys rows per batch ordered by `id`, upserts with
-`ON CONFLICT DO NOTHING`. Each run reprocesses a small `id` overlap for
-safety, which costs nothing because upserts are idempotent. Full backfill is ~3.1M rows,
-expected minutes not hours; run it off-peak with a `statement_timeout`.
+Batch sizing: 50k gesys rows per batch, ordered by `id`.
+
+The upsert is `ON CONFLICT (natural key) DO UPDATE ... WHERE
+excluded.rule_version > ge_ct_facts.rule_version`, so a fixed rule
+replaces its old facts, while a re-run of the same version changes
+nothing. A rule that stops matching would leave stale facts behind; for
+that, use `cli.js --rebuild-metric KEY`, which deletes that metric's
+facts in `insight` and re-extracts them (dry run first).
+
+Each run re-reads gesys rows whose `capture_datetime` is within 2 h of
+the watermark's, not a fixed `id` count. That way a late-committing
+insert from an overlapping run can't be skipped.
+
+The metric catalog is generated from the rule registry and upserted at
+stage start, so labels can't drift and facts never reference a missing
+key.
+
+Full backfill is ~2.95M rows (after the 1b cleanup), expected to take
+minutes, not hours. Run it off-peak with a `statement_timeout`.
 
 Small cleanup on the existing path (optional, same PR or separate):
 `extract_tube_usage`'s catch reads `data[0].system_id`, which throws
@@ -372,11 +391,11 @@ external scrub handles that.
 |---|---|---|
 | **0. Decide** | Answer §9 questions; freeze metric catalog v1 | Catalog agreed |
 | **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ✅ (2026-11-03 19:44 UTC); `down` script tested in a dry run ✅ (`roundtrip`) |
-| **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ⏳ (fix proposed §11.4, awaiting approval); cleanup decision recorded ⏳ |
-| **2. Extract** | Rule registry + fixtures + `extract.js`; dry-run against prod (read-only reads, extract counts only, no writes), then `--apply` into `insight.*` | Rule tests pass; per-system fact counts reconcile with hand-run SQL from this investigation (±dedupe) |
+| **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ✅ (fix live 2026-11-03 19:45 UTC); cleanup done ✅ (§11.6) |
+| **2. Extract** | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
 | **3. Derive** | daily, exams, tube segments, capabilities | Replacements detected on SME16618 (installed 06‑02, confirmed), SME15218, SME21864 (~07‑15); SME21873's 0-glitches are not counted as swaps; exam counts sanity-checked with 2–3 sites; swaps spot-checked with field service, since there's no DB source of truth |
 | **4. Findings** | rules + open/resolve | Flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful |
-| **5. Prod** | Apply migrations to prod; one-off backfill via `ct_insight -- --backfill` off-peak; deploy the `index.js` hook (no new cron line); run-log monitoring | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |
+| **5. Prod** | (Migrations already applied, §11/§12.) One-off backfill via `cli.js --backfill` off-peak. Deploy the `index.js` hook (no new cron line) via dev → staging → prod, then `git pull` on `vm-debian`. Monitor the run logs | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |
 | **6. Viewer** | `sme_reports` CT report, internal | Team reviews fleet + 3 system views |
 | **7. Validate & extend** | FSE review of findings (start with SME21859 rotor); threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
 
@@ -448,9 +467,17 @@ failure**
 7. Record the applied version and checksum in `insight.schema_migrations`.
 
 **Pipeline writes (`run_ct_insight`)**
-- Write only to `insight.*`. The DB role/grants should enforce this
-  where possible. Ask the DB owner whether an `insight_writer` role is
-  feasible.
+- Write only to `insight.*`, **enforced by the database** (decided
+  2026-11-03). The stage connects as `insight_writer`:
+  - `LOGIN`, nothing else (no superuser, createrole or createdb)
+  - SELECT on `log.ge_ct_gesys`, `public.systems`, `public.sites`
+  - DML on `insight.*`; no DDL rights
+
+  The login is created by `maintenance/create_insight_writer.js`, run by
+  the user on `vm-debian`. The password is generated there and goes only
+  into that server's `.env` as `INSIGHT_PG_USER`/`INSIGHT_PG_PW`.
+  Because the writer can't create partitions, migrations pre-create them
+  and the stage warns when fewer than 6 months remain.
 - Pre-check on start: the required tables exist and the schema version
   matches what the code expects. Otherwise log and skip, never fail the
   `ge_ct` run.
@@ -735,3 +762,63 @@ Timing note for `--apply` and cleanup: fse_dispatch's odd-job
 `add-pg-table-partitions.sql` creates next-month partitions on protected
 tables. If it runs during a migration, the runner's catalog check will
 (correctly) abort. Avoid month boundaries.
+
+---
+
+## 12. Phase 2 re-evaluation (2026-11-03, after Phases 1/1b)
+
+Read-only checks on prod, after dedupe:
+- The §4 templates match **37%** of rows (last 30 days, 28 reporting
+  systems). The rest is mostly routine noise: db checkpoints, "service
+  name not found", recon status, ecomm/IPC chatter.
+- Every system logs `Start: Prospective Exam`. "Scan Prep" lines are a
+  separate per-scan event on 3 newer-software systems, not a missing exam
+  start.
+- **19 of 31** reporting CT systems have NULL `sites.time_zone_id`. The
+  parser silently used America/New_York for them, so their absolute
+  `host_datetime` may be off by hours. This is a data gap for the
+  `sites` owner; it affects the alert engine too, and is not fixed here.
+- No patient identifiers found in 90 days: no DOB, MRN, accession or
+  patient-name fields. Messages do contain exam numbers and hostnames,
+  and `Svc_Notepad` is free text that people type.
+
+Decisions (user, 2026-11-03):
+1. **Rule-version-aware upsert** plus `--rebuild-metric` (§6).
+2. **Day and hour come from the device wall clock** (`host_local`, built
+   from `host_date` + `host_time`). It is what site staff experience and
+   is immune to the missing zones.
+3. **The catalog is generated from the rule registry** (§6).
+4. **Run record = `insight.job_state`.** The app writes no DB run log on
+   this line.
+5. **Exact reconciliation** exit criterion (§8).
+6. **Time-based overlap re-read** (§6).
+7. **`--coverage` report in Phase 2**, with the "every template > 500
+   rows/30 d has a rule or an explicit ignore" criterion.
+8. **Two new metrics, now.** Both are data only until field service
+   confirms what they mean.
+   - `compliance.dose_display_disabled`: scanRx "Dose information
+     database (Ctdi.cfg) read error. Disabled dose information display
+     feature". 7 systems, all on sw 14BW25.15; up to ~1,300/month per
+     system.
+   - `calibration.air_overdue`: "Only large spot is allowed for patient
+     scanning because no air ratio calibration was done more than N
+     days". SME21918 (114/30 d) and SME21849 (76).
+9. **Scrubbed fixtures.** Exam numbers, hostnames and serials are
+   replaced. No `Svc_Notepad` free text except the `PRODUCT
+   CONFIGURATION` line. The repo is on GitHub.
+10. **Limited login `insight_writer`** (§10).
+11. **Target Node v16.20.2** (`vm-debian`).
+
+Migration 003, the schema follow-ups (insight only; the tables are still
+empty):
+- `ge_ct_facts.host_local timestamp NOT NULL`
+- drop the now-unused `ge_ct_daily.time_zone`
+- partitions through 2028‑12
+- grants to `insight_writer`
+
+It requires the login to exist first.
+
+Considered and left as is: the facts natural key collapses DST
+fall-back records that share epoch/rnc (8 historical keys). This is
+negligible, and §9 stands.
+

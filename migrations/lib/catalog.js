@@ -15,12 +15,12 @@ WITH ns AS (
     AND nspname !~ '^pg_(toast|temp|toast_temp)'
 )
 SELECT 'schema:' || quote_ident(ns.nspname) AS key, ns.nspname AS schema, NULL::text AS name,
-       md5(concat_ws('|', pg_get_userbyid(n.nspowner), n.nspacl::text)) AS h
+       md5(concat_ws('|', pg_get_userbyid(n.nspowner), coalesce(n.nspacl, acldefault('n', n.nspowner))::text)) AS h
 FROM ns JOIN pg_namespace n ON n.oid = ns.oid
 UNION ALL
 SELECT 'rel:' || quote_ident(ns.nspname) || '.' || quote_ident(c.relname), ns.nspname, c.relname,
        md5(concat_ws('|',
-         c.relkind, pg_get_userbyid(c.relowner), c.relacl::text, c.reloptions::text, c.relpersistence,
+         c.relkind, pg_get_userbyid(c.relowner), coalesce(c.relacl, acldefault(CASE WHEN c.relkind = 'S' THEN 's' ELSE 'r' END::"char", c.relowner))::text, c.reloptions::text, c.relpersistence,
          c.relispartition::text, pg_get_expr(c.relpartbound, c.oid), c.relrowsecurity::text,
          CASE WHEN c.relkind = 'p' THEN pg_get_partkeydef(c.oid) END,
          (SELECT string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod) || ':' || a.attnotnull::text
@@ -43,12 +43,12 @@ FROM pg_class c JOIN ns ON ns.oid = c.relnamespace
 WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S', 'i', 'I', 'c')
 UNION ALL
 SELECT 'func:' || p.oid::regprocedure::text, ns.nspname, p.proname,
-       md5(concat_ws('|', pg_get_userbyid(p.proowner), p.proacl::text, p.prokind, p.prosecdef::text,
+       md5(concat_ws('|', pg_get_userbyid(p.proowner), coalesce(p.proacl, acldefault('f', p.proowner))::text, p.prokind, p.prosecdef::text,
                      p.provolatile, p.prorettype::regtype::text, p.proconfig::text, md5(coalesce(p.prosrc, '')), p.probin))
 FROM pg_proc p JOIN ns ON ns.oid = p.pronamespace
 UNION ALL
 SELECT 'type:' || quote_ident(ns.nspname) || '.' || quote_ident(t.typname), ns.nspname, t.typname,
-       md5(concat_ws('|', t.typtype, pg_get_userbyid(t.typowner), t.typacl::text,
+       md5(concat_ws('|', t.typtype, pg_get_userbyid(t.typowner), coalesce(t.typacl, acldefault('T', t.typowner))::text,
                      (SELECT string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) FROM pg_enum e WHERE e.enumtypid = t.oid),
                      format_type(t.typbasetype, t.typtypmod)))
 FROM pg_type t JOIN ns ON ns.oid = t.typnamespace

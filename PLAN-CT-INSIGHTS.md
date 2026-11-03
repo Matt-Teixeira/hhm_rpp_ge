@@ -29,9 +29,21 @@ schema, rule registry per source), but nothing is built for them yet.
 
   To apply: `node migrations/run.js up --apply` (type `prod`, then
   `APPLY`).
-- **Phase 1b root cause found; fix proposed, not implemented; no rows
-  changed.** See §11. The cleanup decision is open, pending approval of
-  the §11.4 plan.
+- **Phase 1b: root cause found (§11). Fix step 1 implemented on `dev`
+  and verified; not yet deployed. Cleanup approved in principle, and the
+  exact statements are awaiting approval.** Step 1 lives in
+  `persist/drop_already_ingested.js`, called from
+  `jobs/CT/gesys_parser.js`. Verified on real `saved_files` snapshots
+  against prod (read-only):
+  - SME18531 rotation: drops exactly the 3,482 carried-over records and
+    keeps the 341 new ones.
+  - SME21865 rotation: drops 112 and keeps 586.
+  - Normal incremental run: drops 0.
+
+  The lookup costs 17 ms in the worst case (2 weeks, 14k rows) and 0.1 ms
+  for a normal batch. `node test/drop_already_ingested.test.js` passes
+  9/9. New duplicates stop only once the prod server runs this code.
+  Step 2 (§11.4) is not approved. Cleanup: §11.6.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -536,7 +548,8 @@ Impact beyond insight:
 ### 11.4 Proposed fix (awaiting approval; not implemented)
 
 **Step 1, parser (this repo, `jobs/CT/gesys_parser.js`). Drop
-already-ingested records before insert.**
+already-ingested records before insert.** Approved and implemented
+2026-11-03.
 - After parsing, select `(epoch, record_number_concurrent, sr, type,
   message)` from `log.ge_ct_gesys` for this system, with `host_datetime`
   between the batch's min and max. This is an index range scan on the
@@ -558,7 +571,7 @@ Everything else stays byte-for-byte:
   `scan_seconds` rows) is a separate decision, because `fse_dispatch`
   reads that table.
 
-**Step 2, parser (optional; closes the data-loss edge in §11.1).**
+**Step 2, parser (optional; closes the data-loss edge in §11.1). Not approved; explanation sent to the user 2026-11-03.**
 - Store the file's header epoch (`A <epoch>`) in a new Redis key
   `<sme>.<file>.head`. The existing size key is unchanged.
 - If the header changed since the last run, read the whole file even when

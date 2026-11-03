@@ -6,6 +6,7 @@ const { ge_ct_gesys_schema } = require("../../persist/pg-schemas");
 const generateDateTime = require("../../processing/generateDateTimes");
 const extract_tube_usage = require("../../processing/ge_ct/extract-tube_usage");
 const { build_upsert_str } = require("../../tooling");
+const { drop_already_ingested } = require("../../persist/drop_already_ingested");
 const { pg_column_sets: pg_cs } = require("../../utils/db/sql/pg-helpers_hhm");
 
 // File data parsed in bulk. One regex to group array of data blocks. Second regex to parse blocks.
@@ -188,16 +189,41 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     // ** Begin Persist
 
-    const query = pgp.helpers.insert(mappedData, pg_cs.log.ge.ge_ct_gesys);
+    // Skip records already in log.ge_ct_gesys: GE log rotation carries the
+    // old file's tail into the new file, and partial transfers cause re-reads
+    // (PLAN-CT-INSIGHTS.md §11). Fails open: on error all rows are inserted,
+    // as before this check existed.
+    const dedupe = await drop_already_ingested(db, System.sme, mappedData);
+    if (dedupe.error) {
+      await System.addLogEvent(
+        System.E,
+        System.run_log,
+        "ge_ct_gesys: drop_already_ingested (inserting all rows)",
+        System.cat,
+        { job_id: System.job_id, system_id: System.sme },
+        dedupe.error
+      );
+    }
 
-    await db.any(query);
+    // Zero parsed rows: insert as before (it throws, so Redis is not advanced
+    // and the next run retries). Only skip when rows parsed but none are new.
+    if (dedupe.fresh.length > 0 || mappedData.length === 0) {
+      const query = pgp.helpers.insert(dedupe.fresh, pg_cs.log.ge.ge_ct_gesys);
+
+      await db.any(query);
+    }
 
     // ** End Persist
 
-    note.number_of_rows = mappedData.length;
+    note.number_of_rows = dedupe.fresh.length;
+    note.parsed_rows = mappedData.length;
+    note.skipped_already_ingested = dedupe.dropped;
     note.first_row = mappedData[0];
     note.last_row = mappedData[mappedData.length - 1];
-    note.message = "Successful Insert";
+    note.message =
+      dedupe.fresh.length > 0
+        ? "Successful Insert"
+        : "No new records: all parsed records already ingested";
 
     await System.addLogEvent(
       System.I,

@@ -80,7 +80,21 @@ schema, rule registry per source), but nothing is built for them yet.
   side-effecting or out-of-scope function calls in views and DEFAULTs.
   43 tests now pass.
 
+  **2026-11-03 (later):**
+  - `insight_writer` created by the user on `vm-debian`, and verified
+    read-only from here: login only, NOINHERIT, no memberships, connection
+    limit 5, role-level timeouts.
+  - Migration 003 dry run and roundtrip passed against the real role.
+  - Coverage criterion MET (§12.1).
+  - Write path built (`insight/load.js`; `cli.js backfill
+    --rehearse|--apply`, `cli.js verify`), with unit tests. 47 tests pass.
+
   Waiting on:
+  - the user applies 003 on `vm-debian`
+  - the `INSIGHT_PG_*` lines are copied to this workstation
+  - then: rehearsal → `--apply` backfill → `verify`
+
+  Previously waiting on:
   - the user runs the login script on `vm-debian`
   - 003 is applied
   - the write path and `--apply` backfill, run as `insight_writer`

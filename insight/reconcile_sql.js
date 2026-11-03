@@ -48,7 +48,7 @@ const COND = {
 
 const RECONCILE_SQL = `
 WITH base AS (
-  SELECT system_id, message, exception_class, ermes_number,
+  SELECT system_id, message, exception_class, ermes_number, epoch, record_number_concurrent, host_datetime,
          btrim(CASE WHEN position(E'\\t' IN coalesce(type, '')) > 0 THEN split_part(type, E'\\t', 2) ELSE coalesce(type, '') END) AS p
   FROM log.ge_ct_gesys
   WHERE id > $1 AND id <= $2 AND ($3::text IS NULL OR system_id = $3)
@@ -64,4 +64,12 @@ ${Object.entries(COND).map(([k, c]) => `  ('${k}', coalesce(${c}, false))`).join
 WHERE k.hit
 GROUP BY 1, 2`;
 
-module.exports = { RECONCILE_SQL, COND };
+// Facts are one row per natural key (system, epoch, rnc, metric, host_datetime),
+// so after --apply the expected count is the number of DISTINCT keys.
+const RECONCILE_DISTINCT_SQL = RECONCILE_SQL.replace(
+  "SELECT system_id, k.key, count(*) AS n",
+  "SELECT system_id, k.key, count(DISTINCT (epoch, record_number_concurrent, host_datetime)) AS n"
+);
+if (RECONCILE_DISTINCT_SQL === RECONCILE_SQL) throw new Error("reconcile_sql: distinct variant not built");
+
+module.exports = { RECONCILE_SQL, RECONCILE_DISTINCT_SQL, COND };

@@ -1,15 +1,27 @@
 #!/usr/bin/env node
 "use strict";
-// Manual insight commands (PLAN-CT-INSIGHTS.md §6). Read-only modes:
+// Manual insight commands (PLAN-CT-INSIGHTS.md §6).
 //   node insight/cli.js dry-run [--system SME..] [--from-id N] [--to-id N]
-//       Run the rules over log.ge_ct_gesys (read-only), print fact counts,
-//       per-(system, metric) reconciliation against independent SQL counts,
-//       rule errors, skipped rows, and the top unmatched templates (coverage).
+//       READ-ONLY. Run the rules over log.ge_ct_gesys, print fact counts,
+//       reconciliation per (system, metric) against independent SQL, rule
+//       errors, skipped rows, and the 30-day coverage criterion.
+//   node insight/cli.js backfill --rehearse [--batches N] [--from-id N]
+//       As insight_writer, in ONE transaction that is rolled back: sync the
+//       catalog, upsert N batches (default 2), report. Writes nothing.
+//   node insight/cli.js backfill --apply [--from-id N] [--to-id N]
+//       As insight_writer: per batch, upsert facts + advance the watermark
+//       in one transaction. Resumes from the watermark. Run off-peak.
+//   node insight/cli.js verify
+//       READ-ONLY. Facts per (system, metric) vs the independent count of
+//       DISTINCT natural keys, over the watermark range.
 const { connect, pgp } = require("./db");
 const { rules } = require("./rules/ge_ct");
 const { validate_rules } = require("./rules/engine");
 const { stream } = require("./extract");
-const { RECONCILE_SQL } = require("./reconcile_sql");
+const { RECONCILE_SQL, RECONCILE_DISTINCT_SQL } = require("./reconcile_sql");
+const { run_extract } = require("./load");
+const readline = require("readline");
+const crypto = require("crypto");
 const { ignore } = require("./rules/ge_ct_ignore");
 
 const RECENT_MS = 30 * 24 * 3600 * 1000;
@@ -17,14 +29,20 @@ const COVERAGE_THRESHOLD = 500; // rows per template per 30 days (§8)
 const ignored = (proc, msg) => ignore.find((i) => (!i.process || i.process === proc) && i.re.test(msg || ""));
 
 function args(argv) {
-  const a = { cmd: argv[0], system: null, from_id: 0, to_id: null };
+  const a = { cmd: argv[0], system: null, from_id: null, to_id: null, rehearse: false, apply: false, batches: 2 };
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === "--system") a.system = argv[++i];
     else if (argv[i] === "--from-id") a.from_id = Number(argv[++i]);
     else if (argv[i] === "--to-id") a.to_id = Number(argv[++i]);
+    else if (argv[i] === "--rehearse") a.rehearse = true;
+    else if (argv[i] === "--apply") a.apply = true;
+    else if (argv[i] === "--batches") a.batches = Number(argv[++i]);
     else throw new Error(`unknown argument ${argv[i]}`);
   }
-  if (a.cmd !== "dry-run") throw new Error("usage: cli.js dry-run [--system SME] [--from-id N] [--to-id N]");
+  if (!["dry-run", "backfill", "verify"].includes(a.cmd)) throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify");
+  if (a.cmd === "backfill" && a.rehearse === a.apply) throw new Error("backfill needs exactly one of --rehearse / --apply");
+  if (a.cmd === "backfill" && a.system) throw new Error("backfill does not take --system (the watermark is fleet-wide)");
+  if (a.cmd === "dry-run" && a.from_id === null) a.from_id = 0;
   return a;
 }
 
@@ -119,9 +137,74 @@ async function dry_run(a) {
   }
 }
 
+async function confirm(db, a) {
+  const t = await db.one("SELECT current_database() AS db, current_user AS usr");
+  const mode = a.apply ? "APPLY (commits per batch)" : "REHEARSAL (one transaction, rolled back)";
+  console.log(`target: database=${t.db} host=${process.env.PG_HOST} user=${t.usr} — ${mode}`);
+  const rl = readline.createInterface({ input: process.stdin, terminal: false });
+  const it = rl[Symbol.asyncIterator]();
+  const ask = async (q) => {
+    process.stdout.write(q);
+    const { value, done } = await it.next();
+    if (done) throw new Error("no input: aborted");
+    if (!process.stdin.isTTY) console.log(value);
+    return value.trim();
+  };
+  try {
+    if ((await ask("Type the database name to continue: ")) !== t.db) throw new Error("database name mismatch: aborted");
+    if (a.apply && (await ask("This writes facts to insight. Type APPLY to continue: ")) !== "APPLY") throw new Error("not confirmed: aborted");
+  } finally {
+    rl.close();
+  }
+}
+
+async function backfill(a) {
+  const errs = validate_rules(rules);
+  if (errs.length) throw new Error(`invalid rules: ${errs.join("; ")}`);
+  const db = connect("writer", { statementTimeoutMs: 300000, applicationName: "insight_backfill" });
+  try {
+    await confirm(db, a);
+    const t0 = Date.now();
+    const out = await run_extract(db, {
+      rules, mode: a.apply ? "apply" : "rehearse", from_id: a.from_id, to_id: a.to_id,
+      max_batches: a.apply ? null : a.batches, run_id: crypto.randomUUID(), log: (m) => console.log(m),
+    });
+    console.log(`${a.apply ? "APPLIED" : "REHEARSAL ROLLED BACK"} in ${((Date.now() - t0) / 1000).toFixed(1)}s: ${JSON.stringify(out.skipped ? out : out.stats)}`);
+  } finally {
+    await db.$pool.end();
+  }
+}
+
+async function verify() {
+  const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_verify" });
+  try {
+    const job = await db.oneOrNone("SELECT watermark_id, last_run_status, last_run_finished_at FROM insight.job_state WHERE job_name = 'ge_ct_extract'");
+    if (!job) throw new Error("no watermark yet: run backfill --apply first");
+    const to = Number(job.watermark_id);
+    const facts = await db.any(`SELECT system_id, metric_key AS key, count(*)::int AS n FROM insight.ge_ct_facts
+                                WHERE source_id <= $1 GROUP BY 1, 2`, [to]);
+    const sql = await db.any(RECONCILE_DISTINCT_SQL, [0, to, null]);
+    const fm = new Map(facts.map((r) => [`${r.system_id}|${r.key}`, r.n]));
+    const sm = new Map(sql.map((r) => [`${r.system_id}|${r.key}`, Number(r.n)]));
+    const keys = new Set([...fm.keys(), ...sm.keys()]);
+    const diffs = [...keys].filter((k) => (fm.get(k) || 0) !== (sm.get(k) || 0));
+    const total = facts.reduce((s, r) => s + r.n, 0);
+    console.log(`verify (read-only): watermark ${to} (${job.last_run_status} at ${job.last_run_finished_at && job.last_run_finished_at.toISOString()}); ${total} facts in insight.ge_ct_facts`);
+    console.log(`facts vs independent DISTINCT-key SQL (${keys.size} system×metric cells): ${diffs.length ? `${diffs.length} differ` : "all equal"}`);
+    for (const k of diffs.slice(0, 40)) console.log(`  ${k.padEnd(48)} facts=${fm.get(k) || 0} sql=${sm.get(k) || 0}`);
+    const cat = await db.one("SELECT count(*)::int AS n FROM insight.metric_catalog");
+    console.log(`catalog rows: ${cat.n} (registry: ${rules.length})`);
+    if (diffs.length || cat.n !== rules.length) process.exitCode = 2;
+  } finally {
+    await db.$pool.end();
+  }
+}
+
 (async () => {
   const a = args(process.argv.slice(2));
   if (a.cmd === "dry-run") await dry_run(a);
+  if (a.cmd === "backfill") await backfill(a);
+  if (a.cmd === "verify") await verify();
 })()
   .catch((e) => { console.error(`ERROR: ${e.message}`); process.exitCode = 1; })
   .finally(() => pgp.end());

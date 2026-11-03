@@ -10,6 +10,34 @@ then, an internal HTML viewer reads the same contract.
 Out of scope for v1: MRI and CV. The design keeps them in mind (shared
 schema, rule registry per source), but nothing is built for them yet.
 
+## Status (2026-11-03)
+
+- **Phase 0 done.** Decisions in §9.
+- **Phase 1 built, dry-run verified on prod, NOT applied.** Waiting for
+  the go-ahead to run `--apply`. `migrations/run.js` (guarded runner,
+  §10), `001_insight_schema.sql` (+down), and `002_api_views.sql` (+down,
+  v0 placeholder views) are written. `node migrations/test/sqlscan.test.js`
+  passes 8/8 (no DB needed). Verified against prod:
+  - static scan ok on all 4 files
+  - dry run of up 001→002: 166 in-scope objects created; all 2,892
+    protected catalog fingerprints unchanged; the migration statements
+    take no locks on protected relations; ROLLBACK; a fresh connection
+    shows the catalog identical, so nothing persisted
+  - `roundtrip` (up 001→002, then down 002→001, in one transaction): the
+    catalog is restored exactly (2,892 objects, including `api`); rolled
+    back
+
+  To apply: `node migrations/run.js up --apply` (type `prod`, then
+  `APPLY`).
+- **Phase 1b root cause found; fix proposed, not implemented; no rows
+  changed.** See §11. The cleanup decision is open, pending approval of
+  the §11.4 plan.
+- **Correction to §1 and the dedupe key:** `(system_id, epoch,
+  record_number_concurrent)` is unique except in 8 known cases, which are
+  distinct records. GE `epoch` is local wall-clock seconds, so it repeats
+  in the DST fall-back hour. See §11.3. The key is fine for metrics (§9
+  stands). Deleting rows must match exact copies.
+
 ---
 
 ## 1. What the data supports (verified against prod, 2026-11-03)
@@ -27,7 +55,8 @@ schema, rule registry per source), but nothing is built for them yet.
   with `record_number_concurrent` 0..n. About 3% of rows are true
   duplicates (same key, later `capture_datetime`), up to 30% on some
   systems (SME17371), from the same file contents being re-ingested.
-  **Every metric must dedupe on this key.**
+  **Every metric must dedupe on this key.** (Root cause and the 8
+  known exceptions to the key: §11.)
 - The system's model and software version are in Svc_Notepad
   `PRODUCT CONFIGURATION|Product: …|sw_version: …`. 33 of 34 systems
   log it. Fleet: Optima CT540/580/660/520, Discovery CT750 HD/RT/610/MI,
@@ -311,8 +340,8 @@ external scrub handles that.
 | Phase | Work | Exit criteria |
 |---|---|---|
 | **0. Decide** | Answer §9 questions; freeze metric catalog v1 | Catalog agreed |
-| **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass; dry run rolls back cleanly; apply succeeds; `down` script tested in a dry run |
-| **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained; new duplicates stop; cleanup decision recorded |
+| **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ⏳ (awaiting go); `down` script tested in a dry run ✅ (`roundtrip`) |
+| **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ⏳ (fix proposed §11.4, awaiting approval); cleanup decision recorded ⏳ |
 | **2. Extract** | Rule registry + fixtures + `extract.js`; dry-run against prod (read-only reads, extract counts only, no writes), then `--apply` into `insight.*` | Rule tests pass; per-system fact counts reconcile with hand-run SQL from this investigation (±dedupe) |
 | **3. Derive** | daily, exams, tube segments, capabilities | Replacements detected on SME16618 (installed 06‑02, confirmed), SME15218, SME21864 (~07‑15); SME21873's 0-glitches are not counted as swaps; exam counts sanity-checked with 2–3 sites; swaps spot-checked with field service, since there's no DB source of truth |
 | **4. Findings** | rules + open/resolve | Flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful |
@@ -412,3 +441,206 @@ need:
 - a row-count preview
 - a copy of the affected rows to `archive_log` first
 - explicit user approval of the exact statement
+
+---
+
+## 11. Phase 1b — duplicate re-ingestion (investigated 2026-11-03)
+
+All queries were read-only (`default_transaction_read_only=on`). Prod
+Redis was probed with `SCAN`/`GET`/`INFO` only. No rows were changed.
+
+### 11.1 Root cause: GE gesys rotation carries the old tail into the new file
+
+GE rotates `gesys_<host>.log` at about 7 MB. The new file is **not
+empty**. It holds a 130‑byte header (`A <epoch>` plus padding), then a
+byte-exact copy of the **last part of the old file**, then new records.
+The parser sees a smaller file, `delta < 0` in
+`acquisition/GE_CT_CV_MRI.js:getFileData`, treats it as a brand-new file,
+and reads all of it. The carried-over tail is inserted a second time.
+
+The evidence is byte-for-byte. `log.saved_files` keeps a gzip of every
+capture, but only for about 48 h. Both shrink events in that window
+match, and the carried-over record counts equal the DB's duplicate counts
+exactly:
+
+| System | Capture | Size before → after | Carried-over tail | Records in tail | Dups in that DB batch |
+|---|---|---|---|---|---|
+| SME18531 | 2026‑11‑02 20:48 | 7,003,571 → 1,093,255 | 1,014,531 B (old bytes 5,989,040…end) | 3,482 | **3,482** |
+| SME21865 | 2026‑11‑02 13:18 | 7,386,982 → 169,769 | 22,486 B | 112 | **112** |
+
+The fleet history fits the same pattern. Duplicates arrive in 1–10 large
+batches per system and almost never anywhere else; within-batch
+duplicates total 6 rows. The tail size varies, so a low-volume system
+re-reads weeks:
+- SME17371: one batch on 09‑21 re-read 09‑07…09‑21, 3,778 rows. That is
+  30% of its unique 90‑day records.
+- SME18531 (the 10‑05/10‑07 example): the 10‑07 10:18 batch re-read
+  10‑02…10‑07, 3,481 of 3,679 rows.
+
+The batch heuristic attributes **128,765 of 155,002 duplicate rows
+(83%)** to this signature. The remaining 17% is in §11.2.
+
+A related data-loss edge case follows from the same logic. If the new
+file grows past the old watermark before the next capture, `delta > 0`,
+and `tail -c delta` reads only the end of the new file. Its beginning is
+silently skipped.
+
+### 11.2 Secondary: partial-file reads (probable interrupted transfers)
+
+9 batches, 26,237 dup rows. Examples: SME20594 05‑12 and
+05‑21, SME21849 and SME21873 06‑09. These show a different signature:
+- One batch holds the **oldest part** of the file, including history
+  never seen before.
+- The next batch holds the rest, which is mostly duplicates.
+
+That is what a truncated file followed by a complete one produces. The
+acquisition scripts write in place: `scp`, `lftp mget` with
+`xfer:clobber`, and `ge_ct_21.sh`'s `timeout 55 lftp mirror`. An
+interrupted transfer therefore leaves a short file that the parser
+cannot tell apart from a rotation. **Not verified byte-for-byte**: no
+snapshots survive from those dates.
+
+### 11.3 Ruled out, and a caveat on the key
+
+**Ruled out:**
+- **Redis key loss.** Prod Redis uptime is 523 days, so there was no
+  restart. All CT gesys watermarks equal the latest saved file size
+  exactly. No zero-valued keys.
+- **`hhm_log_rotator`.** Its CT systems are configured `v_2`, and its
+  code only acts on `v_1` and `v_3`, so it does nothing for them.
+- **Overlapping runs and within-file repeats.** Neither is a meaningful
+  contributor.
+- **SME17371's three configured gesys names.** Only `gesys_nbct1.log`
+  exists. `gesys_NBCT1.log` and `gesys_nbls.log` are stale no-ops.
+
+**Key caveat:** GE `epoch` is **local wall-clock seconds**.
+`to_timestamp(epoch)` reads as site-local time. So
+`(system_id, epoch, record_number_concurrent)` repeats in the DST
+fall-back hour. Example: SME20608 2026‑11‑01 01:51:58 has two distinct
+Plenum readings an hour apart. Fleet-wide, 8 keys collide with distinct
+content, including SME20594 2025‑11‑03, where the clock replayed around a
+hardware shutdown.
+- Exact-copy duplicates: **154,994**.
+- 3-column-key duplicates: 155,002.
+
+This is negligible for metrics, so the §9 decision stands. Deletion must
+match exact copies.
+
+Impact beyond insight:
+- `extract_tube_usage` is fed the duplicate tube records. There are 193
+  duplicate `scan_seconds` rows in
+  `public.logfile_event_history_metadata` since 05‑01, out of 2,916.
+- 20,090 enabled `alert.models` rules read `log.ge_ct_gesys`, across 37
+  systems.
+
+### 11.4 Proposed fix (awaiting approval; not implemented)
+
+**Step 1, parser (this repo, `jobs/CT/gesys_parser.js`). Drop
+already-ingested records before insert.**
+- After parsing, select `(epoch, record_number_concurrent, sr, type,
+  message)` from `log.ge_ct_gesys` for this system, with `host_datetime`
+  between the batch's min and max. This is an index range scan on the
+  existing `(system_id, host_datetime)` index: minutes for a normal
+  batch, at most a couple of weeks for one system after a rotation.
+- Drop parsed records whose key and content already exist. Insert the
+  rest.
+- This fixes rotation (§11.1), partial-file pairs (§11.2) and any future
+  Redis reset in one place, and needs no schema change on `log.*`.
+  Comparing content keeps the DST-hour records.
+
+Everything else stays byte-for-byte:
+- Skip the insert when nothing is new. `pgp.helpers.insert` throws on an
+  empty array.
+- The Redis update and the `offline_hhm_conn` upsert still run, from the
+  last *parsed* row as today.
+- `extract_tube_usage` is fed the same, unfiltered, tube rows as today.
+  Whether to feed it only new rows (ending the 193 duplicate
+  `scan_seconds` rows) is a separate decision, because `fse_dispatch`
+  reads that table.
+
+**Step 2, parser (optional; closes the data-loss edge in §11.1).**
+- Store the file's header epoch (`A <epoch>`) in a new Redis key
+  `<sme>.<file>.head`. The existing size key is unchanged.
+- If the header changed since the last run, read the whole file even when
+  `delta > 0`. Step 1 removes the overlap.
+
+**Step 3, acquisition (`hhm_data_acquisition`, separate repo;
+recommended).** Download to a temp name and `mv` it into place, so the
+parser never sees a half-written file.
+
+A unique index on `log.ge_ct_gesys` is **not** an option. It is a
+protected table, 155k duplicates exist, and a partitioned unique index
+would have to include `capture_datetime`, which defeats it.
+
+### 11.5 Existing duplicates per system (exact copies; all history 2026‑05…11‑02)
+
+| System | Dup rows | % of rows | In last 90 d (host time) | Dup batches | Last dup capture |
+|---|---|---|---|---|---|
+| SME18531 | 32,245 | 11.6 | 19,758 | 10 | 11‑02 |
+| SME20594 | 21,417 | 37.5 | 0 | 4 | 05‑21 |
+| SME14521 | 20,435 | 9.3 | 0 | 7 | 07‑26 |
+| SME20608 | 20,266 | 7.6 | 11,258 | 10 | 11‑01 |
+| SME14522 | 8,491 | 12.1 | 0 | 3 | 07‑23 |
+| SME01434 | 6,353 | 0.7 | 444 | 2 | 10‑02 |
+| SME00881 | 5,238 | 7.3 | 0 | 1 | 05‑11 |
+| SME21855 | 4,422 | 2.4 | 2,164 | 2 | 08‑26 |
+| SME16618 | 4,141 | 7.1 | 2,831 | 2 | 08‑27 |
+| SME17371 | 3,778 | 8.8 | 3,778 | 1 | 09‑21 |
+| SME21859 | 3,740 | 6.7 | 3,740 | 1 | 09‑18 |
+| SME21853 | 3,699 | 7.9 | 0 | 1 | 07‑09 |
+| SME01430 | 3,041 | 4.1 | 2,753 | 3 | 09‑24 |
+| SME01431 | 2,835 | 1.5 | 670 | 4 | 10‑01 |
+| SME21873 | 2,558 | 6.8 | 0 | 2 | 07‑06 |
+| SME18536 | 2,140 | 4.7 | 0 | 1 | 07‑23 |
+| SME21865 | 1,742 | 2.7 | 112 | 2 | 11‑02 |
+| SME21870 | 1,518 | 6.8 | 1,518 | 1 | 10‑08 |
+| SME21918 | 1,361 | 6.9 | 0 | 1 | 07‑06 |
+| SME21858 | 1,232 | 10.0 | 1,232 | 1 | 08‑31 |
+| SME21849 | 1,217 | 10.2 | 0 | 2 | 06‑09 |
+| SME01429 | 613 | 1.4 | 613 | 2 | 09‑28 |
+| SME21851 | 586 | 1.1 | 0 | 2 | 07‑30 |
+| SME21866 | 535 | 1.3 | 273 | 2 | 10‑14 |
+| SME21867 | 406 | 1.8 | 406 | 1 | 08‑20 |
+| SME21869 | 307 | 0.8 | 307 | 1 | 10‑16 |
+| SME21929 | 289 | 3.9 | 0 | 1 | 07‑20 |
+| SME21864 | 184 | 0.4 | 0 | 1 | 07‑13 |
+| SME15218 | 150 | 0.4 | 150 | 1 | 08‑25 |
+| SME21854 | 63 | 0.3 | 0 | 1 | 07‑20 |
+| **Total (30 of 34 systems)** | **154,994** (key-based 155,002) | **5.0** of 3,100,150 | 51,992 | 73 | |
+
+By capture partition:
+
+| Partition | Dup rows |
+|---|---|
+| 2026_05 | 40,233 |
+| 2026_06 | 27,407 |
+| 2026_07 | 28,455 |
+| 2026_08 | 23,973 |
+| 2026_09 | 19,824 |
+| 2026_10 | 11,508 |
+| 2026_11 | 3,594 |
+
+SME00882, SME00875, SME21924 and SME11229 have none.
+
+### 11.6 Cleanup: decision open (draft plan, nothing run)
+
+Insight dedupes on its own, so cleanup is for the other readers of
+`log.ge_ct_gesys` (the alert engine, ad-hoc SQL). If approved, it
+follows §10 "Destructive operations". The steps:
+1. Land the step-1 fix first, so duplicates stop growing.
+2. Preview the counts per partition and per system (as in §11.5),
+   re-run at execution time.
+3. Copy the rows to delete into a new `archive_log` table, keyed by
+   `(id, capture_datetime)`.
+4. Delete only rows that are **exact copies** of an earlier row:
+   - same system, epoch, rnc and full content hash
+   - keep the earliest `(capture_datetime, id)`
+   - one partition per transaction, off-peak, with `lock_timeout`
+5. Verify the counts.
+
+The exact statement goes to the user for approval before anything runs.
+
+Timing note for `--apply` and cleanup: fse_dispatch's odd-job
+`add-pg-table-partitions.sql` creates next-month partitions on protected
+tables. If it runs during a migration, the runner's catalog check will
+(correctly) abort. Avoid month boundaries.

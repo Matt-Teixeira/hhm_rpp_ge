@@ -635,23 +635,50 @@ By capture partition:
 
 SME00882, SME00875, SME21924 and SME11229 have none.
 
-### 11.6 Cleanup: decision open (draft plan, nothing run)
+### 11.6 Cleanup: approved in principle 2026-11-03; exact statements awaiting approval
 
-Insight dedupes on its own, so cleanup is for the other readers of
-`log.ge_ct_gesys` (the alert engine, ad-hoc SQL). If approved, it
-follows §10 "Destructive operations". The steps:
-1. Land the step-1 fix first, so duplicates stop growing.
-2. Preview the counts per partition and per system (as in §11.5),
-   re-run at execution time.
-3. Copy the rows to delete into a new `archive_log` table, keyed by
-   `(id, capture_datetime)`.
-4. Delete only rows that are **exact copies** of an earlier row:
-   - same system, epoch, rnc and full content hash
-   - keep the earliest `(capture_datetime, id)`
-   - one partition per transaction, off-peak, with `lock_timeout`
-5. Verify the counts.
+Tool: `maintenance/dedupe_ge_ct_gesys.js`. It has separate steps, uses
+typed confirmation, and runs as a dry run (BEGIN … ROLLBACK) unless
+given `--apply`. `preview` prints the exact SQL.
 
-The exact statement goes to the user for approval before anything runs.
+Read-only preview, 2026‑11‑03 18:27 UTC:
+- **154,994 exact duplicates**: every column except `id` and
+  `capture_datetime` is equal.
+- **49** of them are referenced by `alert.detections.row_id`. These are
+  **kept**, so no detection loses its source row. (So 49 of the 358
+  gesys detections fired on re-ingested copies.)
+- **154,945 to delete.**
+
+| Partition | Delete |
+|---|---|
+| 2026_05 | 40,231 |
+| 2026_06 | 27,406 |
+| 2026_07 | 28,455 |
+| 2026_08 | 23,927 |
+| 2026_09 | 19,824 |
+| 2026_10 | 11,508 |
+| 2026_11 | 3,594 |
+
+Order of steps:
+1. Deploy the step-1 fix to the prod server, so no new duplicates appear.
+2. `archive --cutoff <ts> --apply`. This copies the duplicates captured
+   before the cutoff into a new
+   `archive_log.ge_ct_gesys_dups_YYYYMMDD`, with each row's keeper id and
+   source partition. It does not touch `log.*`.
+3. `delete --table … ` as a dry run, then with `--apply`. Each partition
+   gets its own transaction. All four pre-checks must be 0:
+   - the archived row is still identical to the live row
+   - its keeper exists and is identical
+   - the keeper is not itself archived
+   - the row is not newly referenced by a detection
+
+   Then it deletes by primary key, and commits only if the deleted count
+   equals the expected count.
+4. `verify`.
+
+Restore path: insert from the archive table (the SQL is in the tool's
+header). The fix and the cleanup can both be re-run later for any
+duplicates that slip through before deploy.
 
 Timing note for `--apply` and cleanup: fse_dispatch's odd-job
 `add-pg-table-partitions.sql` creates next-month partitions on protected

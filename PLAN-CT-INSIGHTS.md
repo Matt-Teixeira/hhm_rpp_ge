@@ -103,7 +103,13 @@ schema, rule registry per source), but nothing is built for them yet.
   - **Server permissions (flagged to the user, not changed).**
     `/home/prod/hhm_rpp_ge/.env` is world-readable and `/home/prod` is
     world-writable. Suggested fix, run as `prod`: `chmod 600
-    /home/prod/hhm_rpp_ge/.env` and `chmod 755 /home/prod`.
+    /home/prod/hhm_rpp_ge/.env` and `chmod 755 /home/prod`. **User
+    decision 2026-11-03: not changing these now.** Dev and prod share
+    this machine (prod is the `prod` user), and a server migration that
+    physically splits dev/staging/prod is in progress. At cutover:
+    - port this work to the new line
+    - give each environment its own writer login
+    - remove the writer credentials from the dev checkout
 
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are

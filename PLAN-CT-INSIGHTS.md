@@ -63,42 +63,48 @@ schema, rule registry per source), but nothing is built for them yet.
 
   **Cleanup done 2026-11-03 19:54 UTC** (§11.6). 154,945 duplicate rows
   were deleted; the 49 rows referenced by detections were kept.
-- **Phase 2 in progress (§12, §12.1).**
+- **Phase 2 DONE (2026-11-03 22:06 UTC).** Backfill applied as
+  `insight_writer` (`node insight/cli.js backfill --apply`):
 
-  Done on `dev` (read-only against prod):
-  - the `insight_writer` login script (dry run ok)
-  - migration 003 (tested up and down in a rolled-back transaction)
-  - the rule registry: 34 metrics in `insight/rules/ge_ct.js`
-  - 183 scrubbed real fixtures
-  - 40 tests passing
-  - a full dry run: 2,947,116 rows produce 1,251,255 facts, with no rule
-    errors, and **all 585 system×metric counts equal the independent SQL
-    counts**
+  | Item | Result |
+  |---|---|
+  | Gesys rows | 2,948,466, in 59 batches, 208 s, one commit per batch |
+  | Facts | **2,163,802** across 37 metrics and 34 systems |
+  | Rule errors, skipped rows | 0 |
+  | Collapsed | 57 facts: the 49 kept duplicates and DST-hour key collisions |
+  | Watermark | `ge_ct_extract` = 18543534, status `ok` |
 
-  **Codex review (2026-11-03): 5 findings, all fixed**
-  (`REVIEW-CT-INSIGHTS-CODEX.md`). The biggest was a scanner gap:
-  side-effecting or out-of-scope function calls in views and DEFAULTs.
-  43 tests now pass.
-
-  **2026-11-03 (later):**
-  - `insight_writer` created by the user on `vm-debian`, and verified
-    read-only from here: login only, NOINHERIT, no memberships, connection
-    limit 5, role-level timeouts.
-  - Migration 003 dry run and roundtrip passed against the real role.
+  Exit criteria (§8):
+  - **Exact reconciliation:** `cli.js verify` → all 621 system×metric
+    cells equal the independent DISTINCT-key SQL count; catalog 37/37.
+  - Rule tests pass (47 tests in 7 suites).
   - Coverage criterion MET (§12.1).
-  - Write path built (`insight/load.js`; `cli.js backfill
-    --rehearse|--apply`, `cli.js verify`), with unit tests. 47 tests pass.
+  - The writer verified unable to write outside `insight`.
 
-  Waiting on:
-  - the user applies 003 on `vm-debian`
-  - the `INSIGHT_PG_*` lines are copied to this workstation
-  - then: rehearsal → `--apply` backfill → `verify`
+  Before the apply, both run as `insight_writer` and rolled back:
+  - rehearsal: 2 batches, 50,607 facts
+  - upsert-semantics test: same version again → 0 rows changed;
+    version bump on `error.ermes` → exactly its 4,969 facts replaced; old
+    version again → 0; catalog re-sync → 0
 
-  Previously waiting on:
-  - the user runs the login script on `vm-debian`
-  - 003 is applied
-  - the write path and `--apply` backfill, run as `insight_writer`
-  - coverage triage (§12.1)
+  How we got here:
+  - The Codex review's 5 findings were fixed
+    (`REVIEW-CT-INSIGHTS-CODEX.md`).
+  - The `insight_writer` login was created by the user on `vm-debian`,
+    and its credentials copied (never displayed) from
+    `/home/prod/hhm_rpp_ge/.env` to this checkout's `.env`.
+  - 003 was applied by the user, 2026-11-03 21:58 UTC.
+
+  Observations for later:
+  - **Device clock drift.** Some scanners' clocks run ahead of capture
+    time: SME20594 ~37 min, SME16618 ~26 min, SME21873 ~11 min. Phase 3
+    busy-hour and cross-system timelines need a per-system clock-offset
+    estimate.
+  - **Server permissions (flagged to the user, not changed).**
+    `/home/prod/hhm_rpp_ge/.env` is world-readable and `/home/prod` is
+    world-writable. Suggested fix, run as `prod`: `chmod 600
+    /home/prod/hhm_rpp_ge/.env` and `chmod 755 /home/prod`.
+
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -426,7 +432,7 @@ external scrub handles that.
 | **0. Decide** | Answer §9 questions; freeze metric catalog v1 | Catalog agreed |
 | **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ✅ (2026-11-03 19:44 UTC); `down` script tested in a dry run ✅ (`roundtrip`) |
 | **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ✅ (fix live 2026-11-03 19:45 UTC); cleanup done ✅ (§11.6) |
-| **2. Extract** | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
+| **2. Extract** ✅ 2026-11-03 | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
 | **3. Derive** | daily, exams, tube segments, capabilities | Replacements detected on SME16618 (installed 06‑02, confirmed), SME15218, SME21864 (~07‑15); SME21873's 0-glitches are not counted as swaps; exam counts sanity-checked with 2–3 sites; swaps spot-checked with field service, since there's no DB source of truth |
 | **4. Findings** | rules + open/resolve | Flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful |
 | **5. Prod** | (Migrations already applied, §11/§12.) One-off backfill via `cli.js --backfill` off-peak. Deploy the `index.js` hook (no new cron line) via dev → staging → prod, then `git pull` on `vm-debian`. Monitor the run logs | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |

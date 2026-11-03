@@ -170,6 +170,38 @@ const FORBIDDEN_ANYWHERE = [
   /\bCOPY\b[^;]*\bPROGRAM\b/i,
 ];
 
+// Function calls are checked everywhere (view bodies, column DEFAULTs,
+// function bodies), because they run later, outside the migration's catalog
+// checks (review F1). Unqualified names resolve via the runner's pinned
+// search_path (pg_catalog), so only schema-qualified calls can reach user
+// code: those must target insight.*, pg_catalog.* or api.ge_ct_*.
+const SIDE_EFFECT_BUILTINS = /\b(setval|pg_advisory\w*|pg_try_advisory\w*|pg_notify|lo_\w+|pg_sleep\w*|pg_switch_wal|pg_create_\w+|pg_drop_\w+|pg_replication_\w+|pg_stat_reset\w*|pg_stat_statements_reset|pg_rotate_logfile|pg_promote|pg_file_\w+|txid_current\w*|pg_current_xact_id\w*|pg_log_backend_memory_contexts|pg_import_system_collations|pg_logical_emit_message)\s*\(/i;
+
+// Qualified calls and side-effecting built-ins: run on text whose string
+// literals are masked (so quoted words can't trip it).
+function checkCalls(text, line) {
+  const bad = SIDE_EFFECT_BUILTINS.exec(text);
+  if (bad) throw new ScanError(`side-effecting function ${bad[1]}() is not allowed`, line);
+  const q = new RegExp(String.raw`\b(${IDENT})\s*\.\s*(${IDENT})\s*\(`, "g");
+  let m;
+  while ((m = q.exec(text))) {
+    const schema = m[1].replace(/"/g, "").toLowerCase();
+    const name = m[2].replace(/"/g, "").toLowerCase();
+    if (schema === "insight" || schema === "pg_catalog" || (schema === "api" && /^ge_ct_/.test(name))) continue;
+    throw new ScanError(`call or reference ${schema}.${name}(...) outside insight/pg_catalog/api.ge_ct_*`, line);
+  }
+}
+
+// nextval/currval: run on raw text (literals intact). Must name an insight.* sequence literally.
+function checkSequences(text, line) {
+  const seq = /\b(nextval|currval)\s*\(\s*(?:'([^']*)'|([^)\s]*))/gi;
+  let m;
+  while ((m = seq.exec(text))) {
+    if (m[2] === undefined) throw new ScanError(`${m[1]}() must take a literal sequence name`, line);
+    if (!/^insight\.[a-z_][a-z0-9_]*$/i.test(m[2].replace(/"/g, ""))) throw new ScanError(`${m[1]}('${m[2]}'): only insight.* sequences`, line);
+  }
+}
+
 // Top-level statement kinds refused outright.
 const FORBIDDEN_TOP = [
   [/^(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE|PREPARE\s+TRANSACTION)\b/i, "transaction control (the runner owns the transaction)"],
@@ -411,7 +443,14 @@ function scanSql(src, { filename = "<sql>" } = {}) {
       const { shape, bodies, literals } = mask(s.sql);
       for (const [rx, why] of FORBIDDEN_TOP) if (rx.test(shape)) throw new ScanError(why, s.line);
       const info = parseTop(shape, s.line);
-      for (const b of bodies) scanBody(b, s.line);
+      // calls: on the shape (literals masked) for qualified calls, on the raw
+      // text for nextval('...') literals, and on every function body
+      checkCalls(shape.replace(/\$body\$/g, ""), s.line);
+      checkSequences(s.sql, s.line); // raw text incl. bodies
+      for (const b of bodies) {
+        scanBody(b, s.line);
+        checkCalls(mask(b).shape, s.line);
+      }
       // format() literals at top level are not executed; nothing to scan there.
       void literals;
       statements.push({ sql: s.sql, line: s.line, info });

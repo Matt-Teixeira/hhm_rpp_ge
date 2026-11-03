@@ -172,3 +172,14 @@ test("a throwing rule is reported, not fatal", () => {
   assert.deepStrictEqual(out.errors.map((e) => e.key), ["x.y"]);
   assert.deepStrictEqual(out.facts.map((f) => f.metric_key), ["tube.mas_total"]);
 });
+
+// Review F5 (Codex 2026-11-03)
+test("non-finite numbers never reach a fact", () => {
+  const f = only(row("scanmgr", "tube usage data reports a total of " + "9".repeat(400) + " ma*S"), "tube.mas_total");
+  assert.strictEqual(f.value_num, null);
+  const bad = [{ key: "x.y", version: 1, process: null, extract: () => ({ value_num: -Infinity }) }];
+  assert.strictEqual(facts_for_row(row("p", "m"), bad).facts[0].value_num, null);
+  const str = [{ key: "x.y", version: 1, process: null, extract: () => ({ value_num: "12" }) }];
+  assert.strictEqual(facts_for_row(row("p", "m"), str).facts[0].value_num, null);
+});
+

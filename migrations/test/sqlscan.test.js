@@ -136,3 +136,27 @@ test("allows the expected insight / api.ge_ct_* forms", () => {
   allow("GRANT USAGE, SELECT ON SEQUENCE insight.s TO insight_writer");
   allow("GRANT USAGE ON SCHEMA insight TO insight_writer");
 });
+
+// Review F1 (Codex 2026-11-03): calls that run later, outside the migration.
+test("refuses side-effecting or out-of-scope calls in views, defaults and bodies", () => {
+  refuse("CREATE VIEW api.ge_ct_probe AS SELECT nextval('public.external_seq')", /only insight\.\* sequences/);
+  refuse("CREATE VIEW api.ge_ct_probe AS SELECT public.write_to_log()", /outside insight\/pg_catalog/);
+  refuse("CREATE VIEW api.ge_ct_probe AS SELECT x FROM insight.a WHERE log.fn(x)", /outside insight\/pg_catalog/);
+  refuse("CREATE TABLE insight.t (x int DEFAULT public.fn())", /outside insight\/pg_catalog/);
+  refuse("CREATE TABLE insight.t (x bigint DEFAULT nextval('log.some_seq'))", /only insight\.\* sequences/);
+  refuse("CREATE VIEW api.ge_ct_probe AS SELECT setval('insight.s', 1)", /side-effecting/);
+  refuse("CREATE VIEW api.ge_ct_probe AS SELECT pg_catalog.pg_advisory_lock(1)", /side-effecting/);
+  refuse("CREATE VIEW api.ge_ct_probe AS SELECT nextval(some_var)", /literal sequence name/);
+  refuse(`CREATE FUNCTION insight.f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM public.write_to_log(); END $$`, /outside insight\/pg_catalog/);
+  refuse(`CREATE FUNCTION insight.f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_notify('c', 'x'); END $$`, /side-effecting/);
+});
+
+test("still allows in-scope calls and plain built-ins", () => {
+  allow("CREATE TABLE insight.t (id bigint NOT NULL DEFAULT nextval('insight.t_id_seq'), at timestamptz DEFAULT now())");
+  allow("CREATE VIEW api.ge_ct_x_v AS SELECT count(*), max(a.x), coalesce(a.y, 0), array_position(ARRAY['a','b']::text[], a.z) FROM insight.a a");
+  allow("CREATE VIEW api.ge_ct_x_v AS SELECT pg_catalog.lower(a.z) FROM insight.a a");
+  allow(`CREATE FUNCTION insight.f() RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN insight.g(1); END $$`);
+  allow("COMMENT ON FUNCTION insight.ensure_ge_ct_facts_partitions(timestamptz, timestamptz) IS 'x'");
+  allow("CREATE TABLE insight.c (k text REFERENCES insight.metric_catalog (metric_key))");
+});
+

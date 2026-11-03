@@ -18,11 +18,22 @@
 //                                   re-verify, DELETE by primary key, check
 //                                   rowCount == expected, else ROLLBACK
 //   verify  --table <archive_log.x> read-only post-checks
+//   restore-sql --table <archive_log.x>
+//                                   read-only: print the exact restore statement
+//                                   and how many rows it would put back
 // Without --apply, archive/delete run inside BEGIN ... ROLLBACK.
 //
-// Restore (if ever needed), per partition:
-//   INSERT INTO log.ge_ct_gesys (<all columns>)
-//   SELECT <all columns> FROM <archive table> WHERE src_partition = '<partition>';
+// Concurrency (review F3): new alert.detections references are re-checked
+// AFTER the delete, inside the same transaction, just before COMMIT. That
+// narrows the race with a concurrent detection insert to the commit itself;
+// fully closing it would need a lock on alert.detections, which this tool
+// deliberately doesn't take (not our table). Run it between alert-processor
+// runs. The 2026-11-03 run was verified afterwards: 0 detections pointed at
+// deleted rows.
+//
+// Restore (review F4): use `restore-sql`. It restores only rows that were
+// deleted (NOT referenced_by_detection: the kept rows are still live) and
+// is safe to re-run (ON CONFLICT DO NOTHING on the primary key).
 
 const fs = require("fs");
 const path = require("path");
@@ -53,6 +64,13 @@ const DUPS_SQL = `
 // IN (subquery) so Postgres hashes the referenced ids once (hashed SubPlan)
 const REFERENCED = (alias) =>
   `(${alias}.id::text IN (SELECT d.row_id FROM alert.detections d WHERE d.pg_table = 'log.ge_ct_gesys' AND d.row_id IS NOT NULL))`;
+
+const RESTORE_SQL = (t) => `
+    INSERT INTO log.ge_ct_gesys (${ALL_COLS.join(", ")})
+    SELECT ${ALL_COLS.map((c) => `a.${c}`).join(", ")}
+    FROM ${t} a
+    WHERE NOT a.referenced_by_detection
+    ON CONFLICT DO NOTHING`;
 
 const sql = {
   preview: `
@@ -124,14 +142,14 @@ function args(argv) {
     else if (argv[i] === "--partition") a.partition = argv[++i];
     else throw fail(`unknown argument ${argv[i]}`);
   }
-  if (!["preview", "archive", "delete", "verify"].includes(a.cmd)) throw fail("usage: dedupe_ge_ct_gesys.js preview | archive --cutoff ISO [--apply] | delete --table T [--partition P] [--apply] | verify --table T");
+  if (!["preview", "archive", "delete", "verify", "restore-sql"].includes(a.cmd)) throw fail("usage: dedupe_ge_ct_gesys.js preview | archive --cutoff ISO [--apply] | delete --table T [--partition P] [--apply] | verify --table T | restore-sql --table T");
   if (a.apply && !["archive", "delete"].includes(a.cmd)) throw fail("--apply only for archive/delete");
   if (a.cmd === "archive") {
     if (!a.cutoff || Number.isNaN(Date.parse(a.cutoff))) throw fail("archive needs --cutoff <ISO timestamp>");
     const d = new Date(a.cutoff);
     a.table = `archive_log.ge_ct_gesys_dups_${d.toISOString().slice(0, 10).replace(/-/g, "")}`;
   }
-  if (["delete", "verify"].includes(a.cmd) && !ARCHIVE_RX.test(a.table || "")) throw fail("--table must be archive_log.ge_ct_gesys_dups_YYYYMMDD");
+  if (["delete", "verify", "restore-sql"].includes(a.cmd) && !ARCHIVE_RX.test(a.table || "")) throw fail("--table must be archive_log.ge_ct_gesys_dups_YYYYMMDD");
   if (a.partition && !PART_RX.test(a.partition)) throw fail("--partition must be log.ge_ct_gesys_YYYY_MM");
   return a;
 }
@@ -257,9 +275,12 @@ async function del(a) {
           const t0 = Date.now();
           const r = await c.result(sql.del(a.table, p), [p]);
           if (r.rowCount !== expected) throw fail(`${p}: deleted ${r.rowCount}, expected ${expected}`);
+          // F3: re-check after the delete, just before COMMIT
+          const { n: late } = await c.one(sql.checks(a.table).now_referenced_by_detection, [p]);
+          if (late !== 0) throw fail(`${p}: ${late} deleted row(s) became referenced by alert.detections during the delete`);
           await c.none(a.apply ? "COMMIT" : "ROLLBACK");
           total += r.rowCount;
-          out(`  ${p}: pre-checks 0/0/0/0, deleted ${r.rowCount} = expected, ${Date.now() - t0} ms → ${a.apply ? "COMMIT" : "ROLLBACK (dry run)"}`);
+          out(`  ${p}: pre-checks 0/0/0/0, deleted ${r.rowCount} = expected, post-check 0, ${Date.now() - t0} ms → ${a.apply ? "COMMIT" : "ROLLBACK (dry run)"}`);
         } catch (e) {
           await c.none("ROLLBACK").catch(() => {});
           throw e;
@@ -267,6 +288,24 @@ async function del(a) {
       });
     }
     out(`${a.apply ? "deleted" : "would delete"} ${total} rows`);
+  } finally {
+    await db.$pool.end();
+  }
+}
+
+async function restore_sql(a) {
+  const db = connect(900000, true);
+  try {
+    const r = await db.one(`
+      SELECT count(*) FILTER (WHERE NOT referenced_by_detection)::int AS to_restore,
+             count(*) FILTER (WHERE referenced_by_detection)::int AS kept_live_skipped,
+             count(*) FILTER (WHERE NOT referenced_by_detection AND EXISTS (
+               SELECT 1 FROM log.ge_ct_gesys g WHERE g.id = a.id AND g.capture_datetime = a.capture_datetime))::int AS already_live
+      FROM ${a.table} a`);
+    out(`read-only check: ${r.to_restore} rows would be restored; ${r.kept_live_skipped} kept rows skipped (still live); ${r.already_live} already present (ON CONFLICT skips them)`);
+    hr();
+    out("RESTORE STATEMENT (run in one transaction, after review/approval):");
+    out(RESTORE_SQL(a.table).trim() + ";");
   } finally {
     await db.$pool.end();
   }
@@ -296,6 +335,7 @@ async function verify(a) {
   if (a.cmd === "archive") await archive(a);
   if (a.cmd === "delete") await del(a);
   if (a.cmd === "verify") await verify(a);
+  if (a.cmd === "restore-sql") await restore_sql(a);
 })()
   .catch((e) => {
     hr();

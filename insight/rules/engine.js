@@ -48,7 +48,8 @@ function facts_for_row(row, rules) {
     facts.push({
       metric_key: r.key,
       rule_version: r.version,
-      value_num: out.value_num === undefined || Number.isNaN(out.value_num) ? null : out.value_num,
+      // Non-finite numbers (NaN, ±Infinity from absurdly long digit runs) become null (review F5).
+      value_num: typeof out.value_num === "number" && Number.isFinite(out.value_num) ? out.value_num : null,
       value_text: out.value_text === undefined ? null : out.value_text,
       exam_no: out.exam_no === undefined ? null : out.exam_no,
       attrs: out.attrs === undefined ? null : out.attrs,

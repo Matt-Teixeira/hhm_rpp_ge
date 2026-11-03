@@ -11,7 +11,8 @@
 // public.sites. Its insight.* rights come from migration 003 (versioned
 // with the schema). Nothing else: no superuser/createdb/createrole/
 // replication/bypassrls, and the script refuses to commit if the role
-// would hold any write/DDL privilege outside insight (including via PUBLIC).
+// would hold any write/DDL privilege outside insight (including via PUBLIC)
+// or could execute any SECURITY DEFINER function outside pg_catalog.
 // Read-only grants PUBLIC already has (e.g. pg_stat_statements) are listed.
 //
 // Secret handling: the password is generated here, sent to the server
@@ -69,6 +70,17 @@ const UNEXPECTED_PRIVS_SQL = `
   SELECT 'schema ' || nspname, 'CREATE' FROM pg_namespace
   WHERE has_schema_privilege($1, oid, 'CREATE') AND nspname NOT IN ('pg_catalog','information_schema') AND nspname !~ '^pg_(toast|temp)'
   ORDER BY 1, 2`;
+
+// SECURITY DEFINER functions run with their owner's rights, so EXECUTE on
+// one could let the role write outside insight (review F2). SECURITY INVOKER
+// functions run with the caller's own (limited) rights and are harmless.
+const DEFINER_FUNCS_SQL = `
+  SELECT n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS fn,
+         pg_get_userbyid(p.proowner) AS owner
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE p.prosecdef AND has_function_privilege($1, p.oid, 'EXECUTE')
+    AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  ORDER BY 1`;
 
 async function main() {
   const apply = process.argv.includes("--apply");
@@ -138,6 +150,12 @@ async function main() {
           bad.slice(0, 20).forEach((b) => out(`  UNEXPECTED ${b.priv} on ${b.obj}`));
           throw fail(`${ROLE} would hold ${bad.length} write/DDL privilege(s) outside insight (e.g. via PUBLIC): not committing`);
         }
+        const definer = await c.any(DEFINER_FUNCS_SQL, [ROLE]);
+        if (definer.length) {
+          definer.slice(0, 20).forEach((d) => out(`  UNEXPECTED EXECUTE on SECURITY DEFINER ${d.fn} (owner ${d.owner})`));
+          throw fail(`${ROLE} could execute ${definer.length} SECURITY DEFINER function(s): not committing`);
+        }
+        out("  ok  no executable SECURITY DEFINER functions outside pg_catalog");
         const ok = await c.one(`SELECT bool_and(has_table_privilege($1, t, 'SELECT')) AS sel FROM unnest($2::text[]) t`, [ROLE, SOURCE_TABLES]);
         if (!ok.sel) throw fail("SELECT on source tables not effective");
         out("  ok  privilege check: SELECT on the 3 source tables; no write/DDL privilege anywhere outside insight (checked every table, view, sequence and schema)");

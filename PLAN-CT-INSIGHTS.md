@@ -75,6 +75,11 @@ schema, rule registry per source), but nothing is built for them yet.
     errors, and **all 585 system×metric counts equal the independent SQL
     counts**
 
+  **Codex review (2026-11-03): 5 findings, all fixed**
+  (`REVIEW-CT-INSIGHTS-CODEX.md`). The biggest was a scanner gap:
+  side-effecting or out-of-scope function calls in views and DEFAULTs.
+  43 tests now pass.
+
   Waiting on:
   - the user runs the login script on `vm-debian`
   - 003 is applied

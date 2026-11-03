@@ -13,22 +13,23 @@ schema, rule registry per source), but nothing is built for them yet.
 ## Status (2026-11-03)
 
 - **Phase 0 done.** Decisions in §9.
-- **Phase 1 built, dry-run verified on prod, NOT applied.** Waiting for
-  the go-ahead to run `--apply`. `migrations/run.js` (guarded runner,
-  §10), `001_insight_schema.sql` (+down), and `002_api_views.sql` (+down,
-  v0 placeholder views) are written. `node migrations/test/sqlscan.test.js`
-  passes 8/8 (no DB needed). Verified against prod:
-  - static scan ok on all 4 files
-  - dry run of up 001→002: 166 in-scope objects created; all 2,892
-    protected catalog fingerprints unchanged; the migration statements
-    take no locks on protected relations; ROLLBACK; a fresh connection
-    shows the catalog identical, so nothing persisted
-  - `roundtrip` (up 001→002, then down 002→001, in one transaction): the
-    catalog is restored exactly (2,892 objects, including `api`); rolled
-    back
+- **Phase 1 done: applied to prod 2026-11-03 19:44:38 UTC** by the user
+  on `vm-debian` from a clean checkout at `2bc73b6`. The runner ended
+  `APPLIED`:
+  - all 2,892 protected fingerprints unchanged
+  - no locks taken on protected relations
+  - a fresh-connection re-check passed
 
-  To apply: `node migrations/run.js up --apply` (type `prod`, then
-  `APPLY`).
+  Independently verified afterwards: `status` shows 2/2 applied with
+  matching checksums; 36 `insight` tables (including partitions) and the
+  5 `api.ge_ct_*` views exist and are empty.
+
+  Before applying, the same was verified as a dry run:
+  - static scan ok on all 4 files; `node migrations/test/sqlscan.test.js`
+    passes 8/8
+  - dry run of up 001→002: catalog unchanged after ROLLBACK
+  - `roundtrip` (up 001→002, then down 002→001): the catalog was
+    restored exactly
 - **Phase 1b: root cause found (§11). Fix step 1 implemented on `dev`
   and verified; not yet deployed. Cleanup approved in principle, and the
   exact statements are awaiting approval.** Step 1 lives in
@@ -43,7 +44,7 @@ schema, rule registry per source), but nothing is built for them yet.
   The lookup costs 17 ms in the worst case (2 weeks, 14k rows) and 0.1 ms
   for a normal batch. `node test/drop_already_ingested.test.js` passes
   9/9. New duplicates stop only once the prod server runs this code.
-  **Step 2 approved and implemented on `dev`, not yet deployed.**
+  **Step 2 approved and implemented. Steps 1 and 2 were pushed to dev, staging and prod (`2bc73b6`), and `vm-debian` is on that commit (its migration record shows it).**
   - Code: `read/gesys_head.js`, plus an opt-in `force_full_read` flag in
     `acquisition/GE_CT_CV_MRI.js` (CV/MRI never set it).
   - Header check: across 6,816 snapshots of 71 CT files, the
@@ -367,7 +368,7 @@ external scrub handles that.
 | Phase | Work | Exit criteria |
 |---|---|---|
 | **0. Decide** | Answer §9 questions; freeze metric catalog v1 | Catalog agreed |
-| **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ⏳ (awaiting go); `down` script tested in a dry run ✅ (`roundtrip`) |
+| **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ✅ (2026-11-03 19:44 UTC); `down` script tested in a dry run ✅ (`roundtrip`) |
 | **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ⏳ (fix proposed §11.4, awaiting approval); cleanup decision recorded ⏳ |
 | **2. Extract** | Rule registry + fixtures + `extract.js`; dry-run against prod (read-only reads, extract counts only, no writes), then `--apply` into `insight.*` | Rule tests pass; per-system fact counts reconcile with hand-run SQL from this investigation (±dedupe) |
 | **3. Derive** | daily, exams, tube segments, capabilities | Replacements detected on SME16618 (installed 06‑02, confirmed), SME15218, SME21864 (~07‑15); SME21873's 0-glitches are not counted as swaps; exam counts sanity-checked with 2–3 sites; swaps spot-checked with field service, since there's no DB source of truth |

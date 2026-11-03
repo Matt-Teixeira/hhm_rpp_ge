@@ -16,7 +16,7 @@
   "ermes_number": 260134622
  },
  {
-  "templates_seen": 10030,
+  "templates_seen": 10034,
   "type": "HOST\ttgp_subsys",
   "message": "\nGantry (Axial) LOOP CONTACTOR state is Still CLOSED.\nThe Loop Contactor status is NOT changing to the OPEN state.\n(AMC State:9).\n",
   "exception_class": "Secondary",
@@ -40,12 +40,12 @@
   "ermes_number": 260142544
  },
  {
-  "templates_seen": 5225,
+  "templates_seen": 5230,
   "type": "HOST\ttgp_subsys",
-  "message": "\n[INTERNAL LANDMARK] pushbutton on Gantry Control Panel was pressed.\nNode Id: 4, Board Number: 5139591, Serial Number: 16470.\n",
+  "message": "\n[INTERNAL LANDMARK] pushbutton on Gantry Control Panel was pressed.\nNode Id: 3, Board Number: 5310000, Serial Number: 3270.\n",
   "exception_class": "Secondary",
   "severity": "Pri/Soft",
-  "ermes_number": 260111052
+  "ermes_number": 260111053
  },
  {
   "templates_seen": 4789,

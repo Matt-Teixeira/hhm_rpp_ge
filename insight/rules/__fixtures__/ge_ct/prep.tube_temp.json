@@ -1,6 +1,6 @@
 [
  {
-  "templates_seen": 5971,
+  "templates_seen": 5972,
   "type": "HOST\tdailyPrepRx",
   "message": "Tube temperature before Cold Tube Warmup is 200.00 degrees Celsius.\n",
   "exception_class": null,
@@ -8,23 +8,23 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 5971,
+  "templates_seen": 5972,
   "type": "HOST\tdailyPrepRx",
-  "message": "Tube temperature after Cold Tube Warmup is 468.63 degrees Celsius.\n",
+  "message": "Tube temperature after Cold Tube Warmup is 468.71 degrees Celsius.\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 4730,
+  "templates_seen": 4732,
   "type": "HOST\tdailyPrepRx",
-  "message": "Tube temperature before WarmupII is 566.31 degrees Celsius.\n",
+  "message": "Tube temperature before WarmupII is 681.11 degrees Celsius.\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 4321,
+  "templates_seen": 4322,
   "type": "HOST\tdailyPrepRx",
   "message": "Tube temperature before Mylar Window Check is 200.00 degrees Celsius.\n",
   "exception_class": null,
@@ -48,17 +48,17 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 3515,
+  "templates_seen": 3516,
   "type": "HOST\tdailyPrepRx",
-  "message": "Tube temperature before Cold Tube Warmup (Fast Calibration) is 202.59 degrees Celsius.\n",
+  "message": "Tube temperature before Cold Tube Warmup (Fast Calibration) is 202.60 degrees Celsius.\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 3132,
+  "templates_seen": 3133,
   "type": "HOST\tdailyPrepRx",
-  "message": "Tube temperature before Collimator Calibration is 730.10 degrees Celsius.\n",
+  "message": "Tube temperature before Collimator Calibration is 730.02 degrees Celsius.\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null

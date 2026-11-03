@@ -10,7 +10,7 @@
  {
   "templates_seen": 1,
   "type": "HOST\tenvironmentMgr",
-  "message": "Running: System Reset\nSystem shutdown started from desktop button\n",
+  "message": "Running Version Management Tool\nSystem shutdown started from desktop button\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -18,7 +18,7 @@
  {
   "templates_seen": 1,
   "type": "HOST\tenvironmentMgr",
-  "message": "Running Version Management Tool\nSystem shutdown started from desktop button\n",
+  "message": "Running: System Reset\nSystem shutdown started from desktop button\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null

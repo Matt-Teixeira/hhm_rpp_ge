@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 419178,
+  "type": "HOST\tenvironmentMgr",
+  "message": "with status:\n%bSend of message with event code 2014 from service uif_env_mgr to Event Router process failed with status:\nIPC failure.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 12828,
+  "type": "HOST\texamRxEnv",
+  "message": "Send of message with event code 3212 from service uif_exam_rx_env to Event Router process failed with status:\nThe event router received an event that had no receivers registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 3218,
+  "type": "HOST\texamRxEnv",
+  "message": "with status:\n%bSend of message with event code 3212 from service uif_exam_rx_env to Event Router process failed with status:\nThe event router received an event that had no receivers registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1235,
+  "type": "HOST\tenvironmentMgr",
+  "message": "Send of message with event code 2014 from service uif_env_mgr to Event Router process failed with status:\nThe event router received an event that had no primary receiver registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 187,
+  "type": "HOST\texamRxEnv",
+  "message": "Send of message with event code 3212 from service uif_exam_rx_env to Event Router process failed with status:\nThe event router received an event that had no primary receiver registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 138,
+  "type": "HOST\tscanRx",
+  "message": "Send of message with event code 3212 from service uif_scan_rx to Event Router process failed with status:\nTimed out while attempting to receive a message.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 41,
+  "type": "HOST\texamRxEnv",
+  "message": "with status:\n%bSend of message with event code 3212 from service uif_exam_rx_env to Event Router process failed with status:\nTimed out while attempting to receive a message.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 31,
+  "type": "HOST\tpetRetro",
+  "message": "Send of message with event code 1001 from service ctpet_retro_recon to Event Router process failed with status:\nThe event router received an event that had no receivers registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

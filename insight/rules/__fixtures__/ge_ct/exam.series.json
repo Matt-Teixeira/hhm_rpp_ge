@@ -1,14 +1,14 @@
 [
  {
-  "templates_seen": 23078,
+  "templates_seen": 23089,
   "type": "HOST\tscanRx",
-  "message": "Series: 1 : Scans: 2 : Images: 2  (Scout)\nSeries: 2 : Scans: 1 : Images: 99 : PMRSeries(3)\n\n",
+  "message": "Series: 1 : Scans: 2 : Images: 2  (Scout)\nSeries: 2 : Scans: 1 : Images: 97 : PMRSeries(1)\n\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 3183,
+  "templates_seen": 3184,
   "type": "HOST\tscanRx",
   "message": "Series: 0 : Scans: 0 : Images: 0 : PMRSeries(0)\n\n",
   "exception_class": null,
@@ -24,9 +24,9 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 2739,
+  "templates_seen": 2742,
   "type": "HOST\tscanRx",
-  "message": "Series: 1 : Scans: 2 : Images: 2  (Scout)\nSeries: 2 : Scans: 1 : Images: 514 : PMRSeries(2)\nSeries: 5 : Scans: 1 : Images: 486 : PMRSeries(2)\n\n",
+  "message": "Series: 1 : Scans: 2 : Images: 2  (Scout)\nSeries: 2 : Scans: 1 : Images: 120 : PMRSeries(3)\nSeries: 6 : Scans: 1 : Images: 121 : PMRSeries(2)\n\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -40,9 +40,9 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 1471,
+  "templates_seen": 1472,
   "type": "HOST\tscanRx",
-  "message": "Series: 1 : Scans: 2 : Images: 2  (Scout)\nSeries: 2 : Scans: 1 : Images: 299 : PMRSeries(2)\nSeries: 12 : Scan Series: 901 : Images: 299: (Static PET -  MAC)\nSeries: 13 : Scan Series: 901 : Images: 299: (Static PET -  NAC)\n\n",
+  "message": "Series: 1 : Scans: 2 : Images: 2  (Scout)\nSeries: 2 : Scans: 1 : Images: 263 : PMRSeries(2)\nSeries: 12 : Scan Series: 901 : Images: 263: (Static PET -  MAC)\nSeries: 13 : Scan Series: 901 : Images: 263: (Static PET -  NAC)\n\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null

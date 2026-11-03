@@ -183,3 +183,15 @@ test("non-finite numbers never reach a fact", () => {
   assert.strictEqual(facts_for_row(row("p", "m"), str).facts[0].value_num, null);
 });
 
+test("IPC and image-space reliability metrics (coverage triage 2026-11-03)", () => {
+  const a = only(row("environmentMgr", "with status:\n%bSend of message with event code 2014 from service uif_env_mgr to Event Router process failed with status:\nIPC failure.\n"), "ipc.event_router_send_failed");
+  assert.deepStrictEqual([a.value_num, a.value_text, a.attrs], [2014, "uif_env_mgr", { status: "IPC failure." }]);
+  const b = only(row("scanUtilsRx", "with status:\n%bSend of message with event code 1003 from service  to Event Router process failed with status:\nNo service has been provided for this process.\n"), "ipc.event_router_send_failed");
+  assert.deepStrictEqual([b.value_num, b.value_text], [1003, null]);
+  assert.strictEqual(only(row("environmentMgr", "EnvironmentMgr received SIGPIPE, broken pipe\n"), "ipc.sigpipe").value_text, "environmentMgr");
+  const q = only(row("dms", "Image space query failed. Error code: -1\n"), "storage.image_space_error");
+  assert.deepStrictEqual([q.value_num, q.value_text], [-1, "query_failed"]);
+  const u = only(row("environmentMgr", "Updating image space, received a bad status code: -1\nReason: OS error : -1 --- Unknown error 4294967295\n"), "storage.image_space_error");
+  assert.deepStrictEqual([u.value_num, u.value_text, u.attrs], [-1, "update_bad_status", { reason: "OS error : -1 --- Unknown error 4294967295" }]);
+});
+

@@ -1,0 +1,18 @@
+[
+ {
+  "templates_seen": 28012,
+  "type": "HOST\tenvironmentMgr",
+  "message": "Updating image space, received a bad status code: -1\nReason: OS error : -1 --- Unknown error 4294967295\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 28012,
+  "type": "HOST\tdms",
+  "message": "Image space query failed. Error code: -1\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

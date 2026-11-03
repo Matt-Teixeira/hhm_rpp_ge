@@ -10,6 +10,11 @@ const { rules } = require("./rules/ge_ct");
 const { validate_rules } = require("./rules/engine");
 const { stream } = require("./extract");
 const { RECONCILE_SQL } = require("./reconcile_sql");
+const { ignore } = require("./rules/ge_ct_ignore");
+
+const RECENT_MS = 30 * 24 * 3600 * 1000;
+const COVERAGE_THRESHOLD = 500; // rows per template per 30 days (§8)
+const ignored = (proc, msg) => ignore.find((i) => (!i.process || i.process === proc) && i.re.test(msg || ""));
 
 function args(argv) {
   const a = { cmd: argv[0], system: null, from_id: 0, to_id: null };
@@ -38,6 +43,9 @@ async function dry_run(a) {
     const per = new Map();      // `${system}|${key}` -> n
     const perKey = new Map();   // key -> {n, systems:Set}
     const unmatched = new Map(); // `${proc}|${tmpl}` -> {n, systems:Set}
+    const recent = new Map();    // same, host_datetime within 30 days, not ignored
+    const recentIgnored = new Map(); // ignore entry -> rows in 30 days
+    const since = Date.now() - RECENT_MS;
     const skipped = {};
     const ruleErrors = new Map();
     await stream(db, {
@@ -60,6 +68,12 @@ async function dry_run(a) {
           const k = `${proc.trim()}|${template(r.message)}`;
           const u = unmatched.get(k) || { n: 0, systems: new Set() };
           u.n++; u.systems.add(r.system_id); unmatched.set(k, u);
+          if (r.host_datetime && new Date(r.host_datetime).getTime() >= since) {
+            const ig = ignored(proc.trim(), r.message);
+            if (ig) { recentIgnored.set(ig, (recentIgnored.get(ig) || 0) + 1); continue; }
+            const v = recent.get(k) || { n: 0, systems: new Set(), example: r.message };
+            v.n++; v.systems.add(r.system_id); recent.set(k, v);
+          }
         }
         if (batches % 10 === 0) process.stderr.write(`  ... ${rows} rows, ${facts} facts\n`);
       },
@@ -83,7 +97,18 @@ async function dry_run(a) {
     console.log(`\nreconciliation vs independent SQL (${keys.size} system×metric cells): ${diffs.length ? `${diffs.length} differ` : "all equal"}`);
     for (const d of diffs.slice(0, 40)) console.log(`  ${d.k.padEnd(48)} js=${d.js} sql=${d.sql} (${d.js - d.sql > 0 ? "+" : ""}${d.js - d.sql})`);
 
-    console.log("\ntop unmatched templates (coverage report):");
+    const uncovered = [...recent.entries()].filter(([, v]) => v.n > COVERAGE_THRESHOLD).sort((x, y) => y[1].n - x[1].n);
+    console.log(`\ncoverage criterion (last 30 days, > ${COVERAGE_THRESHOLD} rows, no rule and no ignore entry): ${uncovered.length ? `${uncovered.length} template(s) uncovered` : "MET"}`);
+    for (const [k, v] of uncovered) {
+      const [proc, tmpl] = k.split("|");
+      console.log(`  ${String(v.n).padStart(7)} ${String(v.systems.size).padStart(2)}sys ${proc.padEnd(15).slice(0, 15)} ${tmpl}`);
+    }
+    if (recentIgnored.size) {
+      console.log("ignore/watch entries matched in the last 30 days:");
+      for (const [ig, n] of [...recentIgnored.entries()].sort((x, y) => y[1] - x[1])) console.log(`  ${String(n).padStart(7)} [${ig.status}] ${ig.re} — ${ig.reason}`);
+    }
+
+    console.log("\ntop unmatched templates, all history (coverage report):");
     const top = [...unmatched.entries()].sort((x, y) => y[1].n - x[1].n).slice(0, 30);
     for (const [k, u] of top) {
       const [proc, tmpl] = k.split("|");

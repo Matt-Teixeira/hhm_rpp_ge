@@ -268,6 +268,37 @@ const rules = [
     }),
   },
 
+  {
+    key: "ipc.event_router_send_failed", version: 1, category: "reliability", value_kind: "event", unit: null,
+    label: "Event Router send failed", description: "Send of a message to the Event Router process failed (any process). value_num = event code, value_text = sending service, attrs.status = failure reason. SME01434 logged ~419k on 2026-08-06 (§12.1).",
+    process: null,
+    extract: (row) => {
+      const m = /Send of message with event code\s+(\d+)\s+from service\s*(\S*)\s+to Event Router process failed with status:\s*([^\n]*)/i.exec(row.message || "");
+      return m ? { value_num: num(m[1]), value_text: m[2] || null, exam_no: null, attrs: { status: m[3].trim() || null } } : null;
+    },
+  },
+  {
+    key: "ipc.sigpipe", version: 1, category: "reliability", value_kind: "event", unit: null,
+    label: "Broken pipe (SIGPIPE)", description: "A process received SIGPIPE (broken pipe). value_text = process.",
+    process: null,
+    extract: (row) => (/received SIGPIPE, broken pipe/i.test(row.message || "")
+      ? { value_num: null, value_text: row.process || null, exam_no: null, attrs: null } : null),
+  },
+  {
+    key: "storage.image_space_error", version: 1, category: "reliability", value_kind: "event", unit: null,
+    label: "Image space error", description: "Image space query failed / update received a bad status (image storage). value_text = query_failed | update_bad_status, value_num = error code. SME00881 logged ~56k in 2026-05/06 (§12.1).",
+    process: ["dms", "environmentMgr"],
+    extract: (row) => {
+      const msg = row.message || "";
+      let m = /Image space query failed\.\s*Error code:\s*(-?\d+)/i.exec(msg);
+      if (m) return { value_num: num(m[1]), value_text: "query_failed", exam_no: null, attrs: null };
+      m = /Updating image space, received a bad status code:\s*(-?\d+)/i.exec(msg);
+      if (!m) return null;
+      const reason = /Reason:\s*([^\n]*)/.exec(msg);
+      return { value_num: num(m[1]), value_text: "update_bad_status", exam_no: null, attrs: reason ? { reason: reason[1].trim() } : null };
+    },
+  },
+
   // --------------------------------------------------------- compliance
   {
     key: "prep.tube_temp", version: 1, category: "compliance", value_kind: "gauge", unit: "°C",

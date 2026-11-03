@@ -1,10 +1,10 @@
 [
  {
-  "templates_seen": 77241,
+  "templates_seen": 77253,
   "type": "HOST\ttgp_subsys",
   "message": "\n[START SCAN] pushbutton was pressed.\n",
   "exception_class": "Secondary",
   "severity": "Pri/Soft",
-  "ermes_number": 260100189
+  "ermes_number": 260100200
  }
 ]

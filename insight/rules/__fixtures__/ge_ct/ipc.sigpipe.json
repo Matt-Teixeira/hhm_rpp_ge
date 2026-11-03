@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 419186,
+  "type": "HOST\tenvironmentMgr",
+  "message": "EnvironmentMgr received SIGPIPE, broken pipe\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

@@ -892,8 +892,27 @@ Dry run (`node insight/cli.js dry-run`, read-only, 2026-11-03):
 | Reconciliation | 585/585 system×metric cells equal the independent SQL (`insight/reconcile_sql.js`) |
 | Coverage | 34.9% of rows produce a fact |
 
-Coverage triage (open; the §8 criterion is "every template above 500
-rows/30 d has a rule or an explicit ignore"):
+**Coverage triage: done 2026-11-03, criterion MET.** Agreed with the
+user:
+- New reliability metrics: `ipc.event_router_send_failed`, `ipc.sigpipe`,
+  `storage.image_space_error`. The registry now has 37 metrics.
+- Every template above 500 rows/30 d has a rule or an entry in
+  `insight/rules/ge_ct_ignore.js`:
+  - **watch** (kept visible as candidate metrics): thermal-state comm
+    errors, recon "Removing ISR", Scan Prep, fwmgr lost communication,
+    InSite sessions, view corrections
+  - **ignore**: everything else, each entry with a reason
+
+Dry run after triage:
+
+| Item | Result |
+|---|---|
+| Facts | 2,163,661 |
+| Coverage | 65.9% of rows |
+| Reconciliation | 621/621 cells equal |
+| Rule errors | 0 |
+
+Original triage notes:
 - **SME01434: 838,355 rows on 2026‑08‑06 alone.** EnvironmentMgr
   "received SIGPIPE, broken pipe" plus "send … to Event Router process
   failed". That is a single-day log storm and about 28% of the whole

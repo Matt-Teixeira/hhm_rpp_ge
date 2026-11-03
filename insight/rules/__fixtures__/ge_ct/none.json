@@ -1,21 +1,5 @@
 [
  {
-  "templates_seen": 419186,
-  "type": "HOST\tenvironmentMgr",
-  "message": "EnvironmentMgr received SIGPIPE, broken pipe\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 419178,
-  "type": "HOST\tenvironmentMgr",
-  "message": "with status:\n%bSend of message with event code 2014 from service uif_env_mgr to Event Router process failed with status:\nIPC failure.\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
   "templates_seen": 49364,
   "type": "HOST\tenvironmentMgr",
   "message": "Service name  not found in GE services file.\n",
@@ -24,15 +8,15 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 42524,
+  "templates_seen": 42541,
   "type": "HOST\tvisScript",
-  "message": "Status update: Starting Review with volume containing 795 images\n",
+  "message": "Status update: Starting Review with volume containing 775 images\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 37465,
+  "templates_seen": 37484,
   "type": "HOST\tdms",
   "message": "Info: database checkpoint was performed for exam 10001.\n",
   "exception_class": null,
@@ -43,22 +27,6 @@
   "templates_seen": 28377,
   "type": "HOST\tvisScript",
   "message": "Status update: Transfer request for exam=10001, series=603 to host='HOST' sent to Browser with status=Ok\n\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 28012,
-  "type": "HOST\tenvironmentMgr",
-  "message": "Updating image space, received a bad status code: -1\nReason: OS error : -1 --- Unknown error 4294967295\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 28012,
-  "type": "HOST\tdms",
-  "message": "Image space query failed. Error code: -1\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -80,9 +48,9 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 21570,
-  "type": "HOST\tcjmMain",
-  "message": "\"Start processing image_set_id=1.2.3.4.5 num_fov=1 overlap=0 totSlices =71 num_slices=71 min FOV -172.300003 max FOV -172.300003\"\n",
+  "templates_seen": 21581,
+  "type": "HOST\tdbwserver",
+  "message": "\"Start processing image_set_id=1.2.3.4.5 num_fov=1 overlap=0 totSlices =47 num_slices=47 min FOV -433.109985 max FOV -433.109985\"\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -96,9 +64,9 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 17424,
+  "templates_seen": 17730,
   "type": "HOST\timagecreate",
-  "message": "Image : image E10001/S1/I1 event EV_SCOUT_SEGMENT_AVAILABLE with status 200000028 \nEcomm send Failed. From <imagecreate> To <Event Router>\n",
+  "message": "Image : image E10001/S1/I2 event EV_SCOUT_SEGMENT_AVAILABLE with status 200000028 \nEcomm send Failed. From <imagecreate> To <Event Router>\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -128,14 +96,6 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 12828,
-  "type": "HOST\texamRxEnv",
-  "message": "Send of message with event code 3212 from service uif_exam_rx_env to Event Router process failed with status:\nThe event router received an event that had no receivers registered.\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
   "templates_seen": 11344,
   "type": "HOST\tscanRx",
   "message": "logCopyForwardForNewSeries: Series Copy Forward for Pat.Ori Pat.Pos Anat.Ref is enabled\n",
@@ -144,23 +104,23 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 9919,
+  "templates_seen": 9928,
   "type": "HOST\tdbwserver",
-  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 12, Current FOV 8 of 8, reconMethod = 3DIR, Matrix Size = 192, Number of Subsets = 32, FrameLocation = -1061.960, OverlapSlice = 11, Correction = DECY\\ATTN\\SCAT\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE.\"\n",
+  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 12, Current FOV 2 of 8, reconMethod = 3DIR, Matrix Size = 192, Number of Subsets = 32, FrameLocation = -315.390, OverlapSlice = 11, Correction = DECY\\ATTN\\SCAT\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE.\"\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 9794,
+  "templates_seen": 9804,
   "type": "HOST\tdbwserver",
-  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 13, Current FOV 8 of 8, reconMethod = 3DIR, Matrix Size = 192, Number of Subsets = 32, FrameLocation = -1061.960, OverlapSlice = 11, Correction = DECY\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE.\"\n",
+  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 13, Current FOV 3 of 8, reconMethod = 3DIR, Matrix Size = 192, Number of Subsets = 32, FrameLocation = -433.110, OverlapSlice = 11, Correction = DECY\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE.\"\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 9766,
+  "templates_seen": 9768,
   "type": "HOST\trecon_control",
   "message": "Removing ISR for scan E10001/S1/S2 because we can't even make 1 image\n",
   "exception_class": null,
@@ -168,7 +128,7 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 7336,
+  "templates_seen": 7339,
   "type": "HOST\tscanRx",
   "message": "SIRx read of config files failed with status 0 within New Patient processing\n",
   "exception_class": null,
@@ -176,7 +136,7 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 7289,
+  "templates_seen": 7297,
   "type": "HOST\tUNKNOWN",
   "message": "Service name uif_autoview_1 is not known.\n",
   "exception_class": null,
@@ -184,9 +144,9 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 6927,
+  "templates_seen": 6931,
   "type": "HOST\tscanRx",
-  "message": "Found an invalid series number (2) in scan prescription.\n",
+  "message": "Found an invalid series number (1) in scan prescription.\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -200,7 +160,7 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 6756,
+  "templates_seen": 6764,
   "type": "HOST\tUNKNOWN",
   "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_autoview_1.\n",
   "exception_class": null,
@@ -216,9 +176,9 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 6572,
+  "templates_seen": 6575,
   "type": "HOST\tvisScript",
-  "message": "Status update: Start session 1, context 4:\n   exam=10001, series=12, seqnum=2, first img=1, numslices=299\n   slice-center=(0.000000,0.000000), slice-range=[-87.500000:-1061.960000],\n   dfov=700.000000, slice-thickness=3.270000, gantry-tilt=0.000000\n",
+  "message": "Status update: Start session 1, context 4:\n   exam=10001, series=3, seqnum=101, first img=1, numslices=775\n   slice-center=(6.200000,19.600000), slice-range=[-7.780000:-491.530000],\n   dfov=500.000000, slice-thickness=1.250000, gantry-tilt=0.000000\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -232,7 +192,7 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 5972,
+  "templates_seen": 5980,
   "type": "HOST\tUNKNOWN",
   "message": "DisplayMgrControl::displayMgrTimerExec() WARNING !! process with index 1 is currently in an unexpected state 0.\nThe manager will ignore the timed out event.\n",
   "exception_class": null,
@@ -272,7 +232,7 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 5452,
+  "templates_seen": 5460,
   "type": "HOST\tUNKNOWN",
   "message": "Service name uif_cross_reference is not known.\n",
   "exception_class": null,
@@ -312,9 +272,49 @@
   "ermes_number": null
  },
  {
-  "templates_seen": 4800,
+  "templates_seen": 4808,
   "type": "HOST\tUNKNOWN",
   "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_cross_reference.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 4745,
+  "type": "HOST\tscanRx",
+  "message": "srx_sma_update_for_nonresumable_scan: A Failure had been detected while calling srx_sma_image_reallocate function.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 4714,
+  "type": "HOST\tdcserver",
+  "message": "Failure to get DCM event:  no event occured (104)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 4691,
+  "type": "HOST\tscanRx",
+  "message": "Localizer invalid for graphicRx.\n Localizer azimuth = 180\n Localizer landmarkuid = 1.2.3.4.5\n Prospective landmarkuid = 1.2.3.4.5\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 4512,
+  "type": "HOST\tscanmgr",
+  "message": "Exam: 10001 Monitor Series: 201 Diagnostic Series: 7. \nTransition out of Monitor phase successfully at 14:21:42. Starting first diag scan with AUTOSCAN ON.\nTransition to scan phase successfully at 14:21:42. It took 59.102 ms to kick off first diagnostic scan.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 4512,
+  "type": "HOST\tscanRx",
+  "message": "CT99 23358/1/1 not found in image management, cannot reallocate image space.\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null

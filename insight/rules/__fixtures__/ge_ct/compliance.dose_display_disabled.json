@@ -2,31 +2,7 @@
  {
   "templates_seen": 1526,
   "type": "HOST\tscanRx",
-  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, CENTER, XLARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 1526,
-  "type": "HOST\tscanRx",
-  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, BODY, PERIPHERAL, XLARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 1526,
-  "type": "HOST\tscanRx",
-  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, BODY, PERIPHERAL, LARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 1526,
-  "type": "HOST\tscanRx",
-  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, BODY, PERIPHERAL, SMALL_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
+  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, CENTER, LARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -42,15 +18,7 @@
  {
   "templates_seen": 1526,
   "type": "HOST\tscanRx",
-  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, CENTER, LARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
-  "exception_class": null,
-  "severity": null,
-  "ermes_number": null
- },
- {
-  "templates_seen": 1526,
-  "type": "HOST\tscanRx",
-  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, CENTER, SMALL_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
+  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, BODY, PERIPHERAL, XLARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
@@ -59,6 +27,38 @@
   "templates_seen": 1526,
   "type": "HOST\tscanRx",
   "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, PERIPHERAL, LARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1526,
+  "type": "HOST\tscanRx",
+  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, CENTER, XLARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1526,
+  "type": "HOST\tscanRx",
+  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, BODY, PERIPHERAL, SMALL_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1526,
+  "type": "HOST\tscanRx",
+  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, BODY, PERIPHERAL, LARGE_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1526,
+  "type": "HOST\tscanRx",
+  "message": "\nDose information database (Ctdi.cfg) read error.\nDisabled dose information display feature.\nFailed token path: PERENNA_16, HEAD, CENTER, SMALL_SPOT, slice_factor_0_625x16_1_25x8\nFailed function: ctdiConfig::readField\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null

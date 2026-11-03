@@ -1,24 +1,24 @@
 [
  {
-  "templates_seen": 16614,
+  "templates_seen": 16646,
   "type": "HOST\tdcserver",
-  "message": "Sent:  2229/1104 (DEST)\n",
+  "message": "Sent:  2230/999 (DEST)\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 11773,
+  "templates_seen": 11791,
   "type": "HOST\tdcserver",
-  "message": "Sent:  22417/601 (DEST)\n",
+  "message": "Sent:  29272/700 (DEST)\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null
  },
  {
-  "templates_seen": 9889,
+  "templates_seen": 9900,
   "type": "HOST\tdcserver",
-  "message": "Sent:  2231/1 (DEST)\n",
+  "message": "Sent:  2233/5 (DEST)\n",
   "exception_class": null,
   "severity": null,
   "ermes_number": null

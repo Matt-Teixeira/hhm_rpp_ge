@@ -40,6 +40,9 @@ const COND = {
   "env.psu_temp_out_of_spec": `p = 'event_logger' AND message ~* 'power supply read a temperature which is out of specification.*Actual reading\\s*=\\s*-?[0-9]+\\s*millidegC'`,
   "env.psu_voltage_out_of_spec": `p = 'event_logger' AND message ~* 'power supply read a voltage which is out of specification.*Actual reading\\s*=\\s*-?[0-9]+\\s*mV'`,
   "env.humidity_out_of_range": `p = 'event_logger' AND message ~* 'humidity out of range.*Actual Value:\\s*-?[0-9]+\\s*milliRH'`,
+  "ipc.event_router_send_failed": `message ~* 'Send of message with event code\\s+[0-9]+\\s+from service\\s*\\S*\\s+to Event Router process failed with status:'`,
+  "ipc.sigpipe": `message ~* 'received SIGPIPE, broken pipe'`,
+  "storage.image_space_error": `p IN ('dms','environmentMgr') AND (message ~* 'Image space query failed\\.\\s*Error code:\\s*-?[0-9]+' OR message ~* 'Updating image space, received a bad status code:\\s*-?[0-9]+')`,
   "inventory.product": `p = 'Svc_Notepad' AND message ~ 'PRODUCT CONFIGURATION\\|' AND message ~ '\\|\\s*Product\\s*:'`,
 };
 

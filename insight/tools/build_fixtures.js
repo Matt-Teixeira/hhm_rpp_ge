@@ -49,6 +49,9 @@ const LABEL_SQL = `CASE
   WHEN message ~ 'power supply read a voltage which is out of specification' THEN 'env.psu_voltage_out_of_spec'
   WHEN message ~ 'humidity out of range' THEN 'env.humidity_out_of_range'
   WHEN message ~ 'PRODUCT CONFIGURATION\\|' THEN 'inventory.product'
+  WHEN message ~ 'Send of message with event code [0-9]+ from service .*to Event Router process failed' THEN 'ipc.event_router_send_failed'
+  WHEN message ~ 'received SIGPIPE, broken pipe' THEN 'ipc.sigpipe'
+  WHEN type ~ E'\\t(dms|environmentMgr)' AND message ~ 'Image space query failed|Updating image space, received a bad status code' THEN 'storage.image_space_error'
   WHEN ermes_number IS NOT NULL THEN 'error.ermes'
 END`;
 

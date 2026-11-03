@@ -7,6 +7,8 @@ const generateDateTime = require("../../processing/generateDateTimes");
 const extract_tube_usage = require("../../processing/ge_ct/extract-tube_usage");
 const { build_upsert_str } = require("../../tooling");
 const { drop_already_ingested } = require("../../persist/drop_already_ingested");
+const { read_gesys_head, rotation_missed, head_key } = require("../../read/gesys_head");
+const { getRedisLine, updateRedisLine } = require("../../redis/redisHelpers");
 const { pg_column_sets: pg_cs } = require("../../utils/db/sql/pg-helpers_hhm");
 
 // File data parsed in bulk. One regex to group array of data blocks. Second regex to parse blocks.
@@ -41,6 +43,41 @@ async function ge_ct_gesys(System, capture_datetime) {
     await System.getCurrentFileSize();
 
     if (!System.current_file_size) return;
+
+    // Rotation the size check can miss: GE rotated the file and the new file
+    // already grew past the old watermark, so delta > 0 would tail-read and
+    // skip its start. A changed header means rotated: read the whole file
+    // (drop_already_ingested removes the overlap). Any error or missing
+    // header -> behave as before. (PLAN-CT-INSIGHTS.md §11.4 step 2)
+    let file_head = null;
+    try {
+      file_head = await read_gesys_head(System.complete_file_path);
+      const prev_head = await getRedisLine(
+        System.sme,
+        head_key(System.file_config.file_name),
+        System.run_log
+      );
+      if (
+        rotation_missed({
+          prev_head,
+          file_head,
+          prev_file_size: System.prev_file_size,
+          delta: System.delta
+        })
+      ) {
+        System.force_full_read = true;
+      }
+    } catch (error) {
+      file_head = null;
+      await System.addLogEvent(
+        System.E,
+        System.run_log,
+        "ge_ct_gesys: file header check (ignored)",
+        System.cat,
+        { job_id: System.job_id, system_id: System.sme },
+        error
+      );
+    }
 
     await System.getFileData("read_file");
 
@@ -240,6 +277,27 @@ async function ge_ct_gesys(System, capture_datetime) {
 
     // Update Redis Cache
     await System.updateRedisFileSize();
+
+    // Remember the header this run's data came from (read before the data).
+    if (file_head) {
+      try {
+        await updateRedisLine(
+          System.sme,
+          head_key(System.file_config.file_name),
+          file_head,
+          System.run_log
+        );
+      } catch (error) {
+        await System.addLogEvent(
+          System.E,
+          System.run_log,
+          "ge_ct_gesys: store file header (ignored)",
+          System.cat,
+          { job_id: System.job_id, system_id: System.sme },
+          error
+        );
+      }
+    }
 
     // Update alert.offline_hhm_conn table with host_datetime
     const resent_host_datetime =

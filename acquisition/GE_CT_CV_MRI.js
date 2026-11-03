@@ -23,6 +23,9 @@ class GE_CT_CV_MRI extends System {
   current_file_size;
   delta;
   file_data;
+  // Set by the CT gesys parser when the file header shows a rotation the
+  // size check missed (read/gesys_head.js). CV/MRI never set it.
+  force_full_read = false;
 
   constructor(sysConfigData, file_config, job_id, run_log) {
     super(sysConfigData, file_config, job_id, run_log);
@@ -211,10 +214,12 @@ class GE_CT_CV_MRI extends System {
       // prev_file_size = null: no entry in redis
       // prev_file_size = 0: rotated cache and file (reset)
       // delta < 0: File has rotated without prior knowledge and is now smaller than previous
+      // force_full_read: rotated file already grew past the old size (CT gesys only)
       if (
         this.prev_file_size === null ||
         this.prev_file_size === 0 ||
-        this.delta < 0
+        this.delta < 0 ||
+        this.force_full_read === true
       ) {
         // Used by GE CT & MRI
         if (type === "read_file") {
@@ -228,6 +233,18 @@ class GE_CT_CV_MRI extends System {
             input: fs.createReadStream(this.complete_file_path),
             crlfDelay: Infinity
           });
+        }
+
+        if (this.force_full_read === true && this.delta >= 0) {
+          note.message = `File header changed (rotated) although delta is ${this.delta}. Reading entire file.`;
+          note.file = this.complete_file_path;
+          await this.addLogEvent(
+            this.W,
+            this.run_log,
+            "GE_CT_CV_MRI: getFileData",
+            this.det,
+            note
+          );
         }
 
         if (this.delta < 0) {

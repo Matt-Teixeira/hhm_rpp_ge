@@ -43,7 +43,22 @@ schema, rule registry per source), but nothing is built for them yet.
   The lookup costs 17 ms in the worst case (2 weeks, 14k rows) and 0.1 ms
   for a normal batch. `node test/drop_already_ingested.test.js` passes
   9/9. New duplicates stop only once the prod server runs this code.
-  Step 2 (§11.4) is not approved. Cleanup: §11.6.
+  **Step 2 approved and implemented on `dev`, not yet deployed.**
+  - Code: `read/gesys_head.js`, plus an opt-in `force_full_read` flag in
+    `acquisition/GE_CT_CV_MRI.js` (CV/MRI never set it).
+  - Header check: across 6,816 snapshots of 71 CT files, the
+    `A <epoch>` header changed exactly at the 2 rotations and nowhere
+    else.
+  - Simulation with the real class and SME18531's rotated file (after a
+    rotation the size check misses): today ingests 173 of the 341 new
+    records and loses 168. With step 2 it ingests all 341, and the
+    3,482 records already stored are dropped.
+  - `node test/gesys_head.test.js` passes 4/4.
+  - The first run after deploy has no stored header, so it behaves as
+    before. The header is stored from then on.
+
+  Cleanup (§11.6) is approved, keeping the 49 rows referenced by
+  detections. It waits until the user confirms the fix is live in prod.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -571,7 +586,7 @@ Everything else stays byte-for-byte:
   `scan_seconds` rows) is a separate decision, because `fse_dispatch`
   reads that table.
 
-**Step 2, parser (optional; closes the data-loss edge in §11.1). Not approved; explanation sent to the user 2026-11-03.**
+**Step 2, parser (closes the data-loss edge in §11.1). Approved and implemented 2026-11-03.**
 - Store the file's header epoch (`A <epoch>`) in a new Redis key
   `<sme>.<file>.head`. The existing size key is unchanged.
 - If the header changed since the last run, read the whole file even when
@@ -635,7 +650,7 @@ By capture partition:
 
 SME00882, SME00875, SME21924 and SME11229 have none.
 
-### 11.6 Cleanup: approved in principle 2026-11-03; exact statements awaiting approval
+### 11.6 Cleanup: approved 2026-11-03 (keep the 49 detection-referenced rows); runs after the user confirms the fix is live
 
 Tool: `maintenance/dedupe_ge_ct_gesys.js`. It has separate steps, uses
 typed confirmation, and runs as a dry run (BEGIN … ROLLBACK) unless

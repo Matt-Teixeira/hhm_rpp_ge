@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 3867,
+  "type": "HOST\tscanRx",
+  "message": "Scanning was confirmed for exam 10001 while the X-ray tube state was in the yellow warm up zone.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

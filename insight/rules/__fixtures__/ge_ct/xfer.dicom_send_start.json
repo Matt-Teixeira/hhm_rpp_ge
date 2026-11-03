@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 16614,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  2229/1104 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 11778,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  22417/602 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 9889,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  2231/1 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 3518,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  15411/997/... (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2716,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  21884/997/... (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2357,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  2175 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1280,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  29269/2 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 860,
+  "type": "HOST\tdcserver",
+  "message": "Start Sending:  27652/999 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

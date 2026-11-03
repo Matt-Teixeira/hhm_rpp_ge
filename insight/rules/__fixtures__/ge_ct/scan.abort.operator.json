@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 13226,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Scout Scan: 49188/1/1\n Scan Seq Id: 1215000\nOperator Aborted Scanning (via Gantry or Hard Key)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2084,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Cine Scan: 29269/2/8\n Scan Seq Id: 290000\nOperator Aborted Scanning (via Gantry or Hard Key)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 283,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Helical Scan: 2229/2/2\n Scan Seq Id: 323000\nOperator Aborted Scanning (via Gantry or Hard Key)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 72,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Axial Scan: 51111/5/2\n Scan Seq Id: 59000\nOperator Aborted Scanning (via Gantry or Hard Key)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 16,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Helical Scan: 0/0/0\n Scan Seq Id: 114000\nOperator Aborted Scanning\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 11,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Cine Scan: 0/0/0\n Scan Seq Id: 9000\nOperator Aborted Scanning\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 10,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Helical Scan: 14305/2/1\n Scan Seq Id: 100000\nOperator Aborted Scanning (via Host Request)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 9,
+  "type": "HOST\tscanmgr",
+  "message": " Function: System Control : Scan Control\n Scan Type: Axial Scan: 2990/5/9\n Scan Seq Id: 202000\nOperator Aborted Scanning\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

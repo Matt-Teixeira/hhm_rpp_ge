@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 1672,
+  "type": "HOST\torp_subsys",
+  "message": "\nThe CCB has notified the system of an error condition\nwhich prevents scanning.  See log for further information:\u0003\nError message code: 260003171    Notification level: 5   Sequence number: 1\n",
+  "exception_class": "Abort",
+  "severity": "Primary",
+  "ermes_number": 260101023
+ },
+ {
+  "templates_seen": 1099,
+  "type": "HOST\torp_subsys",
+  "message": "\nThe DCB has notified the system of an error condition\nwhich prevents scanning.  See log for further information:\u0003\nError message code: 260132488    Notification level: 5   Sequence number: 3\n",
+  "exception_class": "Abort",
+  "severity": "Primary",
+  "ermes_number": 260101023
+ },
+ {
+  "templates_seen": 1030,
+  "type": "HOST\torp_subsys",
+  "message": "\nThe Data Acquisition System Has Detected An Error\nIn The -5V Analog DAS Power Supply.\u0002\nMeasured: -4630 mV, Expected range: -4751 to -5249 mV\n",
+  "exception_class": "Abort",
+  "severity": "Secondary",
+  "ermes_number": 260007391
+ },
+ {
+  "templates_seen": 638,
+  "type": "HOST\torp_subsys",
+  "message": "\nThe Filter A failed to move off the home switch\nStart Position          = 0\nDesired Position        = 7742\nCurrent Motor Position  = 7741\nCurrent Encoder Position= 7738\nCurrent Filter SW Status= 2\n",
+  "exception_class": "Abort",
+  "severity": "Secondary",
+  "ermes_number": 260133189
+ },
+ {
+  "templates_seen": 377,
+  "type": "HOST\torp_subsys",
+  "message": "\nFilter A failed to Home.\n",
+  "exception_class": "Abort",
+  "severity": "Primary",
+  "ermes_number": 260133193
+ },
+ {
+  "templates_seen": 340,
+  "type": "HOST\torp_subsys",
+  "message": "\nScan ABORT -- DAS Has Detected An Error.\u0003\nThe DAS has received an out-of-sequence command.\nCommand 3003 cannot be accepted when the DAS is in\nthe State: Shutdown State and Command Level: Shutdown.\n",
+  "exception_class": "Abort",
+  "severity": "Primary",
+  "ermes_number": 260007384
+ },
+ {
+  "templates_seen": 310,
+  "type": "HOST\torp_subsys",
+  "message": "\nFilter A drive monitoring detected the current motor position is out of\nthe tolerance band for a successfull move\nStart Position          = 44999um 348431cnt\nDesired Position        = 0um 0cnt\nCurrent Motor Position  = 16491um 127693cnt\nCurrent Encoder Position= 17051um 132030cnt\nRetry Tolerance         = 100um\n",
+  "exception_class": "Abort",
+  "severity": "Secondary",
+  "ermes_number": 260133169
+ },
+ {
+  "templates_seen": 218,
+  "type": "HOST\torp_subsys",
+  "message": "\n(80-1422) Error: overpressure or blown fuse on heat exchanger.\u0003\nZ6,Z7= 0h,0h\n",
+  "exception_class": "Abort",
+  "severity": "Primary",
+  "ermes_number": 260105230
+ }
+]

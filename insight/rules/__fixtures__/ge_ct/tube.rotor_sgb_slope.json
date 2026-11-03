@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 434,
+  "type": "HOST\torp_subsys",
+  "message": "\nLiquid Bearing tube rotor health log.\nSGB Slope: 69 rpm/sec\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260118450
+ }
+]

@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 16614,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  2229/1104 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 11773,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  22417/601 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 9889,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  2231/1 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 3474,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  15411/997/... (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2670,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  21884/997/... (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2354,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  2175 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1221,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  29269/2 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 860,
+  "type": "HOST\tdcserver",
+  "message": "Sent:  27652/999 (DEST)\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

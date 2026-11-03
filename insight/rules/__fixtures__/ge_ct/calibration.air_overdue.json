@@ -1,0 +1,26 @@
+[
+ {
+  "templates_seen": 1509,
+  "type": "HOST\tscanRx",
+  "message": "Only large spot is allowed for patient scanning because no air ratio calibration was done more than 35 days.\nCurrent tube temperature is 115.780548 degrees Celsius, Air Ratio calibration can be done until 13:18:14 if no scan.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 409,
+  "type": "HOST\tscanRx",
+  "message": "Only large spot is allowed for patient scanning because no air ratio calibration was done more than 35 days.\nCurrent tube temperature is 232.541473 degrees Celsius, Air Ratio calibration can be done until 03:37:08 PM if no scan.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 329,
+  "type": "HOST\tscanRx",
+  "message": "Only large spot is allowed for patient scanning because no air ratio calibration was done more than 35 days.\nCurrent tube temperature is 458.848022 degrees Celsius, Air Ratio calibration can be done until 10:24:36 AM if no scan.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

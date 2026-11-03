@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 8521,
+  "type": "HOST\torp_subsys",
+  "message": "\nDAS has Detected Optical high speed link dropped packets.\nOpticalKError        : 1\nOpticalRdError       : 3\nOpticalRsdCwDecFail  : 0\nOpticalRsdCwError    : 2\nOpticalLocked        : 0\n",
+  "exception_class": "Secondary",
+  "severity": "Sec/Soft",
+  "ermes_number": 260132527
+ }
+]

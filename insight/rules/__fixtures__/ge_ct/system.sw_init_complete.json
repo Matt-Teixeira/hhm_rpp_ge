@@ -1,0 +1,18 @@
+[
+ {
+  "templates_seen": 41392,
+  "type": "HOST\tcupMonitor",
+  "message": "Software Initialization Complete\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 21,
+  "type": "HOST\tcupMonitor",
+  "message": "Running: System Reset\nSoftware Initialization Complete\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

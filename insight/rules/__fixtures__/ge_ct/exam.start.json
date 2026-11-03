@@ -1,0 +1,18 @@
+[
+ {
+  "templates_seen": 41776,
+  "type": "HOST\tscanRx",
+  "message": "Start: Prospective Exam: 10001 : Protocol: 5.1\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 31,
+  "type": "HOST\tscanRx",
+  "message": "Start: Prospective Exam: 10001 : Protocol: 36.6.1\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "templates_seen": 398,
+  "type": "HOST\tscanRx",
+  "message": "Tube warm up was skipped. Limited mA will be used for exam 10001. Max small spot mA = 250, max large spot mA = 500\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 103,
+  "type": "HOST\tscanRx",
+  "message": "Tube warm up was skipped. Limited mA will be used for exam 10001. Max mA for 120kV = 440, Max mA for 140kV= 380\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

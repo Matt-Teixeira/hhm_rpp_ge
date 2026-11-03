@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 759,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: Optima CT540|sw_version: 14BW25.15|sw_hw_string: 14BW25.15_SP2-1-1.HP_PP_P16_G_GMV|host_id: 0|tube_type: 23|gantry_type: GANTRY_HP|No. of processors: 8|Processor speed: 1795|memory: 16384\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 253,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: Discovery MI|sw_version: pet_columbia_digital.13|sw_hw_string: pet_columbia_digital.13.H40_PN_CM64_G_GTLNI:16x9x4_lyso|host_id: 0|tube_type: 22|gantry_type: GANTRY_HP_40|No. of processors: CPU: 16 FPU:|Processor speed: GenuineIntel 2095 GenuineIntel|memory: 32024\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 200,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: LightSpeed RT16|sw_version: 15BW19.22|sw_hw_string: 15BW19.22_SP1-1-2.WB_H_P16_G_GTL650|host_id: 0|tube_type: 16|gantry_type: GANTRY_HP_WIDE|No. of processors: 8|Processor speed: 1596|memory: 12288\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 196,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: Optima CT660|sw_version: 15HW25.2|sw_hw_string: 15HW25.2_SP2-0-1.H40_PN_HS64_G_GMV|host_id: 0|tube_type: 22|gantry_type: GANTRY_HP_40|No. of processors: 8|Processor speed: 2526|memory: 24576\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 188,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: LightSpeed RT16|sw_version: 11BW46.3|sw_hw_string: 11BW46.3_SP2-2-1.WB_H_G16_G_GTM|machine_type: Intel|host_id: 0|tube_type: 16|gantry_type: GANTRY_HP_WIDE|No. of processors: 2|Processor speed: 3200|memory: 2048\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 174,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: Discovery CT750 HD|sw_version: 17BW50.7B|sw_hw_string: 17BW50.7B_SP1-6-4.V40_ND_HD64_G_GTL|host_id: 0|tube_type: 18|gantry_type: GANTRY_VCT_40|No. of processors: 32|Processor speed: 2594|memory: 65536\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 157,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: Discovery 610|sw_version: pet_coreload.44|sw_hw_string: pet_coreload.44.H40_P2_SS64_G_GTLNI:8x6_bgo|host_id: 0|tube_type: 19|gantry_type: GANTRY_HP_40|No. of processors: 16|Processor speed: 1596|memory: 24576\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 138,
+  "type": "HOST\tSvc_Notepad",
+  "message": "This message was added by the OPERATOR to report on a problem:\nPRODUCT CONFIGURATION|Product: LightSpeed16|sw_version: 17BW11.2|sw_hw_string: 17BW11.2_SP2-0-5.HP_P_M16_G_HPT|host_id: 0|tube_type: 15|gantry_type: GANTRY_HP|No. of processors: 24|Processor speed: 2394|memory: 16384\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

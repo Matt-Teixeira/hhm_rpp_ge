@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 367,
+  "type": "HOST\torp_subsys",
+  "message": "\n(40-0114)Rotor not at speed. \u0003\nZ6,Z7= 4h,1h\n",
+  "exception_class": "Abort",
+  "severity": "Primary",
+  "ermes_number": 260118177
+ }
+]

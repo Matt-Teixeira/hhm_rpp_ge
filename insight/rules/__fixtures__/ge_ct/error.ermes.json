@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 287759,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nElevation touch switch (tape switches on underside of top side cover, GT1700V table only) is contacted.\nPosition is 583299 um from the table base. (Cradle: 0 um)\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260134736
+ },
+ {
+  "templates_seen": 27432,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nCradle absolute encoder warning. current pos = 826730 um, temp = 32 degC\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260134622
+ },
+ {
+  "templates_seen": 10030,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nGantry (Axial) LOOP CONTACTOR state is Still CLOSED.\nThe Loop Contactor status is NOT changing to the OPEN state.\n(AMC State:9).\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260107222
+ },
+ {
+  "templates_seen": 7979,
+  "type": "HOST\torp_subsys",
+  "message": "\nDetector Module Temperature Out of Tolerance\n Detector Module:      13\n Detector Module Temperature:  40.51\n Limits:           38.50,  40.50\n",
+  "exception_class": "Secondary",
+  "severity": "Sec/Soft",
+  "ermes_number": 260142542
+ },
+ {
+  "templates_seen": 5372,
+  "type": "HOST\torp_subsys",
+  "message": "\nDetector Module Temperature back within Tolerance \n Detector Module:      12\n Detector Module Temperature:  42.00\n Limits:           37.00,  42.00\n",
+  "exception_class": "Secondary",
+  "severity": "Sec/Soft",
+  "ermes_number": 260142544
+ },
+ {
+  "templates_seen": 5225,
+  "type": "HOST\ttgp_subsys",
+  "message": "\n[INTERNAL LANDMARK] pushbutton on Gantry Control Panel was pressed.\nNode Id: 4, Board Number: 5139591, Serial Number: 16470.\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260111052
+ },
+ {
+  "templates_seen": 4789,
+  "type": "HOST\ttgp_subsys",
+  "message": "\n[Resume SCAN] pushbutton was pressed.\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260100201
+ },
+ {
+  "templates_seen": 3663,
+  "type": "HOST\tevent_logger",
+  "message": "\nFunction: ThermalControlSipm::Execute \nDFE has detected dmod 33 detector 14 temperature 29319 mDegrees is above the limit (25000)mDegrees\n",
+  "exception_class": "Soft",
+  "severity": "Sec/Soft",
+  "ermes_number": 260301123
+ }
+]

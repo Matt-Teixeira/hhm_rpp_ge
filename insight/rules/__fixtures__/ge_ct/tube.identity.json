@@ -1,0 +1,58 @@
+[
+ {
+  "templates_seen": 1597,
+  "type": "HOST\tfwmgr",
+  "message": "GE tube has been verified.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1161,
+  "type": "HOST\tfwmgr",
+  "message": "Tube identity advisory: An unrecognized X-Ray tube has been installed on the system.\nGE Medical Systems cannot assure that the system performance will conform to specifications.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 683,
+  "type": "HOST\tfwmgr",
+  "message": "The system has been initialized for an X-Ray tube without Smart ID.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 276,
+  "type": "HOST\torp_subsys",
+  "message": "\nCurrent tube type is Liquid Bearing tube.\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260118449
+ },
+ {
+  "templates_seen": 20,
+  "type": "HOST\torp_subsys",
+  "message": "\nCurrent tube type is Ball Bearing tube.\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260118448
+ },
+ {
+  "templates_seen": 8,
+  "type": "HOST\tfwmgr",
+  "message": "Running: System Reset\nGE tube has been verified.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 3,
+  "type": "HOST\tfwmgr",
+  "message": "Running: System Reset\nTube identity advisory: An unrecognized X-Ray tube has been installed on the system.\nGE Medical Systems cannot assure that the system performance will conform to specifications.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

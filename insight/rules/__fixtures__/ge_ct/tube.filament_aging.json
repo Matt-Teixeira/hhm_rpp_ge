@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 943,
+  "type": "HOST\torp_subsys",
+  "message": "\n(27-0907)Filament aging saturated. \u0003\nZ6,Z7= 0h,0h\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260118159
+ }
+]

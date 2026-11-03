@@ -1,0 +1,58 @@
+[
+ {
+  "templates_seen": 37666,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of device_eventlog caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 270,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of simplmgr caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 39,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of visScript caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 15,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of pet_recon_2 caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 13,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of pet_recon caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 12,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of pet_acq caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2,
+  "type": "HOST\tcupMonitor",
+  "message": "An unexpected termination of PetAcqMgr caused it to be restarted.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

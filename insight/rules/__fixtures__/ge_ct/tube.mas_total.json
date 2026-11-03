@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 3166,
+  "type": "HOST\tscanmgr",
+  "message": "The current tube usage data reports a total of 3893250.0 ma*S.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

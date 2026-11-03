@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 458,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nLiquid Bearing tube rotor is decelerating to stop unexpectedly.\nStopped gantry rotation to prevent the tube from fatal damage.\nSee log for rotor stop cause.\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260100192
+ }
+]

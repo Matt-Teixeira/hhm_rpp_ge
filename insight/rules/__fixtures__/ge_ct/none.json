@@ -1,0 +1,322 @@
+[
+ {
+  "templates_seen": 419186,
+  "type": "HOST\tenvironmentMgr",
+  "message": "EnvironmentMgr received SIGPIPE, broken pipe\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 419178,
+  "type": "HOST\tenvironmentMgr",
+  "message": "with status:\n%bSend of message with event code 2014 from service uif_env_mgr to Event Router process failed with status:\nIPC failure.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 49364,
+  "type": "HOST\tenvironmentMgr",
+  "message": "Service name  not found in GE services file.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 42524,
+  "type": "HOST\tvisScript",
+  "message": "Status update: Starting Review with volume containing 795 images\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 37465,
+  "type": "HOST\tdms",
+  "message": "Info: database checkpoint was performed for exam 10001.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 28377,
+  "type": "HOST\tvisScript",
+  "message": "Status update: Transfer request for exam=10001, series=603 to host='HOST' sent to Browser with status=Ok\n\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 28012,
+  "type": "HOST\tenvironmentMgr",
+  "message": "Updating image space, received a bad status code: -1\nReason: OS error : -1 --- Unknown error 4294967295\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 28012,
+  "type": "HOST\tdms",
+  "message": "Image space query failed. Error code: -1\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 25916,
+  "type": "HOST\tscanRx",
+  "message": "Ecomm internal error detected (internal database error).\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 24281,
+  "type": "HOST\tIqsQueueMgr",
+  "message": "Ecomm internal error detected (no event element for event 3163).\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 21570,
+  "type": "HOST\tcjmMain",
+  "message": "\"Start processing image_set_id=1.2.3.4.5 num_fov=1 overlap=0 totSlices =71 num_slices=71 min FOV -172.300003 max FOV -172.300003\"\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 19278,
+  "type": "HOST\tscanRx",
+  "message": "Previous send operation error was part of a combined send and receive operation\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 17424,
+  "type": "HOST\timagecreate",
+  "message": "Image : image E10001/S1/I1 event EV_SCOUT_SEGMENT_AVAILABLE with status 200000028 \nEcomm send Failed. From <imagecreate> To <Event Router>\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 16448,
+  "type": "HOST\texamRxEnv",
+  "message": " A Communication Error has occurred in uifIpcSendRecvTubeStateRequest with seq_num = 8 and status = 200000018\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 16322,
+  "type": "HOST\texamRxEnv",
+  "message": "Failed to get thermal state from scanmgr. Trying after 5s.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 13273,
+  "type": "HOST\tUNKNOWN",
+  "message": "Detected ecomm disconnect from process uif_exam_rx_display_mgr\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 12828,
+  "type": "HOST\texamRxEnv",
+  "message": "Send of message with event code 3212 from service uif_exam_rx_env to Event Router process failed with status:\nThe event router received an event that had no receivers registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 11344,
+  "type": "HOST\tscanRx",
+  "message": "logCopyForwardForNewSeries: Series Copy Forward for Pat.Ori Pat.Pos Anat.Ref is enabled\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 9919,
+  "type": "HOST\tdbwserver",
+  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 12, Current FOV 8 of 8, reconMethod = 3DIR, Matrix Size = 192, Number of Subsets = 32, FrameLocation = -1061.960, OverlapSlice = 11, Correction = DECY\\ATTN\\SCAT\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE.\"\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 9794,
+  "type": "HOST\tdbwserver",
+  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 13, Current FOV 8 of 8, reconMethod = 3DIR, Matrix Size = 192, Number of Subsets = 32, FrameLocation = -1061.960, OverlapSlice = 11, Correction = DECY\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE.\"\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 9766,
+  "type": "HOST\trecon_control",
+  "message": "Removing ISR for scan E10001/S1/S2 because we can't even make 1 image\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 7336,
+  "type": "HOST\tscanRx",
+  "message": "SIRx read of config files failed with status 0 within New Patient processing\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 7289,
+  "type": "HOST\tUNKNOWN",
+  "message": "Service name uif_autoview_1 is not known.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 6927,
+  "type": "HOST\tscanRx",
+  "message": "Found an invalid series number (2) in scan prescription.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 6826,
+  "type": "HOST\tbadchanmgr",
+  "message": "Exclusion Test - Row 31:2A, Channel 807, Module 26 Short to ground* PASSED CHECKS *.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 6756,
+  "type": "HOST\tUNKNOWN",
+  "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_autoview_1.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 6741,
+  "type": "HOST\tbadchanmgr",
+  "message": "Exclusion Test - Row 54:22B, Channel 570, Module 18 Short to ground* PASSED CHECKS *.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 6572,
+  "type": "HOST\tvisScript",
+  "message": "Status update: Start session 1, context 4:\n   exam=10001, series=12, seqnum=2, first img=1, numslices=299\n   slice-center=(0.000000,0.000000), slice-range=[-87.500000:-1061.960000],\n   dfov=700.000000, slice-thickness=3.270000, gantry-tilt=0.000000\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 6048,
+  "type": "HOST\tvisScript",
+  "message": "Status update: Found film composer process: pid=11046\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5972,
+  "type": "HOST\tUNKNOWN",
+  "message": "DisplayMgrControl::displayMgrTimerExec() WARNING !! process with index 1 is currently in an unexpected state 0.\nThe manager will ignore the timed out event.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5945,
+  "type": "HOST\tscanfile_xfer",
+  "message": "Callback function for normal user callback already registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5722,
+  "type": "HOST\tUNKNOWN",
+  "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_volume_autoview.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5492,
+  "type": "HOST\tcjmMain",
+  "message": "\"Start processing image_set_id=1.2.3.4.5 num_fov=1 overlap=0 totSlices =71 num_slices=71 min FOV 128.529999 max FOV 128.529999\"\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5478,
+  "type": "HOST\tdevice_control",
+  "message": "All Plug n Play Devices are operational and ready for use.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5452,
+  "type": "HOST\tUNKNOWN",
+  "message": "Service name uif_cross_reference is not known.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5267,
+  "type": "HOST\tvisScript",
+  "message": "Status update: Attempting to start film composer\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5208,
+  "type": "HOST\tfwmgr",
+  "message": " Function: No system function reported\n Scan Type: Not scanning Scan: 0/0/0\n Scan Seq Id: 0\nFailure sending event 3253 using event router.\nThe event router received an event that had no receivers registered.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5050,
+  "type": "HOST\tcjmMain",
+  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 14, Current FOV 13 of 13, reconMethod = VPFX, Matrix Size = 256, Number of Subsets = 17, FrameLocation = -178.370, OverlapSlice = 16, Correction = DECY\\ATTN\\SCAT\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE on compute3..\"\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 5049,
+  "type": "HOST\tcjmMain",
+  "message": "\"RSvr: Starting recon job for Exam Number: 10001, Series Number = 13, Current FOV 13 of 13, reconMethod = VPFX, Matrix Size = 256, Number of Subsets = 17, FrameLocation = -178.370, OverlapSlice = 16, Correction = DECY\\DTIM\\RANSNG\\DCAL\\SLSENS\\NORM, state = ACTIVE on compute2..\"\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 4800,
+  "type": "HOST\tUNKNOWN",
+  "message": "IPC failure caused by cupIpcConnect from uif_exam_rx_display_mgr to uif_cross_reference.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 714,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Air Ratio Thermal 2 is 546.75 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 75,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Mylar Window Check is 114.00 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 72,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Air Ratio Create MSD is 549.72 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 42,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Warmup2 is 275.05 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 35,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Collimator Calibration is 280.91 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 34,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Air Calibration is 486.08 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 33,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Non-Bowtie Air Calibration is 730.03 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 31,
+  "type": "HOST\tscanUtilsRx",
+  "message": "Tube temperature before Water Calibration is 467.82 degrees Celsius.\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

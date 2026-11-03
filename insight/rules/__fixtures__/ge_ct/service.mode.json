@@ -1,0 +1,34 @@
+[
+ {
+  "templates_seen": 665,
+  "type": "HOST\tenvironmentMgr",
+  "message": "System enter service mode\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 617,
+  "type": "HOST\tenvironmentMgr",
+  "message": "System exit service mode\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 2,
+  "type": "HOST\tenvironmentMgr",
+  "message": "Running: System Reset\nSystem exit service mode\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ },
+ {
+  "templates_seen": 1,
+  "type": "HOST\tenvironmentMgr",
+  "message": "Running Version Management Tool\nSystem exit service mode\n",
+  "exception_class": null,
+  "severity": null,
+  "ermes_number": null
+ }
+]

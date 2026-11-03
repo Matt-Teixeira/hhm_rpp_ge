@@ -1,0 +1,50 @@
+[
+ {
+  "templates_seen": 3108,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nSlip-Ring Communications are DOWN between subsystems\n",
+  "exception_class": "Safe State",
+  "severity": "Primary",
+  "ermes_number": 260116316
+ },
+ {
+  "templates_seen": 175,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nEmergency Off button has been pressed.\n",
+  "exception_class": "Safe State",
+  "severity": "Primary",
+  "ermes_number": 260112009
+ },
+ {
+  "templates_seen": 163,
+  "type": "HOST\ttgp_subsys",
+  "message": "\n LAN Communication between the Table Gantry Processor and Host (OC) are Down - Watchdog Timed out.\n",
+  "exception_class": "Safe State",
+  "severity": "Primary",
+  "ermes_number": 260116313
+ },
+ {
+  "templates_seen": 46,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nEmergency Off button has been pressed\n",
+  "exception_class": "Safe State",
+  "severity": "Primary",
+  "ermes_number": 260112009
+ },
+ {
+  "templates_seen": 16,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nGUIF communications are down.\nNeed a display and at least one control.\n",
+  "exception_class": "Safe State",
+  "severity": "Primary",
+  "ermes_number": 260111018
+ },
+ {
+  "templates_seen": 2,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nThe hardware watchdog was not running when it should be\nScanning Hardware Reset is needed to recover\n",
+  "exception_class": "Safe State",
+  "severity": "Secondary",
+  "ermes_number": 260116088
+ }
+]

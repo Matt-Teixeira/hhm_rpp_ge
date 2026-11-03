@@ -63,8 +63,23 @@ schema, rule registry per source), but nothing is built for them yet.
 
   **Cleanup done 2026-11-03 19:54 UTC** (§11.6). 154,945 duplicate rows
   were deleted; the 49 rows referenced by detections were kept.
-- **Phase 2 re-evaluated (§12); decisions made.** Work started: login
-  script, migration 003, then the rule registry.
+- **Phase 2 in progress (§12, §12.1).**
+
+  Done on `dev` (read-only against prod):
+  - the `insight_writer` login script (dry run ok)
+  - migration 003 (tested up and down in a rolled-back transaction)
+  - the rule registry: 34 metrics in `insight/rules/ge_ct.js`
+  - 183 scrubbed real fixtures
+  - 40 tests passing
+  - a full dry run: 2,947,116 rows produce 1,251,255 facts, with no rule
+    errors, and **all 585 system×metric counts equal the independent SQL
+    counts**
+
+  Waiting on:
+  - the user runs the login script on `vm-debian`
+  - 003 is applied
+  - the write path and `--apply` backfill, run as `insight_writer`
+  - coverage triage (§12.1)
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -100,7 +115,7 @@ schema, rule registry per source), but nothing is built for them yet.
 | System | Model | Signal |
 |---|---|---|
 | SME21859 | Optima CT540 | 205 "Liquid Bearing tube rotor decelerating to stop unexpectedly"; weekly count rose ~12 → 26 Jul→Sep, still ~20/wk; aborts track 1:1. Possible tube failure precursor. |
-| SME18531 | Discovery MI | 37,666 `cupMonitor` "unexpected termination of device_eventlog … restarted": a process restart loop. Accounts for the 2026-08 row spike. |
+| SME18531 | Discovery MI | 37,666 `cupMonitor` "unexpected termination of device_eventlog … restarted": a process restart loop. (Correction, 2026-11-03: the 2026-08 row spike is mostly SME01434, §12.1.) |
 | SME21867 | LightSpeed16 | 1,133 Abort-class records vs 285 exams. |
 
 ---
@@ -821,4 +836,71 @@ It requires the login to exist first.
 Considered and left as is: the facts natural key collapses DST
 fall-back records that share epoch/rnc (8 historical keys). This is
 negligible, and §9 stands.
+
+### 12.1 Phase 2 build status and catalog as built (2026-11-03)
+
+The rule registry `insight/rules/ge_ct.js` is the source of truth for the
+catalog. Changes from §4, all driven by real message variants:
+- **`system.boot` is now `system.sw_init_complete`, a raw fact.**
+  "Software Initialization Complete" fires about 10×/system/day, after
+  restarts too. Real boots are derived in Phase 3.
+- **`prep.warmup` / `prep.fastcal` / … are now one `prep.tube_temp`**,
+  with the step in `value_text` and before/after in `attrs`.
+  `service.calibration` is the same, from `scanUtilsRx`.
+- **`tube.unrecognized` is folded into `tube.identity`**
+  (`value_text = unrecognized`).
+- **The rotor "decelerating" message is split in two:**
+  `tube.rotor_unexpected_stop` (a fault) and
+  `tube.rotor_stop_no_random_position` (an operator habit GE says
+  shortens tube life).
+- **`scan.abort.operator` comes from the scanmgr message only.**
+  `exception_class = 'Operator Abort'` records are separate ermes rows
+  (`error.ermes`), so counting both would double count.
+- **Plenum is normalized to °C** (one firmware logs 1/100 °C). Recovery
+  notices go to their own `env.plenum_recovered`.
+- **`xfer.dicom_send` is split** into `xfer.dicom_send_start` /
+  `xfer.dicom_sent`, handling three formats (`a/b`, `a/b/...`, `a`).
+- **`env.humidity` / `env.psu_temp` are split** into
+  `env.psu_temp_out_of_spec`, `env.psu_voltage_out_of_spec` and
+  `env.humidity_out_of_range`.
+- **New:** `compliance.dose_display_disabled` and
+  `calibration.air_overdue` (§12 item 8).
+
+How it's verified (no DB needed):
+- 183 real fixtures, built by `insight/tools/build_fixtures.js`. They are
+  read-only, scrubbed (exam numbers, hostnames, host_id, DICOM
+  destinations, UIDs and IPs), and labelled by an independent SQL
+  classifier.
+- Every fixture must produce exactly its label, plus class-based
+  overlaps (ermes / Abort / Safe State). The "none" fixtures must
+  produce nothing.
+- Tests: `node insight/test/rules.test.js`, `node insight/test/scrub.test.js`.
+
+Dry run (`node insight/cli.js dry-run`, read-only, 2026-11-03):
+
+| Item | Result |
+|---|---|
+| Rows | 2,947,116 in 59 s |
+| Facts | 1,251,255 |
+| Rule errors | 0 |
+| Skipped rows | 0 |
+| Reconciliation | 585/585 system×metric cells equal the independent SQL (`insight/reconcile_sql.js`) |
+| Coverage | 34.9% of rows produce a fact |
+
+Coverage triage (open; the §8 criterion is "every template above 500
+rows/30 d has a rule or an explicit ignore"):
+- **SME01434: 838,355 rows on 2026‑08‑06 alone.** EnvironmentMgr
+  "received SIGPIPE, broken pipe" plus "send … to Event Router process
+  failed". That is a single-day log storm and about 28% of the whole
+  table. It is the real cause of the August row spike. Candidate metric.
+- **SME00881: about 56k "Image space query failed" / "Updating image
+  space, received a bad status code"** from 05‑08 to 06‑09 (≈1,700/day).
+  Possibly an image-storage problem. Candidate metric.
+- Other candidates:
+  - examRxEnv "Failed to get thermal state from scanmgr" (25 systems)
+  - recon_control "Removing ISR … can't even make # image" (29)
+  - "Scan Prep" per-scan events (3)
+- Likely ignore: db checkpoints, review/film-composer status, "Service
+  name not found", ecomm internal errors, recon job progress, badchanmgr
+  PASSED checks.
 

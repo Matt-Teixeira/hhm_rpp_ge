@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 14,
+  "type": "HOST\ttgp_subsys",
+  "message": "\nLiquid Bearing tube rotor is decelerating to stop without moving to random gantry position by request.\nA lot of this operation will cause short life of tube.\n",
+  "exception_class": "Secondary",
+  "severity": "Pri/Soft",
+  "ermes_number": 260100197
+ }
+]

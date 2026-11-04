@@ -156,6 +156,14 @@ schema, rule registry per source), but nothing is built for them yet.
     stricter verify passes on the written data.
   - Commits on `dev` (not pushed): `76ede42`, `61fdfe1`, `46362ea`,
     `5bf5098`, `5c00636`.
+- **Phase 4 re-evaluated and AGREED 2026-11-04 (§14); nothing built
+  yet.** It starts at §14.6.
+  - The rules in §14.2 were agreed by the user.
+  - The questions in §14.3 were answered with the proposed defaults: the
+    user doesn't know how these systems operate and won't confirm system
+    behaviour.
+  - So the Phase 4 review is evidence-based (§14.4), and domain
+    confirmation comes from field service in Phase 7.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -360,6 +368,9 @@ prefixes, leading whitespace).
 
 ## 5. Findings v1
 
+> **Re-evaluated 2026-11-04 against real data: see §14.** Once agreed, the
+> §14.2 proposals replace the rules and thresholds below.
+
 Evaluated after each run, per system, on deduped facts. A finding opens
 when its rule trips and resolves after a quiet period, so it doesn't
 open and close on every run. Each finding stores the evidence it used.
@@ -485,7 +496,7 @@ external scrub handles that.
 | **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ✅ (fix live 2026-11-03 19:45 UTC); cleanup done ✅ (§11.6) |
 | **2. Extract** ✅ 2026-11-03 | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
 | **3. Derive** ✅ 2026-11-04 | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3; all met (§13.5). (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
-| **4. Findings** | rules + open/resolve | Flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful |
+| **4. Findings** | rules + open/resolve (proposed changes: §14) | Proposed in §14.4 (replaces: flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful) |
 | **5. Prod** | (Migrations already applied, §11/§12.) One-off backfill via `cli.js --backfill` off-peak. Deploy the `index.js` hook (no new cron line) via dev → staging → prod, then `git pull` on `vm-debian`. Monitor the run logs | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |
 | **6. Viewer** | `sme_reports` CT report, internal | Team reviews fleet + 3 system views |
 | **7. Validate & extend** | FSE review of findings (start with SME21859 rotor), and of tube swaps (§13.3, incl. SME21873 2025-09-02); exam counts sanity-checked with 2–3 sites; threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
@@ -1337,3 +1348,299 @@ What the 432 unclean boots are (read-only analysis):
 - **`verify-derive` hard-codes the §13.1 acceptance list.** A new tube
   replacement will (correctly) make it fail until the list is reviewed
   and updated.
+
+## 14. Phase 4 re-evaluation (2026-11-04)
+
+Read-only checks against the Phase 3 tables: `ge_ct_daily`,
+`ge_ct_exams`, derived facts and segments. Data runs through watermark
+18543534 (device days up to 2026‑11‑03).
+
+**Agreed with the user 2026-11-04:** the §14.2 rules and design as
+written, and the §14.3 answers below. The user is not in a position to
+confirm how the scanners behave. Thresholds rest on the §14.1 evidence;
+field service confirms the meaning in Phase 7, and the thresholds are
+tuned then.
+
+### 14.1 Evidence
+
+**Data freshness.** Six systems have sent nothing for 44–160 days:
+
+| System | Last device day |
+|---|---|
+| SME00875 | 05‑28 |
+| SME00881 | 06‑09 |
+| SME00882 | 06‑09 |
+| SME14521 | 08‑03 |
+| SME14522 | 08‑03 |
+| SME17371 | 09‑21 |
+
+"This week" rules need an as-of day per system, and must not resolve or
+open anything on systems that send no data.
+
+**Rotor stops** (`tube.rotor_unexpected_stop`, per device week):
+- **SME21859:** 6–21 every week since its data starts (2026‑04‑27);
+  average 13.3, recent weeks 13–21. It is **chronic**: twice its 8-week
+  median (about 26) is never reached, so the §5 rule (≥ 5 **and** ≥ 2×
+  its own median) would never fire. It also has `tube.rotor_not_at_speed`
+  on 129 days.
+  - Correction to §1: the deduped device-week series is about 13 → 20,
+    not 12 → 26.
+- **Isolated spikes elsewhere:**
+  - SME18536: 8 in the week of 06‑15, 5 in the week of 08‑10;
+  - SME01430: 7 in the week of 07‑06.
+- **No rotor stops in the 28 days before any of the 8 tube
+  replacements.**
+
+**Process restarts.** Only SME18531 ever exceeds 50 a day
+(`device_eventlog`, 2026‑09‑12 → 14, peak 17,222 a day). Every other
+system peaks at 6 a day. The §5 rule works as written.
+
+**System aborts** (`scan.abort.system`, which is `exception_class =
+'Abort'`), per 100 exams:
+- **SME21867 is chronic:** 410 per 100 exams over all history, and ≥ 50 in
+  18 of 26 rolling 28-day windows (median 288). The causes are DAS
+  power-supply errors (260007391, 1,361) and DCB errors (260101023,
+  1,035): a hardware fault.
+- **Episodic bursts elsewhere** (28-day windows with ≥ 20 exams):
+
+  | System | Peak rate | Notes |
+  |---|---|---|
+  | SME21873 | 820 | CCB, open filament, aperture faults |
+  | SME21851 | 460 | |
+  | SME21866 | 196 | |
+  | SME15218 | 136 | |
+  | SME21864 | 93 | |
+  | SME14521 | 74 | median 46; CCB and filter A homing faults |
+
+- **"Fleet p90 for that model" isn't usable:** there are only 1–7 systems
+  per model. A p90 rule also always flags the top 10% by construction.
+- **Aborts tend to rise before a tube replacement and fall after it:**
+  - this held in 6 of the 8 replacements: 21–235 per 100 exams in the 28
+    days before, 0–7 in days 7–34 after;
+  - SME21864 is the exception (21 before, 64 after), and SME21873's
+    2025‑12‑08 reset showed 0 both before and after.
+
+  This is a candidate tube-failure signal for later, not for v1.
+- **Operator aborts** run at 20–98 per 100 exams on many systems. That's
+  normal workflow, not a finding.
+
+**Safe state** (`scan.safe_state`):
+- **260116316, "Slip-Ring Communications are DOWN"**, is 3,110 of 3,331
+  events. 95% (2,964) fall within 30 minutes of a boot or shutdown: it's a
+  power-cycle side effect, logged at about the same count as boots per
+  system.
+- **Other codes:**
+  - 260112009, "Emergency Off button has been pressed": 221 (SME21873
+    28, SME15218 21, SME16618 20; the first two are tube-replacement
+    systems);
+  - 260116313, TGP–host LAN communication down: 163;
+  - 260111018, GUIF communication: 16.
+
+**Prep compliance.** Fast Calibration is logged on all 34 systems, as
+`Fast Calibration` or `Cold Tube Warmup (Fast Calibration)`. The share of
+scan days (days with an exam) without one separates cleanly:
+
+| System | Scan days without Fast Cal |
+|---|---|
+| SME21855 | 87% |
+| SME01429 | 83% |
+| SME16618 | 74% |
+| next highest, SME17371 | 31% |
+| SME18536 | 26% |
+| all others | ≤ 20% |
+
+The three outliers run `Cold Tube Warmup` daily, and Fast Calibration and
+the rest of the daily sequence only on 17–50 days.
+
+**Environment.** Mostly chronic on specific systems:
+- SME20608: plenum, PSU temperature and PSU voltage out of spec on every
+  one of its 188 days;
+- SME01430: plenum on 175 days;
+- SME18531: plenum on 135 days, humidity on 40;
+- detector temperature low is episodic: SME21873 on 14 days, SME21867 on
+  13, SME20594 on 10.
+
+A "≥ 3 of the last 7 days" rule therefore leaves a few findings
+permanently open.
+
+**Warm-up habit.** Of the 17 systems that can log it, the share of scan
+days with a skipped warm-up or a yellow-zone scan is 98% (SME14521), 92%,
+87%, 84%, 79%, 74%, 63%, 60%, 58%, then 40% and below. The §5 threshold of
+≥ 20% flags 12 of the 17.
+
+**Tube usage spikes.** A week's counter delta at ≥ 2× its trailing 8-week
+median happens on 15 systems (SME21873 in 13 of 69 weeks). The counter
+reports only about every 2 days, so weekly deltas are noisy, and a busy
+week isn't a fault.
+
+**Powered off without a shutdown** (unclean boots, §13.5). Weeks with ≥ 3:
+SME01430 10, SME01429 8, SME01431 8, then SME15218 4 and SME21873 3.
+Everything else ≤ 2. Many of the occasional ones follow service mode.
+
+**Other chronic or episodic signals** (data only for now):
+
+| Metric | Systems |
+|---|---|
+| `calibration.air_overdue` | SME21849 214 days, SME21873 172, SME15218 162, SME21918 48 |
+| `das.link_errors` | SME01429, 146 days |
+| `tube.filament_aging` | SME21918, 33 days |
+| `storage.image_space_error` | SME00881, 6 days with 56k events |
+| `compliance.dose_display_disabled` | 8 systems daily (data only until field service confirms, §12 item 8) |
+
+### 14.2 Changes (agreed 2026-11-04)
+
+**Evaluation model**
+1. **As-of evaluation.** Each rule is a pure function of (system, as-of
+   device day D) over `ge_ct_daily`, `ge_ct_exams`, facts and segments.
+   - Windows are device days: 7 d = D−6..D; baselines are the 8 weeks
+     before that.
+   - A run evaluates each system as of its latest device day ≤ today.
+   - A system with no data in the last 7 device days isn't evaluated:
+     findings keep their state, and the API shows `data_through`.
+     Offline detection stays with `alert.offline_hhm_conn`.
+2. **Open / resolve.**
+   - A finding opens when its rule trips, and resolves after a quiet
+     period of 14 evaluated days without tripping (7 for the daily
+     rules).
+   - At most one open finding per (system, finding_key); this is already
+     enforced by an index. A re-trip after it resolves opens a new row.
+   - Severity may rise while a finding is open, never fall.
+   - `evidence` holds the series, counts, top ermes codes, the thresholds
+     used, and `rule_version`.
+3. **Replay.** The same evaluator runs day by day over all history, to
+   build `insight.findings` with real `opened_at` / `resolved_at`. That's
+   needed both for the exit review and for history in the viewer. It's
+   idempotent: re-running a day changes nothing.
+
+**Rules**
+
+| # | Finding | Proposed rule | Severity | Expected from replay |
+|---|---|---|---|---|
+| 1 | `tube_rotor_instability` | **sustained:** ≥ 5 rotor stops in ≥ 3 of the last 4 weeks → high. **spike:** this week ≥ 5 and ≥ 2× the trailing 8-week median → medium. Drops the undefined "rising trend". Evidence includes `rotor_not_at_speed` | high / medium | SME21859 (high, from the start); spikes on SME18536 and SME01430 for review |
+| 2 | `process_restart_loop` | unchanged: one process ≥ 50 restarts in a device day | medium | SME18531 2026‑09‑12 → resolves after the quiet period |
+| 3 | `abort_rate_high` | **chronic:** 28-day system aborts ≥ 50 per 100 exams (≥ 20 exams) → medium. **spike:** 7-day rate ≥ 30 per 100 and ≥ 3× the system's own 8-week baseline (≥ 10 exams) → medium. Drops the "fleet p90 per model" condition. Evidence: top ermes codes | medium | SME21867 (chronic); episodes on SME21873, SME14521, SME21851, SME15218 and others for review |
+| 4 | `safe_state_recurrent` | the same safe-state code ≥ 3 times in 7 days, **excluding 260116316 and any safe state within 30 min of a boot or shutdown** | medium | E‑off and TGP-LAN episodes, for review |
+| 5 | `prep_noncompliance` | in the last 14 days, > 50% of scan days have no Fast Calibration (`Fast Calibration` or `Cold Tube Warmup (Fast Calibration)`); needs ≥ 5 scan days | low | SME21855, SME01429, SME16618 |
+| 6 | `tube_replaced` | opens on a `tube.replacement` fact (`opened_at` = install date); resolves after 30 days | info (confirmed) / low (`counter_only`, needs field-service review) | the 8 replacements |
+| 7 | `env_out_of_tolerance` | split by sensor family (`env_plenum`, `env_detector_temp`, `env_humidity`, `env_psu`): ≥ 3 of the last 7 days | medium | chronic: SME20608, SME01430, SME18531 (permanently open; field service to review whether it's the sensor or the site); episodic detector-temperature findings |
+| 8 | `warmup_bypass_habit` | **≥ 50%** of scan days in 28 days (§5 had 20%), only on systems with the capability | low | about 9 systems: a habit, likely customer-visible |
+| 9 | `powered_off_without_shutdown` (**new**, §13.5) | ≥ 3 unclean boots in 7 days, not counting boots with service mode entered in the 12 h before | low | SME01430, SME01429, SME01431 |
+| 10 | `air_calibration_overdue` (**new**) | `calibration.air_overdue` on ≥ 3 of the last 7 days. The message itself says the system limits scanning to the large focal spot | low | SME21849, SME21873, SME15218, SME21918 |
+| — | `tube_usage_spike` | **drop as a finding**; keep mA·s/day as a viewer metric (noisy, and not a fault) | — | — |
+
+Data only, not findings in v1 (shown in the viewer, revisited in Phase
+7): `das.link_errors`, `tube.filament_aging`, `storage.image_space_error`,
+`compliance.dose_display_disabled`, the abort-before-replacement pattern,
+and E‑off counts outside rule 4.
+
+**Schema (migration 005, small).**
+- `insight.finding_catalog`: `finding_key` PK, label, description,
+  category, default severity, `rule_version`, `customer_visible`. It's
+  generated from the findings registry, like `metric_catalog`, so the
+  viewer and the frontend get labels.
+- `findings.data_through date`.
+- `api.ge_ct_findings_v` joins the catalog for labels.
+- Grants to `insight_writer`.
+
+**Code.**
+- `insight/findings/`: a registry of pure rules (`evaluate(ctx, D) →
+  {trip, severity, observed, baseline, evidence} | null`), the
+  open/resolve state machine, a replay driver, and `verify_sql.js`.
+- `cli.js findings --rehearse | --apply [--replay]` and
+  `verify-findings`, through the same rehearse → apply → verify path as
+  derive.
+- Phase 5: after derive, evaluate the touched systems; once a day, all
+  systems.
+
+### 14.3 Questions and answers (2026-11-04)
+
+1. **Rules 1–10, including dropping `tube_usage_spike` and adding
+   `powered_off_without_shutdown` and `air_calibration_overdue`:**
+   **agreed** by the user.
+2. **Warm-up habit:** **a low finding at ≥ 50%** of scan days in 28 days,
+   as in rule 8. It's a habit that customers can act on; low severity
+   keeps it out of the medium/high review.
+3. **Chronic environment findings:** **medium, as proposed**, and left
+   open. Each chronic case is listed for field service in Phase 7 (sensor
+   vs site). If they turn out to be sensor faults, the rule gets a
+   chronic exception then.
+4. **Catch-up first: yes.** The first implementation step (§14.5 step 1)
+   runs `backfill --rehearse` → `--apply`, then `derive --rehearse` →
+   `--apply`, then `verify` + `verify-derive`. Findings then use data up
+   to the day of the run.
+5. **Exit review:** the user can't judge system behaviour, so the review
+   is **evidence-based**:
+   - every medium/high finding outside the three named problems is shown
+     with its log evidence (codes, messages, series), and is either
+     explained by that evidence or its rule is tuned;
+   - the user accepts the list on that basis;
+   - **field service confirms the findings in Phase 7**, starting with
+     the SME21859 rotor and the chronic environment cases.
+
+### 14.4 Phase 4 exit criteria (agreed)
+
+- **The three named problems:** the replay opens
+  - `tube_rotor_instability` (high) on SME21859,
+  - `process_restart_loop` on SME18531, opened 2026‑09‑12 and resolved
+    after the loop,
+  - `abort_rate_high` (chronic) on SME21867.
+- **The full replayed list is reviewed with the user, per rule, with log
+  evidence** (§14.3 Q5).
+  - Every medium/high finding outside the three above is either explained
+    by its evidence or its rule is tuned.
+  - Low/info findings are listed, not individually reviewed.
+  - Field-service confirmation is Phase 7, not an exit criterion here.
+- **Every open finding reproduces from independent SQL** at its as-of
+  day (`verify-findings`).
+- **Evaluation is idempotent:** re-running replay or the same day changes
+  nothing.
+- **Process:** migration 005 passes the dry run and roundtrip and is
+  applied by the user. All writes go through rehearse → apply → verify as
+  `insight_writer`.
+
+### 14.5 Build order
+
+1. **Catch-up** (§14.3 Q4): `backfill --rehearse` → `--apply`, then
+   `derive --rehearse` → `--apply`, then `verify` + `verify-derive`.
+   - `verify-derive`'s §13.1 acceptance list fails if a new tube
+     replacement appears in the new data. If that happens, review it and
+     update `EXPECTED_REPLACEMENTS`.
+   - The clock flags may also move with the new 30-day window.
+2. **Migration 005:** scan → dry run → roundtrip → the user applies.
+3. **Findings registry + evaluator + state machine,** with fixture tests
+   from the §14.1 cases.
+4. **Replay + `cli.js findings --rehearse | --apply` + `verify-findings`.**
+   Show the rehearsal and the replayed list before applying.
+5. **Plan/status update.** Ask before committing.
+
+### 14.6 Handoff: where the Phase 4 implementation starts
+
+State at 2026-11-04:
+- **Phases 1–3 are done.** Phase 3 was applied and verified (§13.5) and
+  reviewed by Codex (4 reviews, 8 findings, all fixed).
+- **Prod data:** 2,163,802 per-row facts (extract watermark 18543534)
+  plus 3,393 derived facts; derived tables are filled; `job_state`
+  `ge_ct_derive` = 18543534.
+- **Data after 2026‑11‑03 isn't extracted yet.** That's §14.5 step 1.
+- **Branch:** `dev` was pushed to `origin` at `4fe02b1` (staging and prod
+  branches untouched). The plan update with §14 comes after it.
+- **Credentials:** the `insight_writer` credentials are in this
+  checkout's `.env`.
+
+Start with §14.5 step 1. Stop for the user's go-ahead after migration
+005's dry run and roundtrip (the user applies it), and before any
+findings `--apply`. Reuse the Phase 3 patterns:
+- pure rules + fixtures from real cases;
+- independent verify SQL;
+- rehearse (rolled back, with an idempotency pass) → apply → verify;
+- a Codex review handoff per step;
+- ask before committing; push or promote only when the user asks.
+
+Ground rules carried over:
+- prod DB only, through the §10 guards;
+- read-only ad-hoc queries;
+- writes only as `insight_writer`;
+- schema only through `migrations/run.js`;
+- don't touch parser behaviour (`jobs/`, `acquisition/`, `persist/`,
+  `read/`, `redis/`, `index.js`), `alert.*`, `fse_dispatch` or `utils/`.
+- The Phase 5 `index.js` hook isn't part of Phase 4.

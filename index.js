@@ -88,6 +88,23 @@ async function on_boot() {
 
       await run_job(job_id, system, run_log);
     }
+
+    // GE CT insight stage (PLAN-CT-INSIGHTS.md §15): runs after every
+    // system's ingest has finished; off unless INSIGHT_ENABLED=true; logs to
+    // run_log and never fails the run.
+    if (shell_value[0] === "GE_CT") {
+      try {
+        const { run_ct_insight } = require("./insight");
+        await run_ct_insight(run_log, addLogEvent);
+      } catch (error) {
+        try {
+          await addLogEvent(E, run_log, "run_ct_insight", cat, null, error);
+        } catch (_) {
+          // the run log below must still be written
+        }
+      }
+    }
+
     // await dbInsertLogEvents(pgp, run_log);
     console.log(run_log.log_events);
     await writeLogEvents(run_log);

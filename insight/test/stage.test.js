@@ -12,7 +12,7 @@ const { WRITE_JOB_SQL: DERIVE_WRITE_JOB_SQL } = require("../derive/run");
 const { WRITE_JOB_SQL: FINDINGS_WRITE_JOB_SQL } = require("../findings/run");
 const { OFFSET_BREAKS_SQL } = require("../derive/daily");
 const stage = require("../stage");
-const { run_ct_insight, CONNECT_TIMEOUT_MS, QUERY_TIMEOUT_MS, STATEMENT_TIMEOUT_MS } = require("../index");
+const { run_ct_insight, CONNECT_TIMEOUT_MS, QUERY_TIMEOUT_MS, STATEMENT_TIMEOUT_MS, STAGE_DEADLINE_MS } = require("../index");
 const { rules } = require("../rules/ge_ct");
 
 // ----------------------------------------------------------- pending days
@@ -166,17 +166,21 @@ test("step summaries are small and warnings flag late commits, rule errors and d
 
 // --------------------------------------------------------- run_ct_insight
 
-function fakeDb({ got = true, unlockThrows = false } = {}) {
+function fakeDb({ got = true, unlockThrows = false, connectThrows = null } = {}) {
   const calls = [];
-  const conn = {
+  const sco = {
     one: async (q) => {
       if (/pg_try_advisory_lock/.test(q)) { calls.push("lock"); return { got }; }
       if (/pg_advisory_unlock/.test(q)) { calls.push("unlock"); if (unlockThrows) throw new Error("connection lost"); return { ok: true }; }
       throw new Error(`unexpected query ${q}`);
     },
+    done: (kill) => { calls.push(kill ? "kill" : "release"); if (sco.onKill && kill) sco.onKill(); },
   };
-  const db = { task: async (fn) => fn(conn), $pool: { end: async () => { calls.push("end"); } } };
-  return { db, calls };
+  const db = {
+    connect: async () => { if (connectThrows) throw connectThrows; return sco; },
+    $pool: { end: async () => { calls.push("end"); } },
+  };
+  return { db, calls, sco };
 }
 
 function fakeStage({ preflight = async () => ({ partition_warning: false }), result = null, throws = null } = {}) {
@@ -234,7 +238,7 @@ test("on: one lock for the whole stage, a run_log event per step and a summary, 
   let mode = null;
   const r = await withEnv("true", () => run_ct_insight(RUN_LOG, l.add, { connect: (m, o) => { mode = m; assert.strictEqual(o.applicationName, "insight_stage"); return d.db; }, stage: s, rules }));
   assert.strictEqual(mode, "writer");
-  assert.deepStrictEqual(d.calls, ["lock", "unlock", "end"]);
+  assert.deepStrictEqual(d.calls, ["lock", "unlock", "release", "end"]);
   assert.strictEqual(s.calls.length, 1);
   assert.strictEqual(s.calls[0].run_id, RUN_LOG.run_id); // job_state.last_run_id = the ge_ct run's id
   assert.deepStrictEqual(l.events.map((e) => `${e.type}:${e.note.step}`), ["INFO:extract", "INFO:derive", "INFO:findings", "INFO:summary"]);
@@ -249,7 +253,7 @@ test("lock held: logged as a skip, no unlock of a lock it doesn't hold, pool clo
   const l = logger();
   const r = await withEnv("true", () => run_ct_insight(RUN_LOG, l.add, { connect: () => d.db, stage: s, rules }));
   assert.deepStrictEqual(r, { skipped: "lock" });
-  assert.deepStrictEqual(d.calls, ["lock", "end"]);
+  assert.deepStrictEqual(d.calls, ["lock", "release", "end"]);
   assert.strictEqual(s.calls.length, 0);
   assert.deepStrictEqual(l.events.map((e) => `${e.type}:${e.note.step}`), ["INFO:lock"]);
 });
@@ -261,7 +265,7 @@ test("preflight failure (wrong role, old schema): WARN and skip, nothing run, un
   const r = await withEnv("true", () => run_ct_insight(RUN_LOG, l.add, { connect: () => d.db, stage: s, rules }));
   assert.strictEqual(r.skipped, "preflight");
   assert.strictEqual(s.calls.length, 0);
-  assert.deepStrictEqual(d.calls, ["lock", "unlock", "end"]);
+  assert.deepStrictEqual(d.calls, ["lock", "unlock", "release", "end"]);
   assert.deepStrictEqual(l.events.map((e) => `${e.type}:${e.note.step}`), ["WARN:preflight"]);
   // partition runway warning is logged but the stage runs
   const d2 = fakeDb();
@@ -285,7 +289,7 @@ test("a failed step is an ERROR event with the error; the summary is a WARN; nev
   assert.deepStrictEqual(l.events.map((e) => `${e.type}:${e.note.step}`), ["INFO:extract", "ERROR:derive", "WARN:summary"]);
   assert.strictEqual(l.events[1].tag, "CATCH");
   assert.match(l.events[1].err.message, /statement timeout/);
-  assert.deepStrictEqual(d.calls, ["lock", "unlock", "end"]);
+  assert.deepStrictEqual(d.calls, ["lock", "unlock", "release", "end"]);
 });
 
 test("never rejects: connect, the stage, the unlock and the logger can all throw", async () => {
@@ -300,12 +304,12 @@ test("never rejects: connect, the stage, the unlock and the logger can all throw
   l = logger();
   r = await withEnv("true", () => run_ct_insight(RUN_LOG, l.add, { connect: () => d.db, stage: fakeStage({ throws: new Error("connection terminated") }), rules }));
   assert.match(r.error, /connection terminated/);
-  assert.deepStrictEqual(d.calls, ["lock", "unlock", "end"]);
+  assert.deepStrictEqual(d.calls, ["lock", "unlock", "release", "end"]);
   // the logger itself throws on every event
   const d2 = fakeDb();
   r = await withEnv("true", () => run_ct_insight(RUN_LOG, logger({ throws: true }).add, { connect: () => d2.db, stage: fakeStage({ result: okResult() }), rules }));
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(d2.calls, ["lock", "unlock", "end"]);
+  assert.deepStrictEqual(d2.calls, ["lock", "unlock", "release", "end"]);
   // a run_log without a uuid run_id still gets a valid run id
   const s3 = fakeStage({ result: okResult() });
   await withEnv("true", () => run_ct_insight({ log_events: [] }, logger().add, { connect: () => fakeDb().db, stage: s3, rules }));
@@ -390,4 +394,39 @@ test("F2: connect() hands the timeouts to the pool only when given (no connectio
   assert.strictEqual(a.$cn.query_timeout, 135000);
   const b = connect("readonly");
   assert.ok(!("connectionTimeoutMillis" in b.$cn) && !("query_timeout" in b.$cn), "CLI connections unchanged");
+});
+
+// ------------------------------------------------------- review PHASE5-HOOK
+
+test("hook F2: a stage past the deadline is abandoned: ERROR, connection killed, pool closed, nothing logged after", async () => {
+  assert.ok(STAGE_DEADLINE_MS >= 60000 && STAGE_DEADLINE_MS <= 10 * 60000, "minutes, well under the 30-min cadence");
+  const d = fakeDb();
+  let rejectStage;
+  const s = fakeStage();
+  s.run_stage = () => new Promise((_, rej) => { rejectStage = rej; }); // a stage that is still running
+  d.sco.onKill = () => rejectStage(new Error("Connection terminated")); // killing the socket fails the in-flight query
+  const l = logger();
+  const t0 = Date.now();
+  const r = await withEnv("true", () => run_ct_insight(RUN_LOG, l.add, { connect: () => d.db, stage: s, rules, deadline_ms: 60 }));
+  assert.deepStrictEqual(r, { error: "deadline" });
+  assert.ok(Date.now() - t0 < 2000);
+  assert.deepStrictEqual(d.calls, ["lock", "kill", "end"]); // no unlock: the session (and its lock) is gone
+  assert.deepStrictEqual(l.events.map((e) => `${e.type}:${e.note.step}`), ["ERROR:deadline"]);
+  assert.match(l.events[0].err.message, /exceeded 60 ms/);
+  await new Promise((res) => setTimeout(res, 20)); // the abandoned stage's rejection: no event, no unhandled rejection
+  assert.strictEqual(l.events.length, 1);
+});
+
+test("hook F2: a stage within the deadline is unaffected; connect failure is logged and the pool closed", async () => {
+  const d = fakeDb();
+  const l = logger();
+  const r = await withEnv("true", () => run_ct_insight(RUN_LOG, l.add, { connect: () => d.db, stage: fakeStage({ result: okResult() }), rules, deadline_ms: 5000 }));
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(d.calls, ["lock", "unlock", "release", "end"]);
+  const d2 = fakeDb({ connectThrows: new Error("timeout expired") });
+  const l2 = logger();
+  const r2 = await withEnv("true", () => run_ct_insight(RUN_LOG, l2.add, { connect: () => d2.db, stage: fakeStage({ result: okResult() }), rules }));
+  assert.match(r2.error, /timeout expired/);
+  assert.deepStrictEqual(d2.calls, ["end"]);
+  assert.deepStrictEqual(l2.events.map((e) => `${e.type}:${e.note.step}`), ["ERROR:stage"]);
 });

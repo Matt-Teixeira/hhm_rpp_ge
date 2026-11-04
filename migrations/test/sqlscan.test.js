@@ -181,6 +181,18 @@ test("drop-then-create in one file: freshCreates / netDrops for the runner's sta
   assert.deepStrictEqual(odd.netDrops.map((d) => d.name), ["insight.z"]);
 });
 
+test("functions never get the drop/re-create exemption (overloads share a name)", () => {
+  // review PHASE3-004 F1: different overloads
+  const r = scanSql("DROP FUNCTION insight.f(integer); CREATE FUNCTION insight.f(text) RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;");
+  assert.deepStrictEqual(r.errors, []);
+  assert.deepStrictEqual(r.freshCreates.map((c) => `${c.name}(${c.args})`), ["insight.f(text)"]);
+  assert.deepStrictEqual(r.netDrops.map((d) => `${d.name}(${d.args})`), ["insight.f(integer)"]);
+  // same signature: still not exempt (keeps the runner's pre-004 behaviour)
+  const same = scanSql("DROP FUNCTION insight.g(integer); CREATE FUNCTION insight.g(integer) RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;");
+  assert.strictEqual(same.freshCreates.length, 1);
+  assert.strictEqual(same.netDrops.length, 1);
+});
+
 test("004 re-creates the api views, creates system_clock, and its down restores them", () => {
   const up = scanSql(fs.readFileSync(path.join(dir, "004_phase3_derive.sql"), "utf8"));
   assert.deepStrictEqual(up.errors, []);

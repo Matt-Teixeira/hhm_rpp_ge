@@ -467,17 +467,25 @@ function scanSql(src, { filename = "<sql>" } = {}) {
   //                 (these must be absent before the file runs)
   //   netDrops:     dropped objects NOT re-created later in the same file
   //                 (these must be gone after the file runs)
+  // Functions never get this exemption: overloads share a name, and matching
+  // argument signatures textually is unreliable (int vs integer, parameter
+  // names, defaults), so dropping f(integer) and creating f(text) must not
+  // count as a re-creation (review PHASE3-004 F1). A function drop/re-create
+  // keeps the old behaviour: the pre-check refuses it.
   const objKey = (o) => `${o.kind}:${o.name}`;
+  const exemptable = (o) => o.kind !== "function";
   const freshCreates = [], netDrops = [];
   statements.forEach((s, i) => {
     if (s.info.creates) {
       const k = objKey(s.info.creates);
-      const droppedBefore = statements.slice(0, i).some((p) => (p.info.drops || []).some((d) => objKey(d) === k));
+      const droppedBefore = exemptable(s.info.creates) &&
+        statements.slice(0, i).some((p) => (p.info.drops || []).some((d) => objKey(d) === k));
       if (!droppedBefore) freshCreates.push(s.info.creates);
     }
     for (const d of s.info.drops || []) {
       const k = objKey(d);
-      const createdAfter = statements.slice(i + 1).some((p) => p.info.creates && objKey(p.info.creates) === k);
+      const createdAfter = exemptable(d) &&
+        statements.slice(i + 1).some((p) => p.info.creates && objKey(p.info.creates) === k);
       if (!createdAfter) netDrops.push(d);
     }
   });

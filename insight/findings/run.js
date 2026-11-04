@@ -28,6 +28,14 @@
 // job_state.last_run_stats.as_of_by_system (fleet and --systems runs alike),
 // so verify-findings re-derives every system at the date its rows were
 // computed for (review PHASE4-RUN-VERIFY F2).
+//
+// Lock-free cores (the CLI and the Phase 5 stage hold the lock):
+//   findings_apply_core: the apply loop; each system's transaction also
+//             clears it from the pending systems derive marked (pending.js).
+//   findings_step: the stage's step, default mode: the systems derive
+//             touched since the last findings run, or all systems on the
+//             first run of a new UTC date (§15.3 Q3), which also sets
+//             fleet_today. Advances 'ge_ct_findings' to the derive watermark.
 const { pgp } = require("../db");
 const { LOCK_KEY } = require("../load");
 const { load_inputs } = require("./load");
@@ -35,6 +43,7 @@ const { build_context, dnum, dstr } = require("./context");
 const { replay_system } = require("./state");
 const { finding_rules, catalog_rows } = require("./rules");
 const { run_verify } = require("./verify");
+const { clear_findings_pending, fleet_today_of, daily_pass_due } = require("../pending");
 
 const JOB = "ge_ct_findings";
 const MIN_SCHEMA_VERSION = 5; // finding_catalog, findings.data_through
@@ -161,18 +170,68 @@ function totals(results) {
 }
 const changes = (t) => t.inserted + t.updated + t.deleted;
 
-// The per-system as-of map is kept across runs: write_job preserves it, and
-// record_as_of merges a system into it.
-async function write_job(t, { watermark_id, run_id, started_at, status, stats }) {
-  await t.none(
-    `INSERT INTO insight.job_state (job_name, watermark_id, last_run_id, last_run_started_at, last_run_finished_at, last_run_status, last_run_stats, updated_at)
+// Kept across runs: the per-system as-of map (record_as_of merges a system
+// into it) and the pending systems (pending.js); both are only ever changed
+// by their own per-system statements. fleet_today is kept unless the run's
+// stats set it.
+const WRITE_JOB_SQL = `INSERT INTO insight.job_state (job_name, watermark_id, last_run_id, last_run_started_at, last_run_finished_at, last_run_status, last_run_stats, updated_at)
      VALUES ($1, $2, $3, $4, now(), $5, $6::jsonb, now())
      ON CONFLICT (job_name) DO UPDATE SET watermark_id = EXCLUDED.watermark_id, last_run_id = EXCLUDED.last_run_id,
        last_run_started_at = EXCLUDED.last_run_started_at, last_run_finished_at = now(), last_run_status = EXCLUDED.last_run_status,
-       last_run_stats = EXCLUDED.last_run_stats
-         || jsonb_build_object('as_of_by_system', coalesce(job_state.last_run_stats -> 'as_of_by_system', '{}'::jsonb)),
-       updated_at = now()`,
-    [JOB, watermark_id, run_id, started_at, status, JSON.stringify(stats)]);
+       last_run_stats = jsonb_strip_nulls(jsonb_build_object('fleet_today', job_state.last_run_stats -> 'fleet_today'))
+         || (EXCLUDED.last_run_stats - 'as_of_by_system' - 'pending_systems')
+         || jsonb_build_object('as_of_by_system', coalesce(job_state.last_run_stats -> 'as_of_by_system', '{}'::jsonb),
+                               'pending_systems', coalesce(job_state.last_run_stats -> 'pending_systems', '{}'::jsonb)),
+       updated_at = now()`;
+async function write_job(t, { watermark_id, run_id, started_at, status, stats }) {
+  await t.none(WRITE_JOB_SQL, [JOB, watermark_id, run_id, started_at, status, JSON.stringify(stats)]);
+}
+
+// Lock-free apply core: catalog, one transaction per system (findings +
+// clear its pending mark), then job_state if write. On error: job_state
+// 'error' with prev_watermark (if write), rethrow.
+async function findings_apply_core(conn, { list, today, replay, write, watermark, prev_watermark, run_id, started_at, extra_stats = {}, log = () => {} }) {
+  await conn.tx((t) => sync_catalog(t));
+  const results = [];
+  try {
+    for (const s of list) {
+      const r = await conn.tx(async (t) => {
+        const out = await findings_system(t, s, { today, replay });
+        await clear_findings_pending(t, s);
+        return out;
+      });
+      results.push(r);
+      if (r.evaluated) log(`  ${s}: ${r.rows.length} findings; +${r.inserted} ~${r.updated} -${r.deleted}${r.drift.length ? `; drift ${r.drift.length}` : ""} (committed)`);
+    }
+    const stats = { ...totals(results), today, replay, ...extra_stats };
+    if (write) await conn.tx((t) => write_job(t, { watermark_id: watermark, run_id, started_at, status: "ok", stats }));
+    return { stats, results };
+  } catch (e) {
+    const stats = { ...totals(results), today, replay, error: e.message, failed_after: results.map((r) => r.system_id) };
+    if (write) await conn.tx((t) => write_job(t, { watermark_id: prev_watermark, run_id, started_at, status: "error", stats })).catch(() => {});
+    throw e;
+  }
+}
+
+// The stage's findings step (lock-free; the caller holds LOCK_KEY). Default
+// mode only. force_daily: rehearsal only (time the daily pass).
+async function findings_step(conn, { today, run_id, started_at = new Date(), force_daily = false, log = () => {} }) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new Error(`bad today ${today}`);
+  const derive = await conn.oneOrNone("SELECT watermark_id FROM insight.job_state WHERE job_name = 'ge_ct_derive'");
+  const prev = await conn.oneOrNone("SELECT watermark_id, last_run_stats FROM insight.job_state WHERE job_name = $1", [JOB]);
+  const watermark = derive ? Number(derive.watermark_id) : 0;
+  const prev_watermark = prev ? Number(prev.watermark_id) : 0;
+  const prev_stats = (prev && prev.last_run_stats) || {};
+  const prev_fleet = fleet_today_of(prev_stats);
+  const daily = force_daily || daily_pass_due(prev_fleet, today);
+  const pending = Object.keys(prev_stats.pending_systems || {}).sort();
+  const list = daily ? [...new Set([...(await all_systems(conn)), ...pending])].sort() : pending;
+  const r = await findings_apply_core(conn, { list, today, replay: false, write: true, watermark, prev_watermark, run_id, started_at,
+    extra_stats: { mode: daily ? "daily" : "touched", systems_selected: daily ? "all" : list.length,
+      ...(daily ? { fleet_today: today } : prev_fleet ? { fleet_today: prev_fleet } : {}) }, log });
+  const { skipped_stale, ...t } = r.stats;
+  return { from: prev_watermark, watermark, mode: daily ? "daily" : "touched", systems: list.length, skipped_stale: skipped_stale.length,
+    drift_detail: r.results.flatMap((x) => x.drift).slice(0, 10), stats: t };
 }
 
 async function record_as_of(t, system_id, today) {
@@ -256,26 +315,17 @@ async function run_findings(db, { mode, replay = false, systems = null, today, r
       }
 
       // apply
-      await conn.tx((t) => sync_catalog(t));
-      const results = [];
-      try {
-        for (const s of list) {
-          const r = await conn.tx((t) => findings_system(t, s, { today, replay }));
-          results.push(r);
-          if (r.evaluated) log(`  ${s}: ${r.rows.length} findings; +${r.inserted} ~${r.updated} -${r.deleted}${r.drift.length ? `; drift ${r.drift.length}` : ""} (committed)`);
-        }
-        const stats = { ...totals(results), today, replay, systems_selected: systems ? systems.length : "all" };
-        if (!systems) await conn.tx((t) => write_job(t, { watermark_id: watermark, run_id, started_at, status: "ok", stats }));
-        return { stats, after: await conn.one(COUNTS_SQL), rows: results.flatMap((r) => r.rows) };
-      } catch (e) {
-        const stats = { ...totals(results), today, replay, error: e.message, failed_after: results.map((r) => r.system_id) };
-        if (!systems) await conn.tx((t) => write_job(t, { watermark_id: prevJob ? Number(prevJob.watermark_id) : 0, run_id, started_at, status: "error", stats })).catch(() => {});
-        throw e;
-      }
+      const r = await findings_apply_core(conn, { list, today, replay, write: !systems, watermark,
+        prev_watermark: prevJob ? Number(prevJob.watermark_id) : 0, run_id, started_at,
+        extra_stats: { systems_selected: systems ? systems.length : "all", ...(systems ? {} : { fleet_today: today }) }, log });
+      return { stats: r.stats, after: await conn.one(COUNTS_SQL), rows: r.results.flatMap((x) => x.rows) };
     } finally {
       await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [LOCK_KEY]);
     }
   });
 }
 
-module.exports = { run_findings, findings_system, sync_catalog, read_as_of, JOB, COUNTS_SQL, FINGERPRINT_SQL, UPSERT_SUFFIX, canon, row_canon };
+module.exports = {
+  run_findings, findings_apply_core, findings_step, findings_system, all_systems, sync_catalog, read_as_of, totals,
+  JOB, COUNTS_SQL, FINGERPRINT_SQL, UPSERT_SUFFIX, WRITE_JOB_SQL, canon, row_canon,
+};

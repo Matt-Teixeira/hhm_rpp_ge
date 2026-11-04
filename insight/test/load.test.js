@@ -22,9 +22,10 @@ test("dedupe keeps the first fact per natural key and counts collisions", () => 
 
 test("upsert SQL: version-gated ON CONFLICT, SQL NULL attrs, typed casts, chunking", () => {
   const [q] = upsert_statements([fact(), fact({ record_number_concurrent: 1, attrs: null, value_num: null })]);
-  assert.match(q, /^insert into "insight"\."ge_ct_facts"/i);
+  // wrapped in the touched-days CTE (pending.js): the insert is the CTE body
+  assert.match(q, /^\s*WITH up AS \(insert into "insight"\."ge_ct_facts"/i);
   assert.match(q, /ON CONFLICT ON CONSTRAINT ge_ct_facts_natural_key DO UPDATE SET/);
-  assert.match(q, /WHERE EXCLUDED\.rule_version > ge_ct_facts\.rule_version\s*$/);
+  assert.match(q, /WHERE EXCLUDED\.rule_version > ge_ct_facts\.rule_version\s*RETURNING system_id, host_datetime, host_local\)/);
   assert.match(q, /'\{"left":25\.5\}'::jsonb/);
   assert.match(q, /null::jsonb/);
   assert.ok(!/'null'::jsonb/.test(q), "absent attrs must be SQL NULL, not JSON null");

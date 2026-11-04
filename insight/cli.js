@@ -36,6 +36,16 @@
 //   node insight/cli.js verify-findings
 //       READ-ONLY. Every finding vs the independent SQL, as of the last
 //       findings run's date (§14.4).
+//   node insight/cli.js stage --rehearse
+//       As insight_writer, ONE transaction, rolled back (§15.2 item 4): the
+//       Phase 5 stage (insight/stage.js) as the ge_ct run would do it, on the
+//       current pending range: a catch-up run up to the last ge_ct run, a
+//       typical run (the last ge_ct run's rows), a run with the daily
+//       all-systems findings pass; per-step times; then verify,
+//       verify-derive and verify-findings on the uncommitted data, derive
+//       touched = full rebuild, findings default = replay. Writes nothing.
+//       (There is no `stage --apply`: the stage writes only from the ge_ct
+//       run, with INSIGHT_ENABLED=true.)
 //   node insight/cli.js verify
 //       READ-ONLY. Facts per (system, metric) vs the independent count of
 //       DISTINCT natural keys, over the watermark range. Derived metrics
@@ -45,7 +55,8 @@ const { connect, pgp } = require("./db");
 const { rules } = require("./rules/ge_ct");
 const { validate_rules } = require("./rules/engine");
 const { stream } = require("./extract");
-const { RECONCILE_SQL, RECONCILE_DISTINCT_SQL } = require("./reconcile_sql");
+const { RECONCILE_SQL } = require("./reconcile_sql");
+const { verify_facts } = require("./verify_facts");
 const { run_extract } = require("./load");
 const readline = require("readline");
 const crypto = require("crypto");
@@ -56,6 +67,7 @@ const { run_verify } = require("./derive/verify");
 const { run_findings, COUNTS_SQL: FINDINGS_COUNTS_SQL } = require("./findings/run");
 const { run_verify: run_verify_findings } = require("./findings/verify");
 const { format_report } = require("./findings/report");
+const { rehearse_stage } = require("./stage");
 const fs = require("fs");
 
 const RECENT_MS = 30 * 24 * 3600 * 1000;
@@ -92,8 +104,13 @@ function args(argv) {
     else throw new Error(`unknown argument ${argv[i]}`);
   }
   if (a.system && a.systems) throw new Error("use either --system or --systems, not both");
-  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings"].includes(a.cmd)) {
-    throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify | derive --rehearse|--apply [--system S | --systems S1,S2] | verify-derive | findings --rehearse|--apply [--replay] [--system S | --systems S1,S2] [--report FILE] | verify-findings");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings", "stage"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify | derive --rehearse|--apply [--system S | --systems S1,S2] | verify-derive | findings --rehearse|--apply [--replay] [--system S | --systems S1,S2] [--report FILE] | verify-findings | stage --rehearse");
+  }
+  if (a.cmd === "stage") {
+    if (a.apply) throw new Error("stage has no --apply: the stage writes only from the ge_ct run (INSIGHT_ENABLED=true)");
+    if (!a.rehearse) throw new Error("stage needs --rehearse");
+    if (a.system || a.systems || a.from_id !== null || a.to_id !== null || a.replay || a.report) throw new Error("stage --rehearse takes no other flags");
   }
   if (["backfill", "derive", "findings"].includes(a.cmd) && a.rehearse === a.apply) throw new Error(`${a.cmd} needs exactly one of --rehearse / --apply`);
   if ((a.cmd === "derive" || a.cmd === "findings") && a.system) a.systems = [a.system];
@@ -293,6 +310,35 @@ async function findings(a) {
   }
 }
 
+async function stage(a) {
+  const errs = validate_rules(rules);
+  if (errs.length) throw new Error(`invalid rules: ${errs.join("; ")}`);
+  const db = connect("writer", { statementTimeoutMs: 600000, applicationName: "insight_stage_rehearsal" });
+  try {
+    await confirm(db, a);
+    const t0 = Date.now();
+    const out = await rehearse_stage(db, { rules, log: (m) => console.log(m) });
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    if (out.skipped) { console.log(`SKIPPED: ${out.skipped}`); process.exitCode = 3; return; }
+    console.log(`\nREHEARSAL ROLLED BACK in ${secs}s.`);
+    console.log("per-step ms:");
+    for (const r of out.runs) {
+      const ms = Object.entries(r.steps).map(([k, s]) => `${k} ${s.ms}`).join(", ");
+      const ex = r.steps.extract || {};
+      console.log(`  ${r.label}: total ${r.ms} ms (${ms}); rows ${ex.rows ?? "-"}, late re-read ${ex.late ? ex.late.rows : "-"} rows; derive ${r.steps.derive ? `${r.steps.derive.systems} systems / ${r.steps.derive.days} days` : "-"}; findings ${r.steps.findings ? `${r.steps.findings.mode}, ${r.steps.findings.systems} systems` : "-"}`);
+    }
+    console.log(`checks: ${JSON.stringify(out.checks)}`);
+    console.log(`overall: ${out.ok ? "OK" : "NOT OK"}`);
+    const fresh = await db.one(`SELECT (SELECT json_object_agg(job_name, watermark_id) FROM insight.job_state
+                                        WHERE job_name IN ('ge_ct_extract', 'ge_ct_derive', 'ge_ct_findings')) AS watermarks,
+                                       (SELECT count(*) FROM insight.ge_ct_facts)::int AS facts, (SELECT count(*) FROM insight.findings)::int AS findings`);
+    console.log(`after ROLLBACK, fresh read: ${JSON.stringify(fresh)}`);
+    if (!out.ok) process.exitCode = 2;
+  } finally {
+    await db.$pool.end();
+  }
+}
+
 async function verify_findings() {
   const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_verify_findings" });
   try {
@@ -331,22 +377,12 @@ async function verify() {
     const job = await db.oneOrNone("SELECT watermark_id, last_run_status, last_run_finished_at FROM insight.job_state WHERE job_name = 'ge_ct_extract'");
     if (!job) throw new Error("no watermark yet: run backfill --apply first");
     const to = Number(job.watermark_id);
-    const facts = await db.any(`SELECT system_id, metric_key AS key, count(*)::int AS n FROM insight.ge_ct_facts
-                                WHERE source_id <= $1 AND metric_key <> ALL($2) GROUP BY 1, 2`, [to, DERIVED_KEYS]);
-    const sql = await db.any(RECONCILE_DISTINCT_SQL, [0, to, null]);
-    const fm = new Map(facts.map((r) => [`${r.system_id}|${r.key}`, r.n]));
-    const sm = new Map(sql.map((r) => [`${r.system_id}|${r.key}`, Number(r.n)]));
-    const keys = new Set([...fm.keys(), ...sm.keys()]);
-    const diffs = [...keys].filter((k) => (fm.get(k) || 0) !== (sm.get(k) || 0));
-    const total = facts.reduce((s, r) => s + r.n, 0);
-    console.log(`verify (read-only): watermark ${to} (${job.last_run_status} at ${job.last_run_finished_at && job.last_run_finished_at.toISOString()}); ${total} facts in insight.ge_ct_facts`);
-    console.log(`facts vs independent DISTINCT-key SQL (${keys.size} system×metric cells): ${diffs.length ? `${diffs.length} differ` : "all equal"}`);
-    for (const k of diffs.slice(0, 40)) console.log(`  ${k.padEnd(48)} facts=${fm.get(k) || 0} sql=${sm.get(k) || 0}`);
-    const cat = await db.one("SELECT count(*)::int AS n, count(*) FILTER (WHERE metric_key = ANY($1))::int AS derived FROM insight.metric_catalog", [DERIVED_KEYS]);
-    // derived catalog rows appear once derive has run; before that only the per-row registry
-    const expected = rules.length + (cat.derived ? derived_rules.length : 0);
-    console.log(`catalog rows: ${cat.n} (registry: ${rules.length} per-row + ${derived_rules.length} derived; ${cat.derived} derived present)`);
-    if (diffs.length || cat.n !== expected) process.exitCode = 2;
+    const v = await verify_facts(db, to);
+    console.log(`verify (read-only): watermark ${to} (${job.last_run_status} at ${job.last_run_finished_at && job.last_run_finished_at.toISOString()}); ${v.total} facts in insight.ge_ct_facts`);
+    console.log(`facts vs independent DISTINCT-key SQL (${v.cells} system×metric cells): ${v.diffs.length ? `${v.diffs.length} differ` : "all equal"}`);
+    for (const d of v.diffs.slice(0, 40)) console.log(`  ${d.k.padEnd(48)} facts=${d.facts} sql=${d.sql}`);
+    console.log(`catalog rows: ${v.catalog.n} (registry: ${rules.length} per-row + ${derived_rules.length} derived; ${v.catalog.derived} derived present)`);
+    if (!v.ok) process.exitCode = 2;
   } finally {
     await db.$pool.end();
   }
@@ -366,6 +402,7 @@ if (require.main !== module) {
   if (a.cmd === "verify-derive") await verify_derive();
   if (a.cmd === "findings") await findings(a);
   if (a.cmd === "verify-findings") await verify_findings();
+  if (a.cmd === "stage") await stage(a);
 })()
   .catch((e) => { console.error(`ERROR: ${e.message}`); process.exitCode = 1; })
   .finally(() => pgp.end());

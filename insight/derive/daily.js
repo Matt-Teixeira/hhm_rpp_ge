@@ -68,7 +68,8 @@ const INSERT_PREFIX = `INSERT INTO insight.ge_ct_daily (system_id, local_day, me
 //     time bound) if any newly extracted fact breaks it;
 //   - cli.js verify-derive checks it over all facts.
 const MAX_OFFSET_H = 14;
-const OFFSET_BREAKS_SQL = `abs(extract(epoch FROM f.host_datetime - (f.host_local AT TIME ZONE 'UTC'))) > ${MAX_OFFSET_H} * 3600`;
+const offset_breaks_sql = (a) => `abs(extract(epoch FROM ${a}.host_datetime - (${a}.host_local AT TIME ZONE 'UTC'))) > ${MAX_OFFSET_H} * 3600`;
+const OFFSET_BREAKS_SQL = offset_breaks_sql("f");
 function day_bounds(days) {
   const sorted = [...days].sort();
   const lo = new Date(Date.parse(`${sorted[0]}T00:00:00Z`) - 2 * 86400000).toISOString();
@@ -96,4 +97,4 @@ function unlisted_dim_metrics() {
   return rules.map((r) => r.key).filter((k) => /^(xfer|ipc)\./.test(k) && !(k in DIM_SOURCE));
 }
 
-module.exports = { rebuild_daily, dim_sql, dim_of, day_bounds, AGG_SELECT, DIM_SOURCE, unlisted_dim_metrics, MAX_OFFSET_H, OFFSET_BREAKS_SQL };
+module.exports = { rebuild_daily, dim_sql, dim_of, day_bounds, AGG_SELECT, DIM_SOURCE, unlisted_dim_metrics, MAX_OFFSET_H, OFFSET_BREAKS_SQL, offset_breaks_sql };

@@ -14,7 +14,16 @@
 //   apply   : catalog sync, then one transaction per system, then clock,
 //             then insight.job_state 'ge_ct_derive' (watermark = the
 //             extract watermark the run covered, for the Phase 5 stage).
+//
+// Lock-free cores (the CLI and the Phase 5 stage hold the lock):
+//   derive_apply_core: the apply loop. Each system's transaction also clears
+//             its pending touched days and marks it pending for findings
+//             (pending.js), so a failed run is redone by the next one.
+//   derive_step: the stage's step: the touched scope recorded by extract
+//             (pending.js), not a source-id range, then the clock; advances
+//             'ge_ct_derive' to the extract watermark.
 const { LOCK_KEY } = require("../load");
+const { read_derive_pending, scope_from_pending, clear_derive_pending, mark_findings_pending } = require("../pending");
 const { preflight, all_systems, derive_system, sync_catalog, rebuild_clock, scope_full, touched_from_source_range } = require("./index");
 
 // Rehearsal pass 3 rebuilds only the days touched by the last N gesys ids
@@ -52,14 +61,64 @@ function totals(results) {
   return t;
 }
 
-async function write_job(t, { watermark_id, run_id, started_at, status, stats }) {
-  await t.none(
-    `INSERT INTO insight.job_state (job_name, watermark_id, last_run_id, last_run_started_at, last_run_finished_at, last_run_status, last_run_stats, updated_at)
+// The pending touched days (pending.js) are kept: only extract adds to them
+// and only a system's own derive transaction removes its entry.
+const WRITE_JOB_SQL = `INSERT INTO insight.job_state (job_name, watermark_id, last_run_id, last_run_started_at, last_run_finished_at, last_run_status, last_run_stats, updated_at)
      VALUES ($1, $2, $3, $4, now(), $5, $6::jsonb, now())
      ON CONFLICT (job_name) DO UPDATE SET watermark_id = EXCLUDED.watermark_id, last_run_id = EXCLUDED.last_run_id,
        last_run_started_at = EXCLUDED.last_run_started_at, last_run_finished_at = now(), last_run_status = EXCLUDED.last_run_status,
-       last_run_stats = EXCLUDED.last_run_stats, updated_at = now()`,
-    [JOB, watermark_id, run_id, started_at, status, JSON.stringify(stats)]);
+       last_run_stats = jsonb_build_object('pending', coalesce(job_state.last_run_stats -> 'pending', '{}'::jsonb)) || (EXCLUDED.last_run_stats - 'pending'),
+       updated_at = now()`;
+async function write_job(t, { watermark_id, run_id, started_at, status, stats }) {
+  await t.none(WRITE_JOB_SQL, [JOB, watermark_id, run_id, started_at, status, JSON.stringify(stats)]);
+}
+
+// Lock-free apply core. One transaction per system (derive, clear its
+// pending days, mark it for findings), then clock, then job_state if
+// write_watermark. On error: job_state 'error' with prev_watermark, rethrow.
+async function derive_apply_core(conn, { list, scope, now, run_id, started_at, watermark, prev_watermark, write_watermark, extra_stats = {}, log = () => {} }) {
+  await conn.tx((t) => sync_catalog(t));
+  const results = [];
+  try {
+    for (const s of list) {
+      const s0 = Date.now();
+      const r = await conn.tx(async (t) => {
+        const out = await derive_system(t, s, scope);
+        await clear_derive_pending(t, s);
+        await mark_findings_pending(t, s);
+        return out;
+      });
+      r.ms = Date.now() - s0;
+      results.push(r);
+      log(`  ${s}: derived +${r.derived_facts.inserted} ~${r.derived_facts.updated} -${r.derived_facts.deleted}; daily ${r.daily.inserted}; exams ${r.exams.inserted}; segments ${r.tube_segments.inserted}; capabilities ${r.capabilities.inserted}; ${r.ms} ms (committed)`);
+    }
+    const clock = await conn.tx((t) => rebuild_clock(t, now));
+    log(`  clock: ${clock.upserted} systems ${JSON.stringify(clock.flags)} (committed)`);
+    const stats = { ...totals(results), clock: clock.flags, ...extra_stats };
+    if (write_watermark) await conn.tx((t) => write_job(t, { watermark_id: watermark, run_id, started_at, status: "ok", stats }));
+    return { stats, results, clock };
+  } catch (e) {
+    const stats = { ...totals(results), error: e.message, failed_after: results.map((r) => r.system_id) };
+    // keep the last good watermark; record the error
+    await conn.tx((t) => write_job(t, { watermark_id: prev_watermark, run_id, started_at, status: "error", stats })).catch(() => {});
+    throw e;
+  }
+}
+
+// The stage's derive step (lock-free; the caller holds LOCK_KEY).
+async function derive_step(conn, { now = new Date(), run_id, started_at = new Date(), log = () => {} }) {
+  const extract = await conn.oneOrNone("SELECT watermark_id FROM insight.job_state WHERE job_name = 'ge_ct_extract'");
+  const prev = await conn.oneOrNone("SELECT watermark_id FROM insight.job_state WHERE job_name = $1", [JOB]);
+  const watermark = extract ? Number(extract.watermark_id) : 0;
+  const prev_watermark = prev ? Number(prev.watermark_id) : 0;
+  const scope = scope_from_pending(await read_derive_pending(conn));
+  const list = [...scope.keys()];
+  const days = [...scope.values()].reduce((n, v) => n + (v.days ? v.days.size : 0), 0);
+  const full = list.filter((s) => scope.get(s).full);
+  const r = await derive_apply_core(conn, { list, scope, now, run_id, started_at, watermark, prev_watermark, write_watermark: true,
+    extra_stats: { mode: "touched", systems_selected: list.length, days, full_rebuilds: full }, log });
+  return { from: prev_watermark, watermark, systems: list.length, days, full_rebuilds: full,
+    per_system_ms: Object.fromEntries(r.results.map((x) => [x.system_id, x.ms])), stats: r.stats };
 }
 
 async function run_derive(db, { mode, systems = null, now = new Date(), run_id, log = () => {} }) {
@@ -126,32 +185,15 @@ async function run_derive(db, { mode, systems = null, now = new Date(), run_id, 
       }
 
       // apply: catalog, one transaction per system, clock, job_state
-      await conn.tx((t) => sync_catalog(t));
-      const results = [];
-      try {
-        for (const s of list) {
-          const s0 = Date.now();
-          const r = await conn.tx((t) => derive_system(t, s, scope_full([s])));
-          r.ms = Date.now() - s0;
-          results.push(r);
-          log(`  ${s}: derived +${r.derived_facts.inserted} ~${r.derived_facts.updated} -${r.derived_facts.deleted}; daily ${r.daily.inserted}; exams ${r.exams.inserted}; segments ${r.tube_segments.inserted}; capabilities ${r.capabilities.inserted}; ${r.ms} ms (committed)`);
-        }
-        const clock = await conn.tx((t) => rebuild_clock(t, now));
-        log(`  clock: ${clock.upserted} systems ${JSON.stringify(clock.flags)} (committed)`);
-        const stats = { ...totals(results), clock: clock.flags, systems_selected: systems ? systems.length : "all" };
-        // the watermark only means "derive covered facts up to here" after a fleet-wide run
-        if (!systems) await conn.tx((t) => write_job(t, { watermark_id: watermark, run_id, started_at, status: "ok", stats }));
-        return { stats, watermark: systems ? null : watermark, after: await conn.one(COUNTS_SQL) };
-      } catch (e) {
-        const stats = { ...totals(results), error: e.message, failed_after: results.map((r) => r.system_id) };
-        // keep the last good watermark; record the error
-        await conn.tx((t) => write_job(t, { watermark_id: prevJob ? Number(prevJob.watermark_id) : 0, run_id, started_at, status: "error", stats })).catch(() => {});
-        throw e;
-      }
+      // the watermark only means "derive covered facts up to here" after a fleet-wide run
+      const r = await derive_apply_core(conn, { list, scope: scope_full(list), now, run_id, started_at, watermark,
+        prev_watermark: prevJob ? Number(prevJob.watermark_id) : 0, write_watermark: !systems,
+        extra_stats: { systems_selected: systems ? systems.length : "all" }, log });
+      return { stats: r.stats, watermark: systems ? null : watermark, after: await conn.one(COUNTS_SQL) };
     } finally {
       await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [LOCK_KEY]);
     }
   });
 }
 
-module.exports = { run_derive, JOB, COUNTS_SQL };
+module.exports = { run_derive, derive_apply_core, derive_step, JOB, COUNTS_SQL, FINGERPRINT_SQL, WRITE_JOB_SQL, totals };

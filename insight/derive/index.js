@@ -3,7 +3,8 @@
 // derived tables. Writes only insight.* and runs as insight_writer; the
 // caller owns transactions (cli.js derive: rehearse = one rolled-back
 // transaction, apply = one transaction per system), and the Phase 5 stage
-// will call it after extract with a touched scope.
+// calls it after extract with the touched scope extract recorded
+// (run.js derive_step, pending.js).
 //
 // Per system, in order (each later stage sees the earlier ones' output):
 //   1. derived facts (system.boot, tube.replacement): whole history
@@ -41,7 +42,9 @@ async function all_systems(t) {
 }
 
 // Systems and device-clock days that got facts from gesys ids (from_id, to_id]
-// (the Phase 5 stage passes the extract run's old and new watermark).
+// (the derive rehearsal's pass 3). The Phase 5 stage doesn't use it: a
+// late-committed row's facts have a source id below the watermark, so the
+// stage takes the days from the keys extract inserted (pending.js).
 // A system with a new fact whose host_datetime is not within a zone offset
 // of its host_local gets a full rebuild instead: the touched daily scan's
 // time bounds rely on that invariant (daily.js, review F1).

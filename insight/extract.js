@@ -10,10 +10,12 @@ const PARTITION_FROM = Date.parse("2025-05-01T00:00:00Z");
 const PARTITION_TO = Date.parse("2029-01-01T00:00:00Z");
 
 // host_local = device wall clock (host_date 'DD-Mon-YYYY' + host_time), §12 item 2.
-const BATCH_SQL = `
-  SELECT id, capture_datetime, system_id, epoch, record_number_concurrent, type, message,
+// (Also used by the late-commit re-read, load.js LATE_SQL.)
+const ROW_COLUMNS = `id, capture_datetime, system_id, epoch, record_number_concurrent, type, message,
          exception_class, severity, ermes_number, host_datetime,
-         to_char(to_date(host_date, 'DD-Mon-YYYY') + host_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS host_local
+         to_char(to_date(host_date, 'DD-Mon-YYYY') + host_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS host_local`;
+const BATCH_SQL = `
+  SELECT ${ROW_COLUMNS}
   FROM log.ge_ct_gesys
   WHERE id > $1 AND ($2::bigint IS NULL OR id <= $2) AND ($3::text IS NULL OR system_id = $3)
   ORDER BY id
@@ -56,4 +58,4 @@ async function stream(db, { from_id = 0, to_id = null, system = null, rules, on_
   }
 }
 
-module.exports = { stream, build_facts, BATCH, PARTITION_FROM, PARTITION_TO };
+module.exports = { stream, build_facts, BATCH, PARTITION_FROM, PARTITION_TO, ROW_COLUMNS };

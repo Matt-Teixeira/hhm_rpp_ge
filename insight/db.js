@@ -15,7 +15,12 @@ const REPO = path.resolve(__dirname, "..");
 require("dotenv").config({ path: path.join(REPO, ".env") });
 const pgp = require("pg-promise")({ noWarnings: true });
 
-function connect(mode, { statementTimeoutMs = 300000, applicationName = "insight" } = {}) {
+// connectTimeoutMs: deadline for opening a connection (TCP, TLS, auth);
+// queryTimeoutMs: client-side backstop if the server never answers a query
+// (statement_timeout is enforced by the server, so it can't fire then).
+// Both off unless given: the ge_ct stage sets them, so it can't keep the
+// ge_ct process waiting on an unresponsive server (review PHASE5-STAGE F2).
+function connect(mode, { statementTimeoutMs = 300000, applicationName = "insight", connectTimeoutMs = 0, queryTimeoutMs = 0 } = {}) {
   if (!["writer", "readonly"].includes(mode)) throw new Error(`connect: unknown mode ${mode}`);
   let user, password;
   if (mode === "writer") {
@@ -40,6 +45,8 @@ function connect(mode, { statementTimeoutMs = 300000, applicationName = "insight
     application_name: `${applicationName}_${mode}`,
     ssl: { require: true, cert: fs.readFileSync(path.resolve(REPO, process.env.PG_SSL_PATH)), rejectUnauthorized: true },
     options: opts.join(" "),
+    ...(connectTimeoutMs > 0 ? { connectionTimeoutMillis: connectTimeoutMs } : {}),
+    ...(queryTimeoutMs > 0 ? { query_timeout: queryTimeoutMs } : {}),
   });
 }
 

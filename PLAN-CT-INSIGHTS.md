@@ -111,6 +111,8 @@ schema, rule registry per source), but nothing is built for them yet.
     - give each environment its own writer login
     - remove the writer credentials from the dev checkout
 
+- **Phase 3 re-evaluated 2026-11-04 (§13): decisions agreed, nothing
+  built yet.** It will be implemented in a new session; start at §13.4.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -268,10 +270,10 @@ log's own signature, verified on SME16618:
 | 06‑03 | full service calibration set (`scanUtilsRx` Basis/Air/Water Phantom) |
 | 06‑04 05:55 | mA·s counter reset to 0, then climbing from ~500k |
 
-Rule:
+Rule (as first drafted; **superseded by §13.2, 2026-11-04**):
 - **Primary signal:** counter drops to ~0 and later readings climb from
   low values. A single 0 that returns to the prior level is a glitch
-  (seen 4× on SME21873).
+  (seen 4× on SME21873). *Wrong: SME21873's resets stay low; see §13.1.*
 - **Corroboration:** within 7 days before the reset, look for tube
   identity messages, service mode, and a service-calibration burst.
 - **Confidence:** `confirmed` if both are present, `counter_only`
@@ -439,11 +441,11 @@ external scrub handles that.
 | **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ✅ (2026-11-03 19:44 UTC); `down` script tested in a dry run ✅ (`roundtrip`) |
 | **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ✅ (fix live 2026-11-03 19:45 UTC); cleanup done ✅ (§11.6) |
 | **2. Extract** ✅ 2026-11-03 | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
-| **3. Derive** | daily, exams, tube segments, capabilities | Replacements detected on SME16618 (installed 06‑02, confirmed), SME15218, SME21864 (~07‑15); SME21873's 0-glitches are not counted as swaps; exam counts sanity-checked with 2–3 sites; swaps spot-checked with field service, since there's no DB source of truth |
+| **3. Derive** | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3. (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
 | **4. Findings** | rules + open/resolve | Flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful |
 | **5. Prod** | (Migrations already applied, §11/§12.) One-off backfill via `cli.js --backfill` off-peak. Deploy the `index.js` hook (no new cron line) via dev → staging → prod, then `git pull` on `vm-debian`. Monitor the run logs | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |
 | **6. Viewer** | `sme_reports` CT report, internal | Team reviews fleet + 3 system views |
-| **7. Validate & extend** | FSE review of findings (start with SME21859 rotor); threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
+| **7. Validate & extend** | FSE review of findings (start with SME21859 rotor), and of tube swaps (§13.3, incl. SME21873 2025-09-02); exam counts sanity-checked with 2–3 sites; threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
 
 ---
 
@@ -953,4 +955,179 @@ Original triage notes:
 - Likely ignore: db checkpoints, review/film-composer status, "Service
   name not found", ecomm internal errors, recon job progress, badchanmgr
   PASSED checks.
+
+---
+
+## 13. Phase 3 re-evaluation (2026-11-04)
+
+Read-only checks against `insight.ge_ct_facts`, after the Phase 2
+backfill. The decisions in §13.2 were agreed with the user on
+2026-11-04.
+
+### 13.1 Evidence
+
+**Tube counter resets.** `tube.mas_total` drops below 50% of a prior
+reading above 100k, and the following readings stay low. Corroboration
+is taken from the 7 days before through 1 day after:
+
+| System | Reset | Old tube life | `service.calibration` facts | Verdict |
+|---|---|---|---|---|
+| SME16618 | 2026‑06‑04 | 52.8M mA·s | 26 | confirmed |
+| SME21864 | 2026‑07‑15 | 57.3M | 9 | confirmed |
+| SME15218 | 2026‑05‑28 | 15.2M | 14 | confirmed |
+| SME15218 | 2026‑09‑24 | 7.9M | 81 | confirmed (second tube) |
+| SME21873 | 2025‑08‑14 | 34.1M | 17 | confirmed |
+| SME21873 | 2025‑09‑02 | 0.7M | 0 | **counter only**, needs review |
+| SME21873 | 2025‑12‑08 | 3.1M | 24 | confirmed |
+| SME21873 | 2026‑01‑28 | 2.2M | 78 | confirmed |
+
+- SME21873's resets are **not glitches**. The counter restarts near
+  zero and keeps climbing. Its later tubes lasted only 2–3M mA·s.
+- The `tube.identity` messages ("GE tube has been verified",
+  "unrecognized X-Ray tube") repeat at boots, so they **don't
+  corroborate a swap**. They do show the tube source of each segment:
+  most replacement tubes are "unrecognized" (third-party or
+  refurbished).
+- The tube counter is reported about every 2 days per system.
+
+**Boots.** `system.sw_init_complete`, last 60 days:
+- 37,663 came less than 1 minute after the previous init, almost all
+  right after a `process.restart` (mostly SME18531's restart loop).
+- About 760 came more than 6 h after the previous init. That is roughly
+  one per system per day, matching the ~760 `system.shutdown` in the
+  same period (daily power cycling).
+
+**Exams.** Last 60 days, 9,334 `exam.start`:
+- 96.6% have exactly one `exam.series` before the next start, about 11
+  minutes after the start (on average). That is the end-of-exam
+  summary.
+- 3% have two (a series added later).
+- 8 have none.
+- 9,334 starts against 9,137 distinct exam numbers: 197 re-opened exams.
+
+**Clocks.** Per system, the smallest capture − newest-host lag over 30
+days:
+- The 19 systems with NULL `sites.time_zone_id` behave like Eastern
+  (lags 2–16 min), so the parser's New York default is right for them.
+  SME21854 sits at ~45 min and is ambiguous.
+- **Consistently ahead:**
+  - SME16618 ~45 min
+  - SME21873 ~35 min
+  - SME21929 ~10 min
+  - **SME11229 ~4.6 h** (looks like a device set to UTC)
+- **One-off negative lags** (SME20594, SME01431, SME20608, SME18536):
+  probably clock jumps around the 2026‑11‑01 DST change.
+
+### 13.2 Decisions (agreed)
+
+1. **Tube replacement = counter reset that stays low + at least 3
+   `service.calibration` facts** in [reset − 7 d, reset + 1 d] →
+   `confirmed`. A reset without them is `counter_only`, flagged for field
+   service review.
+   - `install_date` = the first service calibration in that window, or
+     else the reset date.
+   - Each tube segment records its tube source (`verified` /
+     `unrecognized` / `no_smart_id`): the most frequent `tube.identity`
+     value in the segment's first 30 days.
+   - The first segment per system is `initial`.
+   - `tube.identity` is **not** used as swap evidence.
+2. **Clocks: estimate and flag, don't correct (v1).** Store a per-system
+   clock-offset estimate with a flag in `insight.system_clock`. Daily
+   rollups keep the device wall clock (`host_local`), which is what site
+   staff see; offsets under an hour only move events near midnight.
+   Revisit if a flagged system matters (SME11229 barely reports).
+3. **Daily breakdown column (migration 004).** `insight.ge_ct_daily`
+   gets `dim text NOT NULL DEFAULT ''` in its primary key, and
+   `api.ge_ct_daily_v` exposes it. It is filled per metric:
+   - ermes code for `error.ermes`
+   - step for `prep.tube_temp` / `service.calibration`
+   - process for `process.restart`
+   - destination for `xfer.*`
+   - status for `ipc.*`
+   - `''` otherwise
+
+   It drives the viewer's errors-by-code, daily prep calendar and
+   per-destination transfers.
+4. **Derived events are stored as facts.** Phase 3 writes, with
+   context:
+   - `system.boot` (attrs: `clean` / `unclean`)
+   - `tube.replacement` (attrs: confidence, install_date, old/new mA·s,
+     tube source)
+
+   Both go into `insight.ge_ct_facts`, keyed on their source record
+   (the init row or the reset reading), with catalog entries. A boot is
+   a `system.sw_init_complete` with no `process.restart` in the 5 min
+   before and ≥ 10 min since the previous init. It is `clean` if a
+   `system.shutdown` happened since the previous boot, else `unclean`.
+5. **Exams.**
+   - One row per (system, exam_no, started_at), from `exam.start`.
+   - Series, scans and images come from the **last** `exam.series`
+     before the next start (on the same system).
+   - Aborts are the `scan.abort.*` facts in that window.
+   - Re-opened exams (same exam_no started again) stay separate rows,
+     marked `attrs.reopened = true`.
+6. **Revised exit criteria** (§13.3). The site checks and field-service
+   swap checks move to Phase 7.
+
+### 13.3 Phase 3 exit criteria
+
+- **Tube replacements** exactly as in the §13.1 table: 7 confirmed, 1
+  `counter_only` (SME21873 2025‑09‑02), and no other replacements
+  fleet-wide. Each has a tube-source value.
+- **Exams:** rows = distinct (system, exam_no, started_at) starts, and
+  ≥ 95% have a series summary.
+- **Boots:**
+  - ≈ shutdowns per system (within a reviewed tolerance);
+  - the SME18531 restart loop contributes none;
+  - unclean boots are listed per system for review.
+- **Daily:** for every (system, local_day, metric, dim), n / sum / min
+  / max / last reconcile exactly with an independent SQL aggregate of
+  facts.
+- **Capabilities:** one row per (system, metric) present in facts, with
+  first/last seen.
+- **Clock flags:** consistent with §13.1 (SME16618, SME21873, SME21929,
+  SME11229 flagged ahead).
+- **Process:** migration 004 passes the dry run and roundtrip and is
+  applied by the user. All writes run as `insight_writer` through
+  rehearse → apply → verify.
+
+### 13.4 Handoff: where the next session starts
+
+State at 2026-11-04:
+- Phases 1, 1b and 2 are done.
+- Prod holds 2,163,802 facts (watermark `ge_ct_extract` = 18543534),
+  verified 621/621.
+- Facts after the watermark aren't extracted yet. That waits for the
+  Phase 5 hook, or a manual `node insight/cli.js backfill --apply`.
+- `insight_writer` credentials are in this checkout's `.env`.
+- Local `dev` is ahead of `origin` (insight code and plan only;
+  nothing the parser runs).
+
+Build order for Phase 3:
+1. **Migration 004.**
+   - `ge_ct_daily.dim` and its primary-key change (table empty)
+   - `insight.system_clock` (system_id, est_offset_min, p10_lag_min,
+     min_lag_min, flag, window_start/end, computed_at)
+   - grants to `insight_writer`
+   - `CREATE OR REPLACE VIEW api.ge_ct_daily_v` adding `dim`
+   - add a `system_clock` read to the summary view if useful
+
+   Then: scan → dry run → roundtrip → user applies.
+2. **Derived-fact rules** (`system.boot`, `tube.replacement`) with
+   catalog entries and fixtures built from the §13.1 cases. They are
+   context-aware (they read facts), so they are a separate module from
+   the per-row rule engine.
+3. **`insight/derive/`**: daily (with dim), exams, tube segments,
+   capabilities, clock. Each must support a full rebuild per system,
+   and "touched systems/days" for the Phase 5 stage.
+4. **`cli.js derive --rehearse | --apply`, plus `verify-derive`**
+   (the §13.3 checks, independent SQL).
+5. **Plan/status update; ask before committing; promote only when the
+   user asks.**
+
+Ground rules carried over:
+- prod DB only, through the §10 guards
+- read-only ad-hoc queries
+- writes only as `insight_writer`
+- don't touch the parser behaviour, `alert.*` or `fse_dispatch`
 

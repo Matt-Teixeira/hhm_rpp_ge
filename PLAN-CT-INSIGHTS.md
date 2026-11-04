@@ -10,7 +10,7 @@ then, an internal HTML viewer reads the same contract.
 Out of scope for v1: MRI and CV. The design keeps them in mind (shared
 schema, rule registry per source), but nothing is built for them yet.
 
-## Status (2026-11-03)
+## Status (2026-11-04)
 
 - **Phase 0 done.** Decisions in §9.
 - **Phase 1 done: applied to prod 2026-11-03 19:44:38 UTC** by the user
@@ -111,8 +111,49 @@ schema, rule registry per source), but nothing is built for them yet.
     - give each environment its own writer login
     - remove the writer credentials from the dev checkout
 
-- **Phase 3 re-evaluated 2026-11-04 (§13): decisions agreed, nothing
-  built yet.** It will be implemented in a new session; start at §13.4.
+- **Phase 3 DONE (2026-11-04 13:56 UTC).** All §13.3 exit criteria met;
+  details, choices and review fixes in §13.5.
+  - **Migration 004** applied by the user 2026-11-04 12:54:51 UTC from
+    `61fdfe1` (scan, dry run and roundtrip passed first).
+  - **Derive applied** as `insight_writer` (`node insight/cli.js derive
+    --apply`, from `5c00636`): 34 systems, one transaction each, 27 s.
+
+    | Table | Rows |
+    |---|---|
+    | derived facts | 3,393 (3,385 `system.boot` + 8 `tube.replacement`) |
+    | `ge_ct_daily` | 103,985 |
+    | `ge_ct_exams` | 41,826 |
+    | `ge_ct_tube_segments` | 42 |
+    | `system_capabilities` | 659 |
+    | `system_clock` | 28 |
+
+    `job_state` `ge_ct_derive` = watermark 18543534, status `ok`.
+  - **`node insight/cli.js verify-derive` → ALL CHECKS PASS**, each against
+    independent SQL:
+    - **Tube:** the §13.1 table exactly (7 confirmed, 1 `counter_only`);
+      every replacement has a tube source; segments agree with the
+      replacement facts.
+    - **Boots:** 3,385 = independent SQL, clean/unclean included; the
+      SME18531 restart loop gives 0 boots from 37,656 inits.
+    - **Exams:** rows = distinct starts; 99.91% have a series summary.
+    - **Daily:** 103,985 cells exact on n / sum / min / max / last /
+      last_at.
+    - **Capabilities:** 659 cells exact.
+    - **Clock:** flagged ahead = SME11229, SME16618, SME21873, SME21929.
+    - **Invariants:** host_datetime within 14 h of the device clock
+      everywhere; 39 catalog rows.
+  - **Phase 2 `verify`** still 621/621.
+  - **Boot tolerance accepted by the user as listed (2026-11-04).** It may
+    be revised when more information arrives (§13.5).
+  - Before the apply, a rehearsal (one transaction, rolled back) did the
+    same writes, then:
+    - a second pass that changed nothing;
+    - a touched-days pass (28 systems, 439 days) that was byte-identical
+      to the full rebuild;
+    - verify-derive inside the transaction: all PASS.
+  - Three Codex reviews; all 5 findings fixed (§13.5).
+  - Commits on `dev` (not pushed): `76ede42`, `61fdfe1`, `46362ea`,
+    `5bf5098`, `5c00636`.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -441,7 +482,7 @@ external scrub handles that.
 | **1. Schema** | `001`/`002` migrations, applied to **prod** through the §10 runner (pre-checks → dry run → explicit go) | Pre-checks pass ✅; dry run rolls back cleanly ✅; apply succeeds ✅ (2026-11-03 19:44 UTC); `down` script tested in a dry run ✅ (`roundtrip`) |
 | **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ✅ (fix live 2026-11-03 19:45 UTC); cleanup done ✅ (§11.6) |
 | **2. Extract** ✅ 2026-11-03 | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
-| **3. Derive** | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3. (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
+| **3. Derive** ✅ 2026-11-04 | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3; all met (§13.5). (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
 | **4. Findings** | rules + open/resolve | Flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful |
 | **5. Prod** | (Migrations already applied, §11/§12.) One-off backfill via `cli.js --backfill` off-peak. Deploy the `index.js` hook (no new cron line) via dev → staging → prod, then `git pull` on `vm-debian`. Monitor the run logs | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |
 | **6. Viewer** | `sme_reports` CT report, internal | Team reviews fleet + 3 system views |
@@ -1131,3 +1172,154 @@ Ground rules carried over:
 - writes only as `insight_writer`
 - don't touch the parser behaviour, `alert.*` or `fse_dispatch`
 
+### 13.5 Phase 3 build status and results (2026-11-04)
+
+**Code** (all on `dev`):
+- `migrations/004_phase3_derive.sql`.
+- `insight/rules/ge_ct_derived.js`: the derived-fact rules. Pure and
+  separate from the per-row engine.
+- `insight/derive/`:
+  - stages: `derived_facts`, `daily`, `exams`, `tube_segments`,
+    `capabilities`, `clock`
+  - `index.js` (orchestration and scopes)
+  - `run.js` (rehearse / apply)
+  - `verify.js` and `verify_sql.js` (independent checks)
+- `node insight/cli.js derive --rehearse | --apply [--system S | --systems
+  A,B]` and `node insight/cli.js verify-derive`.
+- Tests:
+  - `insight/test/derived.test.js` (12): built on real fixtures in
+    `insight/rules/__fixtures__/ge_ct_derived/`
+  - `insight/test/derive.test.js` (12)
+
+**Migration 004**, applied 2026-11-04 12:54:51 UTC:
+- `ge_ct_daily.dim`, which joins the primary key.
+- `insight.system_clock`, granted to `insight_writer`.
+- `api.ge_ct_daily_v` with `dim`.
+- Three additions approved by the user:
+  - `ge_ct_tube_segments.tube_source`, shown in `api.ge_ct_tube_v` and
+    the summary view
+  - `reopened` in `api.ge_ct_exams_v`
+  - `clock_flag` / `clock_est_offset_min` / `current_tube_source` in
+    `api.ge_ct_system_summary_v`
+- The views are dropped and re-created; none had grants or dependants.
+- Runner change: a file may drop and re-create the same object, via
+  `scanSql` `freshCreates` / `netDrops`. Functions are excluded (review
+  F1 below).
+
+**Implementation choices within the §13.2 decisions:**
+- **Tube source (user decision 2026-11-04):**
+  - the most frequent of `verified` / `unrecognized` in the segment's
+    first 30 days, stopping at the next reset;
+  - `no_smart_id` only when neither appears. It is a companion line
+    logged next to the verdict at every boot, so a plain "most frequent"
+    tied on several systems;
+  - an exact tie goes to the value seen first, in record order. This
+    affects only SME21873's 2025‑09‑02 `counter_only` segment
+    (`verified`, 4 vs 4).
+  - Five systems log no verdict at all, so their segments have no tube
+    source: SME01429, SME01430, SME14521, SME11229, SME21854.
+- **"Stays low":**
+  - at least 2 later readings exist, and the next (up to) 3 are all below
+    50% of the prior reading;
+  - with fewer later readings, the reset is pending. It isn't emitted,
+    and it's kept out of the current tube segment (noted in the segment's
+    evidence) until a later run decides;
+  - null / NaN / ±Infinity readings are ignored by both the JS and the
+    SQL.
+- **Dates:** `install_date` and `local_day` come from the device wall
+  clock (§12), so SME15218's second tube shows install 2026‑09‑23 (the
+  §13.1 table's UTC date is 09‑24).
+- **`install_date`:** the first service calibration in [reset − 7 d,
+  reset + 1 d] if there is one, else the reset day. This applies even for
+  `counter_only`.
+- **Clock:**
+  - window: trailing 30 days, ending at the run time;
+  - `ahead` if p10 lag < 0, with `est_offset_min` = −p10 (a lower bound);
+  - `lagging` if p10 > 45 min;
+  - `jumps` if min lag < −5 min;
+  - else `ok`;
+  - systems with fewer than 5 captures get no row (28 of 34 have one).
+  - Informational only: nothing is corrected.
+- **Daily:**
+  - the sum is taken over `numeric`, so it's exact and independent of
+    row order;
+  - last = the latest fact in (host_datetime, epoch, rnc) order;
+  - `ipc.sigpipe` has no status, so its `dim` is always `''`.
+- **Exams:** `last_activity_at` = the latest start / series / abort in the
+  exam's window. `attrs` = `{reopened, series_summaries}`.
+- **Writes:**
+  - derived facts are a replacement set per system: update only on a
+    difference, and delete what's no longer derived;
+  - the daily, exam, segment and capability tables are deleted and
+    re-inserted per system, or per touched day.
+- **Phase 5:**
+  - `touched_from_source_range(old, new watermark)` gives the touched
+    systems and device days;
+  - a system with a new fact more than 14 h off its device clock is
+    rebuilt in full instead;
+  - exams rebuild from the last start before the earliest touched day;
+  - derived facts, tube segments and capabilities are always whole-system
+    (cheap).
+
+**Codex reviews** (`REVIEW-PHASE3-*-CODEX.md`), all fixed:
+- **004 F1:** function overloads were treated as the same object by the
+  drop/re-create exemption. Functions are now excluded from it.
+- **Derived F1:** same-second tube-source ties ignored record order.
+- **Derived F2:** the verify SQL kept non-finite readings that the JS
+  drops.
+- **Stages F1:** the touched-day scan bound relied on an unstated
+  invariant. It is now enforced: affected systems get a full rebuild, and
+  verify checks the invariant.
+- **Stages F2:** a derived fact moving to another day didn't report its
+  old day.
+
+**Found by the rehearsal:** PostgreSQL can't return `xmax` from
+`INSERT ... ON CONFLICT` on a partitioned table. Inserted vs updated is
+now told from the keys that existed before the upsert.
+
+**Boots: tolerance accepted as listed (user, 2026-11-04); revisit when
+more information arrives.**
+- Fleet: 3,385 boots, 2,993 desktop shutdowns, 432 unclean.
+- Eleven systems have boots/shutdowns outside 0.8–1.25. The largest:
+
+  | System | Boots / shutdowns |
+  |---|---|
+  | SME01429 | 66 / 9 |
+  | SME01430 | 110 / 34 |
+  | SME21918 | 8 / 4 |
+  | SME00875 | 13 / 7 |
+
+What the 432 unclean boots are (read-only analysis):
+- **6 are a rule artifact:** the first boot of a system in our data, with
+  no earlier shutdown to find.
+- **About 81% (345 of 426) followed a silence of 30 min or more in the
+  device log.** The scanner stopped logging without logging a desktop
+  shutdown, so power was most likely removed: switch, breaker,
+  disconnect, outage or emergency off.
+- **About 19% came up while still logging:** a software restart without
+  a desktop shutdown.
+- **30% had service mode entered in the prior 12 h** (vs 4% for clean
+  boots), so field-service work contributes.
+- **SME01430, SME01429 and SME01431** (three different sites) hold 173 of
+  them. SME01430 and SME01429 go quiet in the evening and come back
+  mid-day after 5–8 h; SME01430's clean boots start at 04–05 h instead.
+  That looks like routine switch-off without the desktop shutdown.
+  SME01430 also logs "Database was abruptly shutdown last time" 5 times.
+- **Data loss** (a lost shutdown line, §11.2) can't be ruled out event by
+  event, but it would be scattered at random, not patterned by system and
+  time of day.
+
+**Follow-ups:**
+- **Phase 4 candidate finding:** "powered off without shutdown" (unclean
+  boots per week).
+- **Phase 7:** confirm the SME01429 / SME01430 / SME01431 practice with
+  the sites or field service, together with the SME21873 2025‑09‑02
+  `counter_only` reset.
+- **Optional rule change (not made):** mark each system's first boot as
+  unknown instead of unclean (6 boots).
+- **Facts after watermark 18543534 aren't extracted yet,** so derive hasn't
+  covered them. Both wait for the Phase 5 hook, or a manual `backfill
+  --apply` followed by `derive --apply`.
+- **`verify-derive` hard-codes the §13.1 acceptance list.** A new tube
+  replacement will (correctly) make it fail until the list is reviewed
+  and updated.

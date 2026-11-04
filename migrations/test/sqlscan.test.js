@@ -202,3 +202,13 @@ test("004 re-creates the api views, creates system_clock, and its down restores 
   assert.deepStrictEqual(down.errors, []);
   assert.deepStrictEqual(down.netDrops.map((d) => d.name), ["insight.system_clock"]);
 });
+
+test("005 creates finding_catalog, re-creates the findings view, and its down drops the catalog", () => {
+  const up = scanSql(fs.readFileSync(path.join(dir, "005_phase4_findings.sql"), "utf8"));
+  assert.deepStrictEqual(up.errors, []);
+  assert.deepStrictEqual(up.freshCreates.map((c) => c.name), ["insight.finding_catalog"]);
+  assert.deepStrictEqual(up.netDrops, []);
+  const down = scanSql(fs.readFileSync(path.join(dir, "005_phase4_findings.down.sql"), "utf8"));
+  assert.deepStrictEqual(down.errors, []);
+  assert.deepStrictEqual(down.netDrops.map((d) => d.name), ["insight.finding_catalog"]);
+});

@@ -201,4 +201,4 @@ async function run_extract(db, { rules, mode, from_id = null, to_id = null, max_
   });
 }
 
-module.exports = { run_extract, dedupe_facts, upsert_statements, catalog_statement, natural_key, preflight, JOB, LOCK_KEY, MAX_FACTS_PER_ROW, CHUNK };
+module.exports = { run_extract, dedupe_facts, upsert_statements, catalog_statement, natural_key, preflight, JOB, LOCK_KEY, MAX_FACTS_PER_ROW, CHUNK, FACT_CS };

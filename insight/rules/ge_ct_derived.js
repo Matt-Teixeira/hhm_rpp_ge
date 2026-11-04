@@ -126,20 +126,29 @@ function tube_source(identity, startMs, endMs) {
   return { tube_source: src, counts };
 }
 
-// All confirmed-low resets of a system, in order. Exported for tube segments.
+// All confirmed-low resets of a system, in order, plus a trailing pending
+// candidate (a drop whose later readings, fewer than MIN_FOLLOWING, are all
+// still low): tube segments stop the current segment before it so a
+// not-yet-confirmed 0 doesn't show as the current tube's latest value.
+// Exported for tube segments.
 function find_resets(readings) {
   const rs = sorted(readings).filter((f) => typeof f.value_num === "number" && Number.isFinite(f.value_num));
   const resets = [];
+  let pending = null;
   for (let i = 1; i < rs.length; i++) {
     const prev = rs[i - 1].value_num;
     const v = rs[i].value_num;
     if (!(prev > TUBE.min_prior_mas && v < TUBE.reset_ratio * prev)) continue;
     const following = rs.slice(i + 1, i + 1 + TUBE.check_following);
-    if (following.length < TUBE.min_following) continue; // pending
-    if (!following.every((f) => f.value_num < TUBE.reset_ratio * prev)) continue; // glitch: came back up
+    const low = following.every((f) => f.value_num < TUBE.reset_ratio * prev);
+    if (following.length < TUBE.min_following) {
+      if (low) pending = { index: i, reading: rs[i], prior: rs[i - 1] };
+      continue;
+    }
+    if (!low) continue; // glitch: came back up
     resets.push({ index: i, reading: rs[i], prior: rs[i - 1] });
   }
-  return { readings: rs, resets };
+  return { readings: rs, resets, pending };
 }
 
 function derive_replacements(byMetric, rule) {

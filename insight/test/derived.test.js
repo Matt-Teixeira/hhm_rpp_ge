@@ -105,6 +105,14 @@ test("tube.replacement: glitch, pending, prior threshold", () => {
   assert.strictEqual(of([...base, reading("2026-01-05T12:00:00Z", 0), reading("2026-01-07T12:00:00Z", 1000), reading("2026-01-09T12:00:00Z", 5.2e6)], "tube.replacement").length, 0);
   // reset with only one later reading: pending, not emitted yet
   assert.strictEqual(of([...base, reading("2026-01-05T12:00:00Z", 0), reading("2026-01-07T12:00:00Z", 3000)], "tube.replacement").length, 0);
+  // find_resets reports the trailing pending candidate; a glitch at the tail that came back up is not pending
+  const p = d.find_resets([...base, reading("2026-01-05T12:00:00Z", 0), reading("2026-01-07T12:00:00Z", 3000)]);
+  assert.strictEqual(p.resets.length, 0);
+  assert.strictEqual(p.pending.reading.value_num, 0);
+  assert.strictEqual(p.pending.index, 2);
+  assert.strictEqual(d.find_resets([...base, reading("2026-01-05T12:00:00Z", 0)]).pending.index, 2);
+  assert.strictEqual(d.find_resets([...base, reading("2026-01-05T12:00:00Z", 0), reading("2026-01-07T12:00:00Z", 5.2e6)]).pending, null);
+  assert.strictEqual(d.find_resets(base).pending, null);
   // two later readings, both low: emitted
   assert.strictEqual(of([...base, reading("2026-01-05T12:00:00Z", 0), reading("2026-01-07T12:00:00Z", 3000), reading("2026-01-09T12:00:00Z", 9000)], "tube.replacement").length, 1);
   // a 4th later reading that is high doesn't matter (only the next 3 are checked)

@@ -28,8 +28,10 @@ const UPSERT_SUFFIX = `
         IS DISTINCT FROM
         (EXCLUDED.host_local, EXCLUDED.value_num, EXCLUDED.value_text, EXCLUDED.exam_no, EXCLUDED.attrs,
          EXCLUDED.source_id, EXCLUDED.source_capture_datetime, EXCLUDED.rule_version)
-  RETURNING (xmax = 0) AS inserted, epoch, record_number_concurrent, metric_key, host_datetime,
-            to_char(host_local, 'YYYY-MM-DD') AS day`;
+  RETURNING epoch, record_number_concurrent, metric_key, host_datetime, to_char(host_local, 'YYYY-MM-DD') AS day`;
+// (Inserted vs updated is told from the pre-upsert key set: PostgreSQL can't
+// return system columns such as xmax from INSERT ... ON CONFLICT on a
+// partitioned table.)
 
 // Existing derived facts of the system, with their device day, so an update
 // that moves a fact to another day reports the old day too (review F2).
@@ -39,17 +41,20 @@ const EXISTING_SQL = `
 
 const fkey = (r) => `${r.epoch}|${r.record_number_concurrent}|${r.metric_key}|${new Date(r.host_datetime).toISOString()}`;
 
-// Pure: days whose daily rows must be rebuilt = new day of every inserted or
-// updated fact, old day of every updated fact, day of every deleted fact.
-function changed_days(existing, upserted, deleted) {
+// Pure. upserted = rows the upsert inserted or changed (RETURNING). A row
+// whose key existed before was updated, otherwise inserted. Days whose daily
+// rows must be rebuilt = new day of every inserted/updated fact, old day of
+// every updated fact, day of every deleted fact.
+function classify_upserts(existing, upserted, deleted) {
   const before = new Map(existing.map((r) => [fkey(r), r.day]));
   const days = new Set();
+  let inserted = 0, updated = 0;
   for (const r of upserted) {
     days.add(r.day);
-    if (!r.inserted && before.has(fkey(r))) days.add(before.get(fkey(r)));
+    if (before.has(fkey(r))) { updated++; days.add(before.get(fkey(r))); } else inserted++;
   }
   for (const r of deleted) days.add(r.day);
-  return days;
+  return { days, inserted, updated };
 }
 
 const DELETE_STALE_SQL = `
@@ -70,19 +75,19 @@ async function derive_facts_for_system(t, system_id) {
   const existing = await t.any(EXISTING_SQL, [system_id, DERIVED_KEYS]);
   const upserted = [];
   for (let i = 0; i < facts.length; i += CHUNK) {
-    const rows = await t.any(pgp.helpers.insert(facts.slice(i, i + CHUNK), FACT_CS) + UPSERT_SUFFIX);
-    for (const r of rows) { r.inserted ? stats.inserted++ : stats.updated++; upserted.push(r); }
+    upserted.push(...(await t.any(pgp.helpers.insert(facts.slice(i, i + CHUNK), FACT_CS) + UPSERT_SUFFIX)));
   }
   const del = await t.any(DELETE_STALE_SQL, [
     system_id, DERIVED_KEYS,
     facts.map((f) => f.epoch), facts.map((f) => f.record_number_concurrent),
     facts.map((f) => f.metric_key), facts.map((f) => new Date(f.host_datetime).toISOString()),
   ]);
-  stats.deleted = del.length;
-  const days = changed_days(existing, upserted, del);
+  const c = classify_upserts(existing, upserted, del);
+  Object.assign(stats, { inserted: c.inserted, updated: c.updated, deleted: del.length });
+  const days = c.days;
   stats.by_metric = {};
   for (const f of facts) stats.by_metric[f.metric_key] = (stats.by_metric[f.metric_key] || 0) + 1;
   return { stats, changed_days: days };
 }
 
-module.exports = { derive_facts_for_system, sync_catalog, changed_days, UPSERT_SUFFIX, DELETE_STALE_SQL };
+module.exports = { derive_facts_for_system, sync_catalog, classify_upserts, UPSERT_SUFFIX, DELETE_STALE_SQL };

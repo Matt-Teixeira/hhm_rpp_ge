@@ -11,6 +11,16 @@
 //   node insight/cli.js backfill --apply [--from-id N] [--to-id N]
 //       As insight_writer: per batch, upsert facts + advance the watermark
 //       in one transaction. Resumes from the watermark. Run off-peak.
+//   node insight/cli.js derive --rehearse [--system SME.. | --systems A,B]
+//       As insight_writer, ONE transaction, rolled back: full rebuild of the
+//       derived tables (derived facts, daily, exams, tube segments,
+//       capabilities, clock), a second pass to prove idempotency, and
+//       verify-derive on the uncommitted data. Writes nothing.
+//   node insight/cli.js derive --apply [--system SME.. | --systems A,B]
+//       As insight_writer: one transaction per system, then clock and
+//       insight.job_state 'ge_ct_derive'. Run verify-derive afterwards.
+//   node insight/cli.js verify-derive
+//       READ-ONLY. The Phase 3 exit checks (§13.3) against independent SQL.
 //   node insight/cli.js verify
 //       READ-ONLY. Facts per (system, metric) vs the independent count of
 //       DISTINCT natural keys, over the watermark range. Derived metrics
@@ -26,6 +36,8 @@ const readline = require("readline");
 const crypto = require("crypto");
 const { ignore } = require("./rules/ge_ct_ignore");
 const { derived_rules, DERIVED_KEYS } = require("./rules/ge_ct_derived");
+const { run_derive, COUNTS_SQL } = require("./derive/run");
+const { run_verify } = require("./derive/verify");
 
 const RECENT_MS = 30 * 24 * 3600 * 1000;
 const COVERAGE_THRESHOLD = 500; // rows per template per 30 days (§8)
@@ -35,6 +47,7 @@ function args(argv) {
   const a = { cmd: argv[0], system: null, from_id: null, to_id: null, rehearse: false, apply: false, batches: 2 };
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === "--system") a.system = argv[++i];
+    else if (argv[i] === "--systems") a.systems = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
     else if (argv[i] === "--from-id") a.from_id = Number(argv[++i]);
     else if (argv[i] === "--to-id") a.to_id = Number(argv[++i]);
     else if (argv[i] === "--rehearse") a.rehearse = true;
@@ -42,8 +55,11 @@ function args(argv) {
     else if (argv[i] === "--batches") a.batches = Number(argv[++i]);
     else throw new Error(`unknown argument ${argv[i]}`);
   }
-  if (!["dry-run", "backfill", "verify"].includes(a.cmd)) throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify");
-  if (a.cmd === "backfill" && a.rehearse === a.apply) throw new Error("backfill needs exactly one of --rehearse / --apply");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify | derive --rehearse|--apply [--system S | --systems S1,S2] | verify-derive");
+  }
+  if ((a.cmd === "backfill" || a.cmd === "derive") && a.rehearse === a.apply) throw new Error(`${a.cmd} needs exactly one of --rehearse / --apply`);
+  if (a.cmd === "derive" && a.system) a.systems = [a.system];
   if (a.cmd === "backfill" && a.system) throw new Error("backfill does not take --system (the watermark is fleet-wide)");
   if (a.cmd === "dry-run" && a.from_id === null) a.from_id = 0;
   return a;
@@ -142,7 +158,7 @@ async function dry_run(a) {
 
 async function confirm(db, a) {
   const t = await db.one("SELECT current_database() AS db, current_user AS usr");
-  const mode = a.apply ? "APPLY (commits per batch)" : "REHEARSAL (one transaction, rolled back)";
+  const mode = a.apply ? (a.cmd === "derive" ? "APPLY (commits per system)" : "APPLY (commits per batch)") : "REHEARSAL (one transaction, rolled back)";
   console.log(`target: database=${t.db} host=${process.env.PG_HOST} user=${t.usr} — ${mode}`);
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
   const it = rl[Symbol.asyncIterator]();
@@ -173,6 +189,46 @@ async function backfill(a) {
       max_batches: a.apply ? null : a.batches, run_id: crypto.randomUUID(), log: (m) => console.log(m),
     });
     console.log(`${a.apply ? "APPLIED" : "REHEARSAL ROLLED BACK"} in ${((Date.now() - t0) / 1000).toFixed(1)}s: ${JSON.stringify(out.skipped ? out : out.stats)}`);
+  } finally {
+    await db.$pool.end();
+  }
+}
+
+async function derive(a) {
+  const db = connect("writer", { statementTimeoutMs: 600000, applicationName: "insight_derive" });
+  try {
+    await confirm(db, a);
+    const t0 = Date.now();
+    const out = await run_derive(db, { mode: a.apply ? "apply" : "rehearse", systems: a.systems || null, now: new Date(),
+      run_id: crypto.randomUUID(), log: (m) => console.log(m) });
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    if (out.skipped) { console.log(`SKIPPED: ${out.skipped}`); process.exitCode = 3; return; }
+    if (a.rehearse) {
+      console.log(`REHEARSAL ROLLED BACK in ${secs}s. pass 1: ${JSON.stringify(out.pass1)}`);
+      console.log(`idempotency: derived-fact changes in pass 2 = ${out.idem.derived_changes}; tables changed = ${out.idem.tables_changed.length ? out.idem.tables_changed.join(", ") : "none"}`);
+      console.log(`touched-days pass vs full rebuild: ${out.idem.touched.tables_changed.length ? `DIFFERS in ${out.idem.touched.tables_changed.join(", ")}` : "identical"} (${out.idem.touched.systems} systems, ${out.idem.touched.days} days)`);
+      console.log(`verify-derive inside the rehearsal: ${out.verify_ok ? "PASS" : "FAIL"}`);
+      const fresh = await db.one(COUNTS_SQL);
+      console.log(`after ROLLBACK, fresh read: ${JSON.stringify(fresh)}`);
+      if (!out.verify_ok || out.idem.derived_changes || out.idem.tables_changed.length || out.idem.touched.tables_changed.length) process.exitCode = 2;
+    } else {
+      console.log(`APPLIED in ${secs}s: ${JSON.stringify(out.stats)}; watermark ${out.watermark}; table rows now ${JSON.stringify(out.after)}`);
+      console.log("next: node insight/cli.js verify-derive");
+    }
+  } finally {
+    await db.$pool.end();
+  }
+}
+
+async function verify_derive() {
+  const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_verify_derive" });
+  try {
+    if ((await db.one("SHOW default_transaction_read_only")).default_transaction_read_only !== "on") throw new Error("not read-only");
+    const job = await db.oneOrNone("SELECT watermark_id, last_run_status, last_run_finished_at FROM insight.job_state WHERE job_name = 'ge_ct_derive'");
+    console.log(`verify-derive (read-only): derive job ${job ? `${job.last_run_status} at ${job.last_run_finished_at && job.last_run_finished_at.toISOString()}, watermark ${job.watermark_id}` : "has not run"}`);
+    const v = await run_verify(db);
+    console.log(v.ok ? "ALL CHECKS PASS" : `FAILED: ${v.results.filter((r) => !r.ok).map((r) => r.name).join(", ")}`);
+    if (!v.ok) process.exitCode = 2;
   } finally {
     await db.$pool.end();
   }
@@ -210,6 +266,8 @@ async function verify() {
   if (a.cmd === "dry-run") await dry_run(a);
   if (a.cmd === "backfill") await backfill(a);
   if (a.cmd === "verify") await verify();
+  if (a.cmd === "derive") await derive(a);
+  if (a.cmd === "verify-derive") await verify_derive();
 })()
   .catch((e) => { console.error(`ERROR: ${e.message}`); process.exitCode = 1; })
   .finally(() => pgp.end());

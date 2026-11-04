@@ -185,7 +185,8 @@ test("scope helpers and derived-fact write statements", () => {
   // idempotent upsert: update only when something differs; report inserted vs updated
   assert.match(UPSERT_SUFFIX, /ON CONFLICT ON CONSTRAINT ge_ct_facts_natural_key DO UPDATE SET/);
   assert.match(UPSERT_SUFFIX, /IS DISTINCT FROM/);
-  assert.match(UPSERT_SUFFIX, /RETURNING \(xmax = 0\) AS inserted/);
+  assert.match(UPSERT_SUFFIX, /RETURNING epoch, record_number_concurrent, metric_key, host_datetime/);
+  assert.ok(!/xmax/.test(UPSERT_SUFFIX.split("RETURNING")[1]), "no system columns in RETURNING (partitioned table)");
   // stale delete is limited to the system and the derived metrics
   assert.match(DELETE_STALE_SQL, /WHERE system_id = \$1 AND metric_key = ANY\(\$2\)/);
   assert.match(DELETE_STALE_SQL, /NOT IN\s+\(SELECT \* FROM unnest\(/);
@@ -213,8 +214,9 @@ test("F1: touched daily bounds cover any zone offset; a new fact breaking the in
   assert.deepStrictEqual(scope.get("B"), { full: true });
 });
 
-test("F2: derived-fact changed days include the OLD day of an updated fact", () => {
-  const { changed_days } = require("../derive/derived_facts");
+test("F2: derived-fact changed days include the OLD day of an updated fact; inserted vs updated from the prior keys", () => {
+  const { classify_upserts } = require("../derive/derived_facts");
+  const changed_days = (e, u, d) => classify_upserts(e, u, d).days;
   const k = { epoch: 1, record_number_concurrent: 0, metric_key: "system.boot", host_datetime: new Date("2026-05-10T03:00:00Z") };
   const k2 = { ...k, epoch: 2, host_datetime: new Date("2026-05-12T03:00:00Z") };
   const existing = [{ ...k, day: "2026-05-09" }, { ...k2, day: "2026-05-11" }];
@@ -223,7 +225,23 @@ test("F2: derived-fact changed days include the OLD day of an updated fact", () 
     [{ ...k, inserted: false, day: "2026-05-10" }, { ...k, epoch: 3, inserted: true, day: "2026-05-13" }],
     [{ day: "2026-05-01" }]);
   assert.deepStrictEqual([...days].sort(), ["2026-05-01", "2026-05-09", "2026-05-10", "2026-05-13"]);
+  const c = classify_upserts(existing, [{ ...k, day: "2026-05-10" }, { ...k, epoch: 3, day: "2026-05-13" }], []);
+  assert.deepStrictEqual([c.inserted, c.updated], [1, 1]);
   // key matching tolerates host_datetime as a Date or an ISO string
   assert.deepStrictEqual([...changed_days([{ ...k, day: "2026-05-09" }], [{ ...k, host_datetime: "2026-05-10T03:00:00.000Z", inserted: false, day: "2026-05-10" }], [])].sort(),
     ["2026-05-09", "2026-05-10"]);
+});
+
+test("verify-derive acceptance lists match the derived rules on the §13.1 fixtures", () => {
+  const { EXPECTED_REPLACEMENTS, EXPECTED_CLOCK_AHEAD } = require("../derive/verify");
+  const d = require("../rules/ge_ct_derived");
+  const tube = JSON.parse(fs.readFileSync(path.join(FIX, "tube.json"), "utf8"));
+  const got = [];
+  for (const sys of Object.keys(tube).sort()) {
+    for (const f of d.derive_system_facts(tubeFacts(sys)).filter((x) => x.metric_key === "tube.replacement")) {
+      got.push([sys, new Date(f.host_datetime).toISOString().slice(0, 10), f.value_text]);
+    }
+  }
+  assert.deepStrictEqual(got, EXPECTED_REPLACEMENTS);
+  assert.deepStrictEqual(EXPECTED_CLOCK_AHEAD, ["SME11229", "SME16618", "SME21873", "SME21929"]);
 });

@@ -11,7 +11,7 @@
 //
 // The catalog (insight.finding_catalog) is generated from this file.
 // Bump `version` when a rule's logic or thresholds change.
-const { median, dstr, SAFE_EXCLUDED_CODES, SAFE_POWER_CYCLE_MIN, SERVICE_BEFORE_BOOT_H, FAST_CAL_STEPS } = require("./context");
+const { median, dstr, SAFE_EXCLUDED_CODES, SAFE_POWER_CYCLE_MIN, SAFE_INCIDENT_GAP_MIN, SERVICE_BEFORE_BOOT_H, FAST_CAL_STEPS } = require("./context");
 
 const SEVERITIES = ["info", "low", "medium", "high"];
 const rank = (s) => SEVERITIES.indexOf(s);
@@ -65,19 +65,24 @@ const process_restart_loop = {
 
 // ---------------------------------------------------------------- rule 3
 const ABORT = { chronic_days: 28, chronic_rate: 50, chronic_min_exams: 20, spike_days: 7, spike_rate: 30, spike_factor: 3,
-  spike_min_exams: 10, baseline_from: 62, baseline_to: 7 };
+  spike_min_exams: 10, baseline_from: 62, baseline_to: 7,
+  // tuned 2026-11-04 (plan §14 checkpoint 4): one exam can log 100+ abort
+  // lines, so a single exam / day must not make a finding
+  spike_min_aborts: 10, min_abort_days: 2 };
 const abort_rate_high = {
   key: "abort_rate_high", version: 1, category: "reliability", default_severity: "medium", quiet_days: QUIET_DAYS,
   label: "High system abort rate",
-  description: "System aborts (exception class Abort) per 100 exams. Chronic: >= 50 over 28 days (>= 20 exams). Spike: >= 30 over 7 days (>= 10 exams) and >= 3x the system's own rate over the 8 weeks before.",
+  description: "System aborts (exception class Abort, log lines) per 100 exams. Chronic: >= 50 over 28 days (>= 20 exams). Spike: >= 30 over 7 days (>= 10 exams, >= 10 aborts) and >= 3x the system's own rate over the 8 weeks before. Either needs aborts on >= 2 days of its window.",
   thresholds: ABORT,
   evaluate(ctx, D) {
     const ab = (a, b) => ctx.series.abort_system.sum(a, b), ex = (a, b) => ctx.series.exams.sum(a, b);
     const a28 = ab(D - 27, D), e28 = ex(D - 27, D), a7 = ab(D - 6, D), e7 = ex(D - 6, D);
     const ab_ = ab(D - ABORT.baseline_from, D - ABORT.baseline_to), eb = ex(D - ABORT.baseline_from, D - ABORT.baseline_to);
     // integer comparisons (no float rounding at the threshold)
-    const chronic = e28 >= ABORT.chronic_min_exams && 100 * a28 >= ABORT.chronic_rate * e28;
-    const spike = e7 >= ABORT.spike_min_exams && 100 * a7 >= ABORT.spike_rate * e7 && eb > 0 && a7 * eb >= ABORT.spike_factor * ab_ * e7;
+    const days28 = ctx.ind.abort_system.sum(D - 27, D), days7 = ctx.ind.abort_system.sum(D - 6, D);
+    const chronic = e28 >= ABORT.chronic_min_exams && 100 * a28 >= ABORT.chronic_rate * e28 && days28 >= ABORT.min_abort_days;
+    const spike = e7 >= ABORT.spike_min_exams && a7 >= ABORT.spike_min_aborts && days7 >= ABORT.min_abort_days
+      && 100 * a7 >= ABORT.spike_rate * e7 && eb > 0 && a7 * eb >= ABORT.spike_factor * ab_ * e7;
     if (!chronic && !spike) return null;
     const codes = new Map();
     for (const c of ctx.abort_codes) if (c.d >= D - 27 && c.d <= D) codes.set(c.code, (codes.get(c.code) || 0) + c.n);
@@ -86,7 +91,8 @@ const abort_rate_high = {
       from: chronic ? D - 27 : D - 6,
       evidence: {
         variants: [chronic && "chronic", spike && "spike"].filter(Boolean),
-        d28: { aborts: a28, exams: e28, per_100: pct(a28, e28) }, d7: { aborts: a7, exams: e7, per_100: pct(a7, e7) },
+        d28: { aborts: a28, exams: e28, per_100: pct(a28, e28), days_with_aborts: days28 },
+        d7: { aborts: a7, exams: e7, per_100: pct(a7, e7), days_with_aborts: days7 },
         baseline_8w: { aborts: ab_, exams: eb, per_100: pct(ab_, eb) },
         top_ermes_28d: [...codes.entries()].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1)).slice(0, 5).map(([code, n]) => ({ code, n })),
       },
@@ -98,20 +104,21 @@ const abort_rate_high = {
 const safe_state_recurrent = {
   key: "safe_state_recurrent", version: 1, category: "reliability", default_severity: "medium", quiet_days: QUIET_DAYS,
   label: "Recurrent safe state",
-  description: `The same safe-state code >= 3 times in 7 days, excluding ${SAFE_EXCLUDED_CODES.join(", ")} (slip-ring comms down) and any safe state within ${SAFE_POWER_CYCLE_MIN} min of a boot or shutdown.`,
-  thresholds: { min_same_code_7d: 3, excluded_codes: SAFE_EXCLUDED_CODES, power_cycle_min: SAFE_POWER_CYCLE_MIN },
+  description: `The same safe-state code in >= 3 separate incidents in 7 days (a new incident after ${SAFE_INCIDENT_GAP_MIN} min without that code), excluding safe states without a code, ${SAFE_EXCLUDED_CODES.join(", ")} (slip-ring comms down), and any within ${SAFE_POWER_CYCLE_MIN} min of a boot or shutdown.`,
+  thresholds: { min_incidents_7d: 3, incident_gap_min: SAFE_INCIDENT_GAP_MIN, excluded_codes: SAFE_EXCLUDED_CODES, power_cycle_min: SAFE_POWER_CYCLE_MIN },
   evaluate(ctx, D) {
     const per = new Map();
     for (const s of ctx.safe) {
       if (s.d < D - 6 || s.d > D) continue;
-      const v = per.get(s.code) || { code: s.code, n: 0 };
-      v.n++; per.set(s.code, v);
+      const v = per.get(s.code) || { code: s.code, incidents: 0, events: 0 };
+      v.events++; if (s.new_incident) v.incidents++; per.set(s.code, v);
     }
-    const codes = [...per.values()].sort((a, b) => b.n - a.n || (a.code < b.code ? -1 : 1));
-    if (!codes.length || codes[0].n < 3) return null;
-    return { severity: "medium", observed: codes[0].n, baseline: null, from: D - 6,
-      evidence: { codes: codes.filter((c) => c.n >= 3), other_codes: codes.filter((c) => c.n < 3),
-        excluded_7d: { code: ctx.safe_excluded.code.sum(D - 6, D), power_cycle: ctx.safe_excluded.power_cycle.sum(D - 6, D) } } };
+    const codes = [...per.values()].sort((a, b) => b.incidents - a.incidents || b.events - a.events || (a.code < b.code ? -1 : 1));
+    if (!codes.length || codes[0].incidents < 3) return null;
+    return { severity: "medium", observed: codes[0].incidents, baseline: null, from: D - 6,
+      evidence: { codes: codes.filter((c) => c.incidents >= 3), other_codes: codes.filter((c) => c.incidents < 3),
+        excluded_7d: { code: ctx.safe_excluded.code.sum(D - 6, D), power_cycle: ctx.safe_excluded.power_cycle.sum(D - 6, D),
+          no_code: ctx.safe_excluded.no_code.sum(D - 6, D) } } };
   },
 };
 

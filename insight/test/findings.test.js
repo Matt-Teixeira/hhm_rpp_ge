@@ -34,7 +34,7 @@ const of = (s, k) => all.filter((r) => r.system_id === s && r.finding_key === k)
 
 // ------------------------------------------------------------ real cases
 
-test("fixture replay equals the independent SQL exactly (76 findings, 13 systems)", () => {
+test("fixture replay equals the independent SQL exactly (13 systems)", () => {
   const c = compare_findings(expected.findings, all);
   assert.deepStrictEqual({ missing: c.missing, extra: c.extra, differ: c.differ }, { missing: [], extra: [], differ: [] });
   assert.strictEqual(all.length, expected.findings.length);
@@ -208,15 +208,22 @@ test("rotor: sustained = >= 5 in >= 3 of 4 weeks (high); spike needs >= 4 baseli
 test("abort_rate_high: chronic >= 50/100 with >= 20 exams; spike needs a baseline with exams", () => {
   const T = 80, e = rule("abort_rate_high");
   const at = (cells) => e.evaluate(build_context(sys({ n: T + 1, cells }), day(T)), dnum(day(T)));
-  // chronic boundary: 10 aborts / 20 exams in 28 days = 50 -> trips; 19 exams -> not
-  assert.ok(at([[day(T - 20), "exam.start", "", 20], [day(T - 20), "scan.abort.system", "", 10]]));
-  assert.strictEqual(at([[day(T - 20), "exam.start", "", 19], [day(T - 20), "scan.abort.system", "", 10]]), null);
-  // spike: 3/10 in 7 days = 30, baseline 1/30 -> 3x 3.33 -> trips; no baseline exams -> no spike
-  const spike = at([[day(T - 1), "exam.start", "", 10], [day(T - 1), "scan.abort.system", "", 3], [day(T - 30), "exam.start", "", 30], [day(T - 30), "scan.abort.system", "", 1]]);
+  // chronic boundary: 10 aborts / 20 exams in 28 days = 50 on 2 days -> trips; 19 exams -> not; all on 1 day -> not
+  const ab2 = (n1, n2) => [[day(T - 20), "scan.abort.system", "", n1], [day(T - 10), "scan.abort.system", "", n2]];
+  assert.ok(at([[day(T - 20), "exam.start", "", 20], ...ab2(5, 5)]));
+  assert.strictEqual(at([[day(T - 20), "exam.start", "", 19], ...ab2(5, 5)]), null);
+  assert.strictEqual(at([[day(T - 20), "exam.start", "", 20], [day(T - 20), "scan.abort.system", "", 300]]), null); // one bad day
+  // spike: 10/30 in 7 days on 2 days = 33.3, baseline 1/30 -> trips; 9 aborts -> not; one day -> not; no baseline exams -> not
+  const base = [[day(T - 30), "exam.start", "", 30], [day(T - 30), "scan.abort.system", "", 1]];
+  const ex7 = [day(T - 1), "exam.start", "", 30];
+  const spike = at([ex7, [day(T - 1), "scan.abort.system", "", 5], [day(T - 3), "scan.abort.system", "", 5], ...base]);
   assert.deepStrictEqual(spike.evidence.variants, ["spike"]);
-  assert.strictEqual(spike.observed, 30);
+  assert.strictEqual(spike.observed, 33.33);
   assert.strictEqual(spike.baseline, 3.33);
-  assert.strictEqual(at([[day(T - 1), "exam.start", "", 10], [day(T - 1), "scan.abort.system", "", 3]]), null);
+  assert.strictEqual(spike.evidence.d7.days_with_aborts, 2);
+  assert.strictEqual(at([[day(T - 1), "exam.start", "", 27], [day(T - 1), "scan.abort.system", "", 5], [day(T - 3), "scan.abort.system", "", 4], ...base]), null);
+  assert.strictEqual(at([ex7, [day(T - 1), "scan.abort.system", "", 10], ...base]), null);
+  assert.strictEqual(at([ex7, [day(T - 1), "scan.abort.system", "", 5], [day(T - 3), "scan.abort.system", "", 5]]), null);
 });
 
 test("safe_state_recurrent: same code >= 3 in 7 days; 260116316 and +-30 min of a boot/shutdown excluded", () => {
@@ -225,6 +232,11 @@ test("safe_state_recurrent: same code >= 3 in 7 days; 260116316 and +-30 min of 
   const at = (safe, boots = [], shutdowns = []) => k.evaluate(build_context(sys({ n: T + 1, safe, boots, shutdowns }), day(T)), dnum(day(T)));
   assert.ok(at([s(T, "1"), s(T - 2, "1"), s(T - 6, "1")]));
   assert.strictEqual(at([s(T, "1"), s(T - 2, "1"), s(T - 7, "1")]), null); // outside the window
+  // incidents: lines within 30 min of the previous one are the same incident
+  assert.strictEqual(at([s(T, "1", "15:00"), s(T, "1", "15:20"), s(T, "1", "15:40"), s(T - 2, "1")]), null); // 2 incidents, 4 lines
+  const inc = at([s(T, "1", "15:00"), s(T, "1", "15:31"), s(T, "1", "16:02")]); // 31 min apart: 3 incidents
+  assert.strictEqual(inc.observed, 3);
+  assert.deepStrictEqual(inc.evidence.codes, [{ code: "1", incidents: 3, events: 3 }]);
   assert.strictEqual(at([s(T, "1"), s(T - 2, "1"), s(T - 3, "2")]), null); // different codes
   assert.strictEqual(at([s(T, "260116316"), s(T - 1, "260116316"), s(T - 2, "260116316")]), null);
   const boot = [{ t: `${day(T)}T15:30:00.000Z`, day: day(T), clean: true }];
@@ -241,7 +253,7 @@ test("safe_state_recurrent: same code >= 3 in 7 days; 260116316 and +-30 min of 
 
 test("evidence carries no raw message text (review PHASE4-RULES F1)", () => {
   for (const r of all.filter((x) => x.finding_key === "safe_state_recurrent")) {
-    for (const c of [...r.evidence.first.codes, ...r.evidence.last.codes, ...r.evidence.last.other_codes]) assert.deepStrictEqual(Object.keys(c).sort(), ["code", "n"]);
+    for (const c of [...r.evidence.first.codes, ...r.evidence.last.codes, ...r.evidence.last.other_codes]) assert.deepStrictEqual(Object.keys(c).sort(), ["code", "events", "incidents"]);
   }
   assert.ok(all.some((x) => x.finding_key === "safe_state_recurrent"));
 });
@@ -341,4 +353,75 @@ test("verify comparator catches a changed resolved_at, severity, observed and a 
   assert.strictEqual(mut((a) => { a[0].severity = "info"; }).differ.length, 1);
   assert.strictEqual(mut((a) => { a[1].observed += 0.01; }).differ.length, 1);
   assert.strictEqual(mut((a) => { a.pop(); }).missing.length, 1);
+});
+
+test("cli findings arguments: a mode is required, flags need values, --replay/--report scoped", () => {
+  const { args } = require("../cli");
+  const bad = [
+    [["findings"], /exactly one of --rehearse \/ --apply/],
+    [["findings", "--rehearse", "--apply"], /exactly one/],
+    [["findings", "--apply", "--system"], /--system needs a value/],
+    [["findings", "--apply", "--report", "x"], /--report is only for findings --rehearse/],
+    [["derive", "--apply", "--replay"], /--replay is only for findings/],
+  ];
+  for (const [argv, re] of bad) assert.throws(() => args(argv), re, argv.join(" "));
+  const a = args(["findings", "--rehearse", "--replay", "--system", "SME1", "--report", "/tmp/x"]);
+  assert.deepStrictEqual([a.replay, a.systems, a.report], [true, ["SME1"], "/tmp/x"]);
+  assert.strictEqual(args(["verify-findings"]).cmd, "verify-findings");
+});
+
+test("findings upsert updates only when a column differs; canonical JSON ignores key order", () => {
+  const { UPSERT_SUFFIX, canon } = require("../findings/run");
+  assert.match(UPSERT_SUFFIX, /ON CONFLICT \(system_id, finding_key, opened_at\) DO UPDATE SET/);
+  assert.match(UPSERT_SUFFIX, /IS DISTINCT FROM/);
+  assert.match(UPSERT_SUFFIX, /findings\.evidence/);
+  assert.strictEqual(canon({ b: 1, a: [{ y: 2, x: 1 }] }), canon({ a: [{ x: 1, y: 2 }], b: 1 }));
+});
+
+test("drift comparison covers every stored column, not only evidence", () => {
+  const { row_canon } = require("../findings/run");
+  const r = all.find((x) => x.status === "resolved");
+  // as read back from the database: Date objects, numeric strings are not expected (double precision), same evidence
+  const stored = { ...r, window_start: new Date(r.window_start), window_end: new Date(r.window_end), last_evaluated: new Date(r.last_evaluated),
+    resolved_at: new Date(r.resolved_at), opened_at: new Date(r.opened_at), evidence: JSON.parse(JSON.stringify(r.evidence)) };
+  assert.strictEqual(row_canon(stored), row_canon(r));
+  assert.notStrictEqual(row_canon({ ...stored, resolved_at: new Date(Date.parse(r.resolved_at) + 86400000) }), row_canon(r));
+  assert.notStrictEqual(row_canon({ ...stored, severity: "high" }), row_canon(r));
+  assert.notStrictEqual(row_canon({ ...stored, data_through: "2000-01-01" }), row_canon(r));
+});
+
+test("safe states without a code never count as the same code (review PHASE4-RUN-VERIFY F1)", () => {
+  const T = 30, k = rule("safe_state_recurrent");
+  const s = (i, code) => ({ t: `${day(i)}T15:00:00.000Z`, day: day(i), code });
+  const at = (safe) => k.evaluate(build_context(sys({ n: T + 1, safe }), day(T)), dnum(day(T)));
+  assert.strictEqual(at([s(T, null), s(T - 2, null), s(T - 4, "")]), null);
+  const r = at([s(T, "7"), s(T - 2, "7"), s(T - 4, "7"), s(T - 1, null)]);
+  assert.strictEqual(r.evidence.excluded_7d.no_code, 1);
+  assert.deepStrictEqual(r.evidence.codes.map((c) => c.code), ["7"]);
+});
+
+test("cli: --report needs --replay (review PHASE4-RUN-VERIFY F3)", () => {
+  const { args } = require("../cli");
+  assert.throws(() => args(["findings", "--rehearse", "--report", "/tmp/x"]), /--report needs --replay/);
+  const { format_report } = require("../findings/report");
+  assert.match(format_report([], { today: "2026-11-04", scope: "PARTIAL: only SME1" }), /PARTIAL: only SME1/);
+});
+
+test("verify checks each system at its own as-of date (review PHASE4-RUN-VERIFY F2)", async () => {
+  const { FINDINGS_SQL } = require("../findings/verify_sql");
+  const { run_verify } = require("../findings/verify");
+  const sqlShape = (rows) => rows.map((r) => ({ ...r, opened_day: r.evidence.opened_day, last_trip_day: r.evidence.last_trip_day ?? null,
+    trip_days: r.evidence.trip_days ?? null }));
+  const early = "2026-09-15";
+  const at = { [fx.today]: sqlShape(all), [early]: sqlShape(Object.keys(fx.inputs).flatMap((s) => replay(s, early))) };
+  // SME21873 was last evaluated (a --systems run) as of the early date; the others as of today
+  const stored = [...all.filter((r) => r.system_id !== "SME21873"), ...at[early].filter((r) => r.system_id === "SME21873")];
+  const lastDay = (d) => Object.entries(fx.inputs).map(([s, c]) => ({ system_id: s, d: c.days.filter((x) => x[0] <= d).pop()[0] }));
+  const t = { any: async (sql, p) => (sql === FINDINGS_SQL ? at[p[0]] : /max\(local_day\)/.test(sql) ? lastDay(p[0]) : catalog_rows()) };
+  const quiet = () => {};
+  const ok = await run_verify(t, { today: fx.today, as_of_by_system: { SME21873: early }, rows: stored, log: quiet });
+  assert.ok(ok.results.find((r) => r.name === "findings vs independent SQL").ok);
+  // without the per-system date, the early rows are checked at today's date and differ
+  const bad = await run_verify(t, { today: fx.today, rows: stored, log: quiet });
+  assert.ok(!bad.results.find((r) => r.name === "findings vs independent SQL").ok);
 });

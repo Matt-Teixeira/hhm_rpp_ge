@@ -73,8 +73,13 @@ const STORED_SQL = `
   FROM insight.findings WHERE source = 'ge_ct'`;
 const LAST_DAY_SQL = `SELECT system_id, to_char(max(local_day), 'YYYY-MM-DD') AS d FROM insight.ge_ct_daily WHERE local_day <= $1::date GROUP BY 1`;
 
-// today: the as-of date of the run that wrote the findings.
-async function run_verify(t, { today, log = console.log, rows = null } = {}) {
+// today: the as-of date of the run that wrote the findings; as_of_by_system:
+// the date each system was last evaluated at (job_state), which wins over
+// today, so a --systems run is checked at its own date (review
+// PHASE4-RUN-VERIFY F2).
+async function run_verify(t, { today, as_of_by_system = {}, log = console.log, rows = null } = {}) {
+  const asOf = (s) => as_of_by_system[s] || today;
+  const dates = [...new Set([today, ...Object.values(as_of_by_system)])].sort();
   const results = [];
   const check = async (name, fn) => {
     const t0 = Date.now();
@@ -84,12 +89,19 @@ async function run_verify(t, { today, log = console.log, rows = null } = {}) {
     for (const l of r.lines) log(`       ${l}`);
   };
   const stored = rows || (await t.any(STORED_SQL)).map((r) => ({ ...r, data_through: r.data_through_text }));
-  const lastDay = new Map((await t.any(LAST_DAY_SQL, [today])).map((r) => [r.system_id, r.d]));
+  const lastDay = new Map();
+  for (const d of dates) for (const r of await t.any(LAST_DAY_SQL, [d])) if (asOf(r.system_id) === d) lastDay.set(r.system_id, r.d);
 
   await check("findings vs independent SQL", async () => {
-    const expected = await t.any(FINDINGS_SQL, [today]);
+    const expected = [];
+    const perDate = [];
+    for (const d of dates) {
+      const e = (await t.any(FINDINGS_SQL, [d])).filter((r) => asOf(r.system_id) === d);
+      expected.push(...e);
+      perDate.push(`${d}: ${new Set(e.map((r) => r.system_id)).size} systems with findings, ${e.length} findings`);
+    }
     const c = compare_findings(expected, stored);
-    const lines = [`as of ${today}: SQL ${c.expected} findings, table ${c.actual}; missing ${c.missing.length}, extra ${c.extra.length}, differ ${c.differ.length}`];
+    const lines = [`as of ${dates.length === 1 ? dates[0] : `per system (${perDate.join("; ")})`}: SQL ${c.expected} findings, table ${c.actual}; missing ${c.missing.length}, extra ${c.extra.length}, differ ${c.differ.length}`];
     for (const k of c.missing.slice(0, 15)) lines.push(`  missing ${k}`);
     for (const k of c.extra.slice(0, 15)) lines.push(`  extra   ${k}`);
     for (const k of c.differ.slice(0, 15)) lines.push(`  differ  ${k}`);

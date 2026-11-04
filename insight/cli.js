@@ -21,6 +21,21 @@
 //       insight.job_state 'ge_ct_derive'. Run verify-derive afterwards.
 //   node insight/cli.js verify-derive
 //       READ-ONLY. The Phase 3 exit checks (§13.3) against independent SQL.
+//   node insight/cli.js findings --rehearse [--replay] [--system S | --systems A,B] [--report FILE]
+//       As insight_writer, ONE transaction, rolled back: findings as of
+//       today (pass 1), the same again (idempotency), after --replay a
+//       default pass, the incremental-consistency check (replay as of
+//       today-28, then default runs a week apart), verify-findings on the
+//       uncommitted rows. --report writes the replayed list per rule with
+//       its evidence (and FILE.json). Writes nothing to the database.
+//   node insight/cli.js findings --apply [--replay] [--system S | --systems A,B]
+//       As insight_writer: catalog, one transaction per system, then
+//       insight.job_state 'ge_ct_findings'. --replay rebuilds the history;
+//       without it only systems with data in the last 7 days are evaluated
+//       and resolved findings are never rewritten. Run verify-findings after.
+//   node insight/cli.js verify-findings
+//       READ-ONLY. Every finding vs the independent SQL, as of the last
+//       findings run's date (§14.4).
 //   node insight/cli.js verify
 //       READ-ONLY. Facts per (system, metric) vs the independent count of
 //       DISTINCT natural keys, over the watermark range. Derived metrics
@@ -38,13 +53,17 @@ const { ignore } = require("./rules/ge_ct_ignore");
 const { derived_rules, DERIVED_KEYS } = require("./rules/ge_ct_derived");
 const { run_derive, COUNTS_SQL } = require("./derive/run");
 const { run_verify } = require("./derive/verify");
+const { run_findings, COUNTS_SQL: FINDINGS_COUNTS_SQL } = require("./findings/run");
+const { run_verify: run_verify_findings } = require("./findings/verify");
+const { format_report } = require("./findings/report");
+const fs = require("fs");
 
 const RECENT_MS = 30 * 24 * 3600 * 1000;
 const COVERAGE_THRESHOLD = 500; // rows per template per 30 days (§8)
 const ignored = (proc, msg) => ignore.find((i) => (!i.process || i.process === proc) && i.re.test(msg || ""));
 
 function args(argv) {
-  const a = { cmd: argv[0], system: null, from_id: null, to_id: null, rehearse: false, apply: false, batches: 2 };
+  const a = { cmd: argv[0], system: null, from_id: null, to_id: null, rehearse: false, apply: false, batches: 2, replay: false, report: null };
   // A flag that takes a value must get one: a missing value must never widen
   // the scope (e.g. `derive --apply --system` becoming fleet-wide; review
   // PHASE3-RUN-VERIFY F1).
@@ -68,14 +87,20 @@ function args(argv) {
     else if (argv[i] === "--rehearse") a.rehearse = true;
     else if (argv[i] === "--apply") a.apply = true;
     else if (argv[i] === "--batches") a.batches = int(i++);
+    else if (argv[i] === "--replay") a.replay = true;
+    else if (argv[i] === "--report") a.report = value(i++);
     else throw new Error(`unknown argument ${argv[i]}`);
   }
   if (a.system && a.systems) throw new Error("use either --system or --systems, not both");
-  if (!["dry-run", "backfill", "verify", "derive", "verify-derive"].includes(a.cmd)) {
-    throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify | derive --rehearse|--apply [--system S | --systems S1,S2] | verify-derive");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify | derive --rehearse|--apply [--system S | --systems S1,S2] | verify-derive | findings --rehearse|--apply [--replay] [--system S | --systems S1,S2] [--report FILE] | verify-findings");
   }
-  if ((a.cmd === "backfill" || a.cmd === "derive") && a.rehearse === a.apply) throw new Error(`${a.cmd} needs exactly one of --rehearse / --apply`);
-  if (a.cmd === "derive" && a.system) a.systems = [a.system];
+  if (["backfill", "derive", "findings"].includes(a.cmd) && a.rehearse === a.apply) throw new Error(`${a.cmd} needs exactly one of --rehearse / --apply`);
+  if ((a.cmd === "derive" || a.cmd === "findings") && a.system) a.systems = [a.system];
+  if (a.replay && a.cmd !== "findings") throw new Error("--replay is only for findings");
+  if (a.report && !(a.cmd === "findings" && a.rehearse)) throw new Error("--report is only for findings --rehearse");
+  // a default-mode run skips stale systems, so its rows are not the full list (review PHASE4-RUN-VERIFY F3)
+  if (a.report && !a.replay) throw new Error("--report needs --replay (a default run skips systems without recent data)");
   if (a.cmd === "backfill" && a.system) throw new Error("backfill does not take --system (the watermark is fleet-wide)");
   if (a.cmd === "dry-run" && a.from_id === null) a.from_id = 0;
   return a;
@@ -174,7 +199,7 @@ async function dry_run(a) {
 
 async function confirm(db, a) {
   const t = await db.one("SELECT current_database() AS db, current_user AS usr");
-  const mode = a.apply ? (a.cmd === "derive" ? "APPLY (commits per system)" : "APPLY (commits per batch)") : "REHEARSAL (one transaction, rolled back)";
+  const mode = a.apply ? (a.cmd === "backfill" ? "APPLY (commits per batch)" : "APPLY (commits per system)") : "REHEARSAL (one transaction, rolled back)";
   console.log(`target: database=${t.db} host=${process.env.PG_HOST} user=${t.usr} — ${mode}`);
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
   const it = rl[Symbol.asyncIterator]();
@@ -236,6 +261,56 @@ async function derive(a) {
   }
 }
 
+const utc_today = () => new Date().toISOString().slice(0, 10);
+
+async function findings(a) {
+  const db = connect("writer", { statementTimeoutMs: 600000, applicationName: "insight_findings" });
+  try {
+    await confirm(db, a);
+    const t0 = Date.now();
+    const today = utc_today();
+    const out = await run_findings(db, { mode: a.apply ? "apply" : "rehearse", replay: a.replay, systems: a.systems || null, today,
+      run_id: crypto.randomUUID(), log: (m) => console.log(m) });
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    if (out.skipped) { console.log(`SKIPPED: ${out.skipped}`); process.exitCode = 3; return; }
+    if (a.rehearse) {
+      console.log(`REHEARSAL ROLLED BACK in ${secs}s. pass 1: ${JSON.stringify(out.pass1)}`);
+      console.log(`checks: ${JSON.stringify(out.checks)}; verify-findings inside the rehearsal: ${out.verify_ok ? "PASS" : "FAIL"}; overall ${out.ok ? "OK" : "NOT OK"}`);
+      console.log(`after ROLLBACK, fresh read: ${JSON.stringify(await db.one(FINDINGS_COUNTS_SQL))}`);
+      if (a.report) {
+        const scope = a.systems ? `PARTIAL: only ${a.systems.join(", ")}` : `all ${out.pass1.systems} systems`;
+        fs.writeFileSync(a.report, format_report(out.rows, { today, scope }) + "\n");
+        fs.writeFileSync(`${a.report}.json`, JSON.stringify(out.rows, null, 1));
+        console.log(`report: ${a.report} (+ .json)`);
+      }
+      if (!out.ok) process.exitCode = 2;
+    } else {
+      console.log(`APPLIED in ${secs}s: ${JSON.stringify(out.stats)}; table now ${JSON.stringify(out.after)}`);
+      console.log("next: node insight/cli.js verify-findings");
+    }
+  } finally {
+    await db.$pool.end();
+  }
+}
+
+async function verify_findings() {
+  const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_verify_findings" });
+  try {
+    if ((await db.one("SHOW default_transaction_read_only")).default_transaction_read_only !== "on") throw new Error("not read-only");
+    const job = await db.oneOrNone("SELECT watermark_id, last_run_status, last_run_finished_at, last_run_stats FROM insight.job_state WHERE job_name = 'ge_ct_findings'");
+    const stats = (job && job.last_run_stats) || {};
+    const today = stats.today || utc_today();
+    const as_of_by_system = stats.as_of_by_system || {};
+    const dates = [...new Set(Object.values(as_of_by_system))].sort();
+    console.log(`verify-findings (read-only): findings job ${job ? `${job.last_run_status || "no fleet run"} at ${job.last_run_finished_at ? job.last_run_finished_at.toISOString() : "-"}, watermark ${job.watermark_id}` : "has not run"}; as of ${today}; per-system as-of dates: ${dates.length ? dates.join(", ") : "none recorded"}`);
+    const v = await run_verify_findings(db, { today, as_of_by_system, log: (m) => console.log(m) });
+    console.log(v.ok ? "ALL CHECKS PASS" : `FAILED: ${v.results.filter((r) => !r.ok).map((r) => r.name).join(", ")}`);
+    if (!v.ok) process.exitCode = 2;
+  } finally {
+    await db.$pool.end();
+  }
+}
+
 async function verify_derive() {
   const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_verify_derive" });
   try {
@@ -289,6 +364,8 @@ if (require.main !== module) {
   if (a.cmd === "verify") await verify();
   if (a.cmd === "derive") await derive(a);
   if (a.cmd === "verify-derive") await verify_derive();
+  if (a.cmd === "findings") await findings(a);
+  if (a.cmd === "verify-findings") await verify_findings();
 })()
   .catch((e) => { console.error(`ERROR: ${e.message}`); process.exitCode = 1; })
   .finally(() => pgp.end());

@@ -58,6 +58,7 @@ w AS (
   SELECT c.*,
          sum(rotor) OVER w7 AS rotor7, sum(is_data::int) OVER w7 AS data7,
          sum(ab) OVER w7 AS ab7, sum(ex) OVER w7 AS ex7, sum(ab) OVER w28 AS ab28, sum(ex) OVER w28 AS ex28,
+         sum((ab > 0)::int) OVER w7 AS abd7, sum((ab > 0)::int) OVER w28 AS abd28,
          sum(ab) OVER wb AS abb, sum(ex) OVER wb AS exb,
          sum(scan::int) OVER w14 AS scan14, sum((scan AND NOT fc)::int) OVER w14 AS nofc14,
          sum(scan::int) OVER w28 AS scan28, sum((scan AND bypass)::int) OVER w28 AS byp28,
@@ -90,15 +91,20 @@ r1 AS (
          CASE WHEN cardinality(base) >= 4 THEN (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM unnest(base) x) END AS med
   FROM wk WHERE is_data
 ),
-safe AS (
-  SELECT s.system_id, s.host_local::date AS d, coalesce(s.attrs ->> 'ermes', '') AS code
+safe0 AS (
+  SELECT s.system_id, s.host_local::date AS d, s.host_datetime AS t, coalesce(s.attrs ->> 'ermes', '') AS code
   FROM insight.ge_ct_facts s
   WHERE s.metric_key = 'scan.safe_state' AND s.host_local < ($1::date + 1)
-    AND coalesce(s.attrs ->> 'ermes', '') <> '260116316'
+    AND coalesce(s.attrs ->> 'ermes', '') NOT IN ('', '260116316')
     AND NOT EXISTS (SELECT 1 FROM insight.ge_ct_facts b
                     WHERE b.system_id = s.system_id AND b.metric_key IN ('system.boot', 'system.shutdown')
                       AND b.host_local < ($1::date + 1)
                       AND b.host_datetime BETWEEN s.host_datetime - interval '30 minutes' AND s.host_datetime + interval '30 minutes')
+),
+safe AS (  -- incidents: the same code more than 30 min after its previous (kept) event starts a new one
+  SELECT system_id, d, code FROM (
+    SELECT safe0.*, lag(t) OVER (PARTITION BY system_id, code ORDER BY t) AS prev_t FROM safe0) x
+  WHERE prev_t IS NULL OR t - prev_t > interval '30 minutes'
 ),
 r4 AS (
   SELECT dd.system_id, dd.d, max(x.n) AS obs
@@ -133,8 +139,8 @@ tr AS (
          CASE WHEN chronic THEN round(100.0 * ab28 / ex28, 2) ELSE round(100.0 * ab7 / ex7, 2) END::double precision,
          CASE WHEN exb > 0 THEN round(100.0 * abb / exb, 2)::double precision END,
          CASE WHEN chronic THEN 27 ELSE 6 END
-  FROM (SELECT w.*, (ex28 >= 20 AND 100 * ab28 >= 50 * ex28) AS chronic,
-               (ex7 >= 10 AND 100 * ab7 >= 30 * ex7 AND exb > 0 AND ab7 * exb >= 3 * abb * ex7) AS spike
+  FROM (SELECT w.*, (ex28 >= 20 AND 100 * ab28 >= 50 * ex28 AND abd28 >= 2) AS chronic,
+               (ex7 >= 10 AND ab7 >= 10 AND abd7 >= 2 AND 100 * ab7 >= 30 * ex7 AND exb > 0 AND ab7 * exb >= 3 * abb * ex7) AS spike
         FROM w WHERE is_data) a
   WHERE chronic OR spike
   UNION ALL

@@ -30,6 +30,10 @@ const FAST_CAL_STEPS = ["Fast Calibration", "Cold Tube Warmup (Fast Calibration)
 // Safe-state exclusions (rule 4): the power-cycle side effect.
 const SAFE_EXCLUDED_CODES = ["260116316"];
 const SAFE_POWER_CYCLE_MIN = 30;
+// Safe states are counted as incidents: the same code again within 30 min
+// of its previous event is the same incident (one press / one outage logs
+// several lines; tuned 2026-11-04, plan §14 checkpoint 4).
+const SAFE_INCIDENT_GAP_MIN = 30;
 const SERVICE_BEFORE_BOOT_H = 12; // rule 9
 
 // Daily series used by the rules: name -> predicate on a daily cell.
@@ -130,14 +134,24 @@ function build_context(inputs, today) {
     return (a < cycles.length && cycles[a] - t <= lim) || (a > 0 && t - cycles[a - 1] <= lim);
   };
   ctx.safe = [];
-  ctx.safe_excluded = { code: dense(), power_cycle: dense() };
+  ctx.safe_excluded = { code: dense(), power_cycle: dense(), no_code: dense() };
   for (const s of inputs.safe || []) {
     const d = dnum(s.day);
     if (d > T) continue;
     const code = s.code === null || s.code === undefined ? "" : String(s.code);
+    // no code: can't be "the same code" as anything (review PHASE4-RUN-VERIFY F1)
+    if (code === "") { ctx.safe_excluded.no_code.add(d, 1); continue; }
     if (SAFE_EXCLUDED_CODES.includes(code)) { ctx.safe_excluded.code.add(d, 1); continue; }
     if (near_cycle(tms(s.t))) { ctx.safe_excluded.power_cycle.add(d, 1); continue; }
-    ctx.safe.push({ d, code });
+    ctx.safe.push({ d, code, t: tms(s.t) });
+  }
+  // incidents per code (after the exclusions); an incident's day is its first event's
+  ctx.safe.sort((a, b) => a.t - b.t);
+  const prev = new Map();
+  for (const s of ctx.safe) {
+    const p = prev.get(s.code);
+    s.new_incident = p === undefined || s.t - p > SAFE_INCIDENT_GAP_MIN * 60000;
+    prev.set(s.code, s.t);
   }
 
   // unclean boots without service mode entered in the 12 h before (rule 9)
@@ -179,5 +193,5 @@ function median(xs) {
 
 module.exports = {
   build_context, day_start, median, dnum, dstr, DAY_MS, SERIES, SERIES_METRICS, FAST_CAL_STEPS,
-  SAFE_EXCLUDED_CODES, SAFE_POWER_CYCLE_MIN, SERVICE_BEFORE_BOOT_H,
+  SAFE_EXCLUDED_CODES, SAFE_POWER_CYCLE_MIN, SAFE_INCIDENT_GAP_MIN, SERVICE_BEFORE_BOOT_H,
 };

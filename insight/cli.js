@@ -13,7 +13,9 @@
 //       in one transaction. Resumes from the watermark. Run off-peak.
 //   node insight/cli.js verify
 //       READ-ONLY. Facts per (system, metric) vs the independent count of
-//       DISTINCT natural keys, over the watermark range.
+//       DISTINCT natural keys, over the watermark range. Derived metrics
+//       (system.boot, tube.replacement) have no per-row count; they are
+//       checked by verify-derive.
 const { connect, pgp } = require("./db");
 const { rules } = require("./rules/ge_ct");
 const { validate_rules } = require("./rules/engine");
@@ -23,6 +25,7 @@ const { run_extract } = require("./load");
 const readline = require("readline");
 const crypto = require("crypto");
 const { ignore } = require("./rules/ge_ct_ignore");
+const { derived_rules, DERIVED_KEYS } = require("./rules/ge_ct_derived");
 
 const RECENT_MS = 30 * 24 * 3600 * 1000;
 const COVERAGE_THRESHOLD = 500; // rows per template per 30 days (§8)
@@ -182,7 +185,7 @@ async function verify() {
     if (!job) throw new Error("no watermark yet: run backfill --apply first");
     const to = Number(job.watermark_id);
     const facts = await db.any(`SELECT system_id, metric_key AS key, count(*)::int AS n FROM insight.ge_ct_facts
-                                WHERE source_id <= $1 GROUP BY 1, 2`, [to]);
+                                WHERE source_id <= $1 AND metric_key <> ALL($2) GROUP BY 1, 2`, [to, DERIVED_KEYS]);
     const sql = await db.any(RECONCILE_DISTINCT_SQL, [0, to, null]);
     const fm = new Map(facts.map((r) => [`${r.system_id}|${r.key}`, r.n]));
     const sm = new Map(sql.map((r) => [`${r.system_id}|${r.key}`, Number(r.n)]));
@@ -192,9 +195,11 @@ async function verify() {
     console.log(`verify (read-only): watermark ${to} (${job.last_run_status} at ${job.last_run_finished_at && job.last_run_finished_at.toISOString()}); ${total} facts in insight.ge_ct_facts`);
     console.log(`facts vs independent DISTINCT-key SQL (${keys.size} system×metric cells): ${diffs.length ? `${diffs.length} differ` : "all equal"}`);
     for (const k of diffs.slice(0, 40)) console.log(`  ${k.padEnd(48)} facts=${fm.get(k) || 0} sql=${sm.get(k) || 0}`);
-    const cat = await db.one("SELECT count(*)::int AS n FROM insight.metric_catalog");
-    console.log(`catalog rows: ${cat.n} (registry: ${rules.length})`);
-    if (diffs.length || cat.n !== rules.length) process.exitCode = 2;
+    const cat = await db.one("SELECT count(*)::int AS n, count(*) FILTER (WHERE metric_key = ANY($1))::int AS derived FROM insight.metric_catalog", [DERIVED_KEYS]);
+    // derived catalog rows appear once derive has run; before that only the per-row registry
+    const expected = rules.length + (cat.derived ? derived_rules.length : 0);
+    console.log(`catalog rows: ${cat.n} (registry: ${rules.length} per-row + ${derived_rules.length} derived; ${cat.derived} derived present)`);
+    if (diffs.length || cat.n !== expected) process.exitCode = 2;
   } finally {
     await db.$pool.end();
   }

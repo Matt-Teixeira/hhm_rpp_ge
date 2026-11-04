@@ -151,7 +151,9 @@ schema, rule registry per source), but nothing is built for them yet.
     - a touched-days pass (28 systems, 439 days) that was byte-identical
       to the full rebuild;
     - verify-derive inside the transaction: all PASS.
-  - Three Codex reviews; all 5 findings fixed (§13.5).
+  - Four Codex reviews; all 8 findings fixed (§13.5). The last review came
+    after the apply; its fixes only tightened the CLI and verify, and the
+    stricter verify passes on the written data.
   - Commits on `dev` (not pushed): `76ede42`, `61fdfe1`, `46362ea`,
     `5bf5098`, `5c00636`.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
@@ -1272,6 +1274,18 @@ Ground rules carried over:
   verify checks the invariant.
 - **Stages F2:** a derived fact moving to another day didn't report its
   old day.
+
+**Review of the run / verify code** (`REVIEW-PHASE3-RUN-VERIFY-CODEX.md`,
+after the apply). All fixed 2026-11-04; none affected the written data:
+- **F1:** `derive --apply --system`, with no value given, would have run
+  fleet-wide. Every value flag now requires a value.
+- **F2:** the exam check didn't compare `protocol` / `local_day`. Now it
+  does.
+- **F3:** the boot and tube checks keyed on (system, epoch, rnc) without
+  `host_datetime`, and didn't fail on a count mismatch. Both fixed.
+
+Re-running the stricter `verify-derive` on the committed data: ALL CHECKS
+PASS.
 
 **Found by the rehearsal:** PostgreSQL can't return `xmax` from
 `INSERT ... ON CONFLICT` on a partitioned table. Inserted vs updated is

@@ -245,3 +245,32 @@ test("verify-derive acceptance lists match the derived rules on the §13.1 fixtu
   assert.deepStrictEqual(got, EXPECTED_REPLACEMENTS);
   assert.deepStrictEqual(EXPECTED_CLOCK_AHEAD, ["SME11229", "SME16618", "SME21873", "SME21929"]);
 });
+
+// ----------------------------------------------- review PHASE3-RUN-VERIFY
+
+test("RUN-VERIFY F1: CLI value flags must have a value; a missing --system never means the whole fleet", () => {
+  const { args } = require("../cli");
+  const bad = [
+    [["derive", "--apply", "--system"], /--system needs a value/],
+    [["derive", "--apply", "--system", "--rehearse"], /--system needs a value/],
+    [["derive", "--apply", "--system", ""], /--system needs a value/],
+    [["derive", "--rehearse", "--systems"], /--systems needs a value/],
+    [["derive", "--rehearse", "--systems", ",, ,"], /at least one system id/],
+    [["derive", "--rehearse", "--system", "A", "--systems", "B"], /either --system or --systems/],
+    [["backfill", "--apply", "--from-id"], /--from-id needs a value/],
+    [["backfill", "--apply", "--from-id", "12x"], /non-negative integer/],
+    [["backfill", "--rehearse", "--batches", "-1"], /--batches needs a value|non-negative integer/],
+  ];
+  for (const [argv, re] of bad) assert.throws(() => args(argv), re, argv.join(" "));
+  assert.deepStrictEqual(args(["derive", "--apply", "--system", "SME1"]).systems, ["SME1"]);
+  assert.deepStrictEqual(args(["derive", "--rehearse", "--systems", "SME1, SME2"]).systems, ["SME1", "SME2"]);
+  assert.strictEqual(args(["derive", "--apply"]).systems, undefined); // no flag at all: fleet-wide, as intended
+  assert.strictEqual(args(["backfill", "--apply", "--from-id", "0"]).from_id, 0);
+});
+
+test("RUN-VERIFY F2: exam verification compares protocol and local_day", () => {
+  const { EXAMS_DIFF_SQL } = require("../derive/verify");
+  assert.match(EXAMS_DIFF_SQL, /value_text AS protocol, host_local::date AS local_day/);
+  assert.strictEqual((EXAMS_DIFF_SQL.match(/y\.protocol IS DISTINCT FROM x\.protocol OR y\.local_day <> x\.local_day/g) || []).length, 2,
+    "in both the differ count and the sample filter");
+});

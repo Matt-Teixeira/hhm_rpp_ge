@@ -62,7 +62,7 @@ FROM x FULL JOIN insight.ge_ct_daily y
 
 const EXAMS_DIFF_SQL = `
 WITH ev AS (
-  SELECT system_id, metric_key, exam_no, host_datetime, epoch, record_number_concurrent AS rnc, value_num, attrs
+  SELECT system_id, metric_key, exam_no, host_datetime, host_local, epoch, record_number_concurrent AS rnc, value_num, value_text, attrs
   FROM insight.ge_ct_facts
   WHERE metric_key IN ('exam.start', 'exam.series', 'scan.abort.operator', 'scan.abort.system')
 ), o AS (
@@ -70,7 +70,7 @@ WITH ev AS (
                  OVER (PARTITION BY system_id ORDER BY host_datetime, epoch, rnc ROWS UNBOUNDED PRECEDING) AS k
   FROM ev
 ), st AS (
-  SELECT system_id, k, exam_no, host_datetime AS started_at,
+  SELECT system_id, k, exam_no, host_datetime AS started_at, value_text AS protocol, host_local::date AS local_day,
          count(*) OVER (PARTITION BY system_id, exam_no ORDER BY host_datetime, epoch, rnc ROWS UNBOUNDED PRECEDING) > 1 AS reopened
   FROM o WHERE metric_key = 'exam.start'
 ), ls AS (
@@ -84,7 +84,7 @@ WITH ev AS (
          max(host_datetime) AS last_at
   FROM o WHERE k > 0 GROUP BY 1, 2
 ), x AS (
-  SELECT st.system_id, st.exam_no, st.started_at, st.reopened, c.nser, c.aop, c.asys, c.last_at,
+  SELECT st.system_id, st.exam_no, st.started_at, st.protocol, st.local_day, st.reopened, c.nser, c.aop, c.asys, c.last_at,
          coalesce((ls.attrs ->> 'ct_series')::int, 0) AS series, coalesce((ls.attrs ->> 'ct_scans')::int, 0) AS scans,
          coalesce((ls.attrs ->> 'ct_images')::int, ls.value_num::int, 0) AS images
   FROM st JOIN c USING (system_id, k) LEFT JOIN ls USING (system_id, k)
@@ -94,6 +94,7 @@ SELECT count(*) FILTER (WHERE y.system_id IS NULL) AS missing,
        count(*) FILTER (WHERE x.system_id IS NOT NULL AND y.system_id IS NOT NULL AND (
            y.series <> x.series OR y.scans <> x.scans OR y.images <> x.images OR y.aborts_operator <> x.aop
         OR y.aborts_system <> x.asys OR y.last_activity_at <> x.last_at
+        OR y.protocol IS DISTINCT FROM x.protocol OR y.local_day <> x.local_day
         OR coalesce((y.attrs ->> 'reopened')::boolean, false) <> x.reopened
         OR coalesce((y.attrs ->> 'series_summaries')::int, -1) <> x.nser)) AS differ,
        count(*) FILTER (WHERE x.system_id IS NOT NULL) AS starts,
@@ -102,7 +103,8 @@ SELECT count(*) FILTER (WHERE y.system_id IS NULL) AS missing,
        (array_agg(coalesce(x.system_id, y.system_id) || ' ' || coalesce(x.exam_no, y.exam_no) || ' ' || coalesce(x.started_at, y.started_at))
           FILTER (WHERE x.system_id IS NULL OR y.system_id IS NULL OR y.series <> x.series OR y.scans <> x.scans
                   OR y.images <> x.images OR y.aborts_operator <> x.aop OR y.aborts_system <> x.asys
-                  OR y.last_activity_at <> x.last_at OR coalesce((y.attrs ->> 'reopened')::boolean, false) <> x.reopened
+                  OR y.last_activity_at <> x.last_at OR y.protocol IS DISTINCT FROM x.protocol OR y.local_day <> x.local_day
+                  OR coalesce((y.attrs ->> 'reopened')::boolean, false) <> x.reopened
                   OR coalesce((y.attrs ->> 'series_summaries')::int, -1) <> x.nser))[1:10] AS sample
 FROM x FULL JOIN insight.ge_ct_exams y
   ON y.system_id = x.system_id AND y.exam_no = x.exam_no AND y.started_at = x.started_at`;
@@ -119,7 +121,10 @@ SELECT count(*) FILTER (WHERE y.system_id IS NULL) AS missing,
        count(*) AS cells
 FROM x FULL JOIN insight.system_capabilities y ON y.system_id = x.system_id AND y.metric_key = x.metric_key`;
 
-const key = (s, e, r) => `${s}|${e}|${r}`;
+// Full natural key of a derived fact (the facts table's key includes
+// host_datetime; (system, epoch, rnc) alone is not unique, §11.3).
+// Review PHASE3-RUN-VERIFY F3.
+const key = (s, e, r, t) => `${s}|${e}|${r}|${new Date(t).toISOString()}`;
 
 async function check_tube(db) {
   const lines = [];
@@ -128,14 +133,16 @@ async function check_tube(db) {
                               FROM insight.ge_ct_facts WHERE metric_key = 'tube.replacement' ORDER BY system_id, host_datetime`);
   const sql = await db.any(RESETS_SQL, [null]);
   // facts vs independent SQL
-  const sm = new Map(sql.map((r) => [key(r.system_id, r.epoch, r.rnc), r]));
+  const sm = new Map(sql.map((r) => [key(r.system_id, r.epoch, r.rnc, r.t), r]));
   const mism = [];
+  if (sm.size !== sql.length) mism.push(`independent SQL has duplicate keys (${sql.length} rows, ${sm.size} keys)`);
+  if (facts.length !== sql.length) mism.push(`count differs: ${facts.length} facts vs ${sql.length} SQL`);
   for (const f of facts) {
-    const s = sm.get(key(f.system_id, f.epoch, f.rnc));
+    const s = sm.get(key(f.system_id, f.epoch, f.rnc, f.host_datetime));
     if (!s) { mism.push(`only in facts: ${f.system_id} ${f.host_datetime.toISOString()}`); continue; }
     const conf = s.calibrations >= 3 ? "confirmed" : "counter_only";
     if (f.value_text !== conf || f.attrs.calibrations_in_window !== s.calibrations) mism.push(`${f.system_id} ${f.host_datetime.toISOString()}: facts ${f.value_text}/${f.attrs.calibrations_in_window} sql ${conf}/${s.calibrations}`);
-    sm.delete(key(f.system_id, f.epoch, f.rnc));
+    sm.delete(key(f.system_id, f.epoch, f.rnc, f.host_datetime));
   }
   for (const s of sm.values()) mism.push(`only in SQL: ${s.system_id} ${s.t.toISOString()}`);
   lines.push(`facts vs independent SQL: ${facts.length} vs ${sql.length} resets, ${mism.length} differences`);
@@ -176,18 +183,19 @@ async function check_tube(db) {
 async function check_boots(db) {
   const lines = [];
   let ok = true;
-  const facts = await db.any(`SELECT system_id, epoch, record_number_concurrent AS rnc, value_text FROM insight.ge_ct_facts WHERE metric_key = 'system.boot'`);
+  const facts = await db.any(`SELECT system_id, epoch, record_number_concurrent AS rnc, host_datetime, value_text FROM insight.ge_ct_facts WHERE metric_key = 'system.boot'`);
   const sql = await db.any(BOOTS_SQL, [null]);
-  const sm = new Map(sql.map((r) => [key(r.system_id, r.epoch, r.rnc), r.clean]));
+  const sm = new Map(sql.map((r) => [key(r.system_id, r.epoch, r.rnc, r.t), r.clean]));
+  const dupSql = sql.length - sm.size;
   let only_facts = 0, clean_diff = 0;
   for (const f of facts) {
-    const k = key(f.system_id, f.epoch, f.rnc);
+    const k = key(f.system_id, f.epoch, f.rnc, f.host_datetime);
     if (!sm.has(k)) only_facts++;
     else if (sm.get(k) !== (f.value_text === "clean")) clean_diff++;
     sm.delete(k);
   }
-  lines.push(`facts vs independent SQL: ${facts.length} vs ${sql.length} boots; only in facts ${only_facts}, only in SQL ${sm.size}, clean/unclean differs ${clean_diff}`);
-  if (only_facts || sm.size || clean_diff) ok = false;
+  lines.push(`facts vs independent SQL: ${facts.length} vs ${sql.length} boots; only in facts ${only_facts}, only in SQL ${sm.size}, clean/unclean differs ${clean_diff}, duplicate SQL keys ${dupSql}`);
+  if (only_facts || sm.size || clean_diff || dupSql || facts.length !== sql.length) ok = false;
   const loop = await db.one(`SELECT count(*) FILTER (WHERE metric_key = 'system.boot')::int AS boots,
                                     count(*) FILTER (WHERE metric_key = 'system.sw_init_complete')::int AS inits
                              FROM insight.ge_ct_facts WHERE system_id = $1 AND host_datetime BETWEEN $2 AND $3`,
@@ -214,7 +222,7 @@ async function check_exams(db) {
   const share = r.starts ? r.with_series / r.starts : 0;
   const ok = !Number(r.missing) && !Number(r.extra) && !Number(r.differ) && rows === Number(r.starts) && share >= MIN_SERIES_SHARE;
   const lines = [
-    `rows ${rows} vs distinct starts ${r.starts}; missing ${r.missing}, extra ${r.extra}, differ ${r.differ} (series/scans/images/aborts/last activity/reopened/series count)`,
+    `rows ${rows} vs distinct starts ${r.starts}; missing ${r.missing}, extra ${r.extra}, differ ${r.differ} (protocol/local_day/series/scans/images/aborts/last activity/reopened/series count)`,
     `with a series summary: ${r.with_series} (${(100 * share).toFixed(2)}%, need >= ${100 * MIN_SERIES_SHARE}%); reopened: ${r.reopened}`,
   ];
   if (r.sample && r.sample.length) lines.push(`  sample: ${r.sample.join(" | ")}`);

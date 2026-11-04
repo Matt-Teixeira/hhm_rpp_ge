@@ -45,16 +45,32 @@ const ignored = (proc, msg) => ignore.find((i) => (!i.process || i.process === p
 
 function args(argv) {
   const a = { cmd: argv[0], system: null, from_id: null, to_id: null, rehearse: false, apply: false, batches: 2 };
+  // A flag that takes a value must get one: a missing value must never widen
+  // the scope (e.g. `derive --apply --system` becoming fleet-wide; review
+  // PHASE3-RUN-VERIFY F1).
+  const value = (i) => {
+    const v = argv[i + 1];
+    if (v === undefined || v === "" || v.startsWith("--")) throw new Error(`${argv[i]} needs a value`);
+    return v;
+  };
+  const int = (i) => {
+    const v = value(i);
+    if (!/^\d+$/.test(v)) throw new Error(`${argv[i]} needs a non-negative integer, got "${v}"`);
+    return Number(v);
+  };
   for (let i = 1; i < argv.length; i++) {
-    if (argv[i] === "--system") a.system = argv[++i];
-    else if (argv[i] === "--systems") a.systems = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
-    else if (argv[i] === "--from-id") a.from_id = Number(argv[++i]);
-    else if (argv[i] === "--to-id") a.to_id = Number(argv[++i]);
+    if (argv[i] === "--system") a.system = value(i++);
+    else if (argv[i] === "--systems") {
+      a.systems = value(i++).split(",").map((s) => s.trim()).filter(Boolean);
+      if (!a.systems.length) throw new Error("--systems needs at least one system id");
+    } else if (argv[i] === "--from-id") a.from_id = int(i++);
+    else if (argv[i] === "--to-id") a.to_id = int(i++);
     else if (argv[i] === "--rehearse") a.rehearse = true;
     else if (argv[i] === "--apply") a.apply = true;
-    else if (argv[i] === "--batches") a.batches = Number(argv[++i]);
+    else if (argv[i] === "--batches") a.batches = int(i++);
     else throw new Error(`unknown argument ${argv[i]}`);
   }
+  if (a.system && a.systems) throw new Error("use either --system or --systems, not both");
   if (!["dry-run", "backfill", "verify", "derive", "verify-derive"].includes(a.cmd)) {
     throw new Error("usage: cli.js dry-run | backfill --rehearse|--apply | verify | derive --rehearse|--apply [--system S | --systems S1,S2] | verify-derive");
   }
@@ -259,6 +275,11 @@ async function verify() {
   } finally {
     await db.$pool.end();
   }
+}
+
+if (require.main !== module) {
+  module.exports = { args }; // tests: argument parsing only, no DB
+  return;
 }
 
 (async () => {

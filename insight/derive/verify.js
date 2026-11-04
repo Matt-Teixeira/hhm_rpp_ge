@@ -21,7 +21,11 @@ const EXPECTED_REPLACEMENTS = [
   ["SME21873", "2025-08-14", "confirmed"], ["SME21873", "2025-09-02", "counter_only"],
   ["SME21873", "2025-12-08", "confirmed"], ["SME21873", "2026-01-28", "confirmed"],
 ];
-const EXPECTED_CLOCK_AHEAD = ["SME11229", "SME16618", "SME21873", "SME21929"];
+// Sorted by system_id (compared as a list). SME20594 added 2026-11-04 (Phase 5
+// monitoring, reviewed): every capture 2026-10-05..10-31 had lag +13..+35 min;
+// every capture from 2026-11-01 (US DST end) has lag -17..-46 min, a ~60 min
+// step; 27 of 251 captures negative in the 30-day window put p10 below 0.
+const EXPECTED_CLOCK_AHEAD = ["SME11229", "SME16618", "SME20594", "SME21873", "SME21929"];
 // SME18531's restart loop (§1, §13.1): restarts ran 2026-09-12 05:11 to 09-14 09:45 UTC.
 const RESTART_LOOP = { system_id: "SME18531", from: "2026-09-12T05:11:00Z", to: "2026-09-14T09:45:34Z" };
 const BOOT_RATIO_REVIEW = [0.8, 1.25]; // boots / shutdowns outside this: listed for review (not a failure)

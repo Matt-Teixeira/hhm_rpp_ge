@@ -243,7 +243,8 @@ test("verify-derive acceptance lists match the derived rules on the §13.1 fixtu
     }
   }
   assert.deepStrictEqual(got, EXPECTED_REPLACEMENTS);
-  assert.deepStrictEqual(EXPECTED_CLOCK_AHEAD, ["SME11229", "SME16618", "SME21873", "SME21929"]);
+  // SME20594 added 2026-11-04 after review (DST-end clock step, see verify.js)
+  assert.deepStrictEqual(EXPECTED_CLOCK_AHEAD, ["SME11229", "SME16618", "SME20594", "SME21873", "SME21929"]);
 });
 
 // ----------------------------------------------- review PHASE3-RUN-VERIFY

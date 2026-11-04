@@ -258,7 +258,7 @@ async function main() {
 
     // expected-state object checks (against the current committed state)
     const missing = [], present = [];
-    for (const m of ups) for (const o of m.upScan.creates) if (await objectExists(db, o)) present.push(`${m.upFile}: ${o.kind} ${o.name} already exists`);
+    for (const m of ups) for (const o of m.upScan.freshCreates) if (await objectExists(db, o)) present.push(`${m.upFile}: ${o.kind} ${o.name} already exists`);
     if (args.cmd === "down") {
       for (const m of downs) for (const o of m.downScan.drops) if (!(await objectExists(db, o))) missing.push(`${m.downFile}: ${o.kind} ${o.name} does not exist`);
     }
@@ -266,7 +266,7 @@ async function main() {
       [...present, ...missing].forEach((x) => out(`    FAIL ${x}`));
       throw fail("expected-state pre-check failed");
     }
-    out(`    ok  ${ups.reduce((n, m) => n + m.upScan.creates.length, 0)} objects to create are absent` +
+    out(`    ok  ${ups.reduce((n, m) => n + m.upScan.freshCreates.length, 0)} objects to create are absent` +
         (args.cmd === "down" ? `; ${downs.reduce((n, m) => n + m.downScan.drops.length, 0)} objects to drop are present` : ""));
 
     // confirmation
@@ -365,7 +365,7 @@ async function main() {
         if (sd.added.length) out(fmtDiff({ added: sd.added, removed: [], changed: [] }, 12));
         if (args.cmd !== "roundtrip") {
           for (const m of ups) for (const o of m.upScan.creates) if (!(await objectExists(c, o))) throw fail(`${o.kind} ${o.name} missing after ${m.upFile}`);
-          for (const m of downs) for (const o of m.downScan.drops) if (await objectExists(c, o)) throw fail(`${o.kind} ${o.name} still present after ${m.downFile}`);
+          for (const m of downs) for (const o of m.downScan.netDrops) if (await objectExists(c, o)) throw fail(`${o.kind} ${o.name} still present after ${m.downFile}`);
           out("    ok  declared objects " + (ups.length ? "created" : "dropped"));
         } else {
           const full = cat.diff(cat.hashes(pre), cat.hashes(post));

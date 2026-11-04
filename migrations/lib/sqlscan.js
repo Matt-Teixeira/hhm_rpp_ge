@@ -460,7 +460,28 @@ function scanSql(src, { filename = "<sql>" } = {}) {
   }
   const creates = statements.map((s) => s.info.creates).filter(Boolean);
   const drops = statements.flatMap((s) => s.info.drops || []);
-  return { ok: errors.length === 0, errors, statements, creates, drops };
+  // A file may DROP an object and CREATE it again (e.g. a view whose column
+  // list changes, which CREATE OR REPLACE can't do). For the runner's
+  // expected-state checks:
+  //   freshCreates: created objects NOT dropped earlier in the same file
+  //                 (these must be absent before the file runs)
+  //   netDrops:     dropped objects NOT re-created later in the same file
+  //                 (these must be gone after the file runs)
+  const objKey = (o) => `${o.kind}:${o.name}`;
+  const freshCreates = [], netDrops = [];
+  statements.forEach((s, i) => {
+    if (s.info.creates) {
+      const k = objKey(s.info.creates);
+      const droppedBefore = statements.slice(0, i).some((p) => (p.info.drops || []).some((d) => objKey(d) === k));
+      if (!droppedBefore) freshCreates.push(s.info.creates);
+    }
+    for (const d of s.info.drops || []) {
+      const k = objKey(d);
+      const createdAfter = statements.slice(i + 1).some((p) => p.info.creates && objKey(p.info.creates) === k);
+      if (!createdAfter) netDrops.push(d);
+    }
+  });
+  return { ok: errors.length === 0, errors, statements, creates, drops, freshCreates, netDrops };
 }
 
 module.exports = { scanSql, splitStatements, isAllowedTarget, ScanError };

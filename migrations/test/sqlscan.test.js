@@ -160,3 +160,33 @@ test("still allows in-scope calls and plain built-ins", () => {
   allow("CREATE TABLE insight.c (k text REFERENCES insight.metric_catalog (metric_key))");
 });
 
+
+test("drop-then-create in one file: freshCreates / netDrops for the runner's state checks", () => {
+  const up = scanSql(`
+    CREATE TABLE insight.k (x int);
+    DROP VIEW api.ge_ct_v;
+    CREATE VIEW api.ge_ct_v AS SELECT x FROM insight.k;`);
+  assert.deepStrictEqual(up.errors, []);
+  assert.deepStrictEqual(up.creates.map((c) => c.name), ["insight.k", "api.ge_ct_v"]);
+  assert.deepStrictEqual(up.freshCreates.map((c) => c.name), ["insight.k"], "re-created view is exempt from the must-be-absent check");
+  assert.deepStrictEqual(up.netDrops, [], "re-created view is not expected to be gone");
+  const down = scanSql(`
+    DROP VIEW api.ge_ct_v;
+    CREATE VIEW api.ge_ct_v AS SELECT 1 AS x;
+    DROP TABLE insight.k;`);
+  assert.deepStrictEqual(down.netDrops.map((d) => d.name), ["insight.k"]);
+  // a create that comes BEFORE a drop of the same object is still fresh
+  const odd = scanSql(`CREATE TABLE insight.z (x int); DROP TABLE insight.z;`);
+  assert.deepStrictEqual(odd.freshCreates.map((c) => c.name), ["insight.z"]);
+  assert.deepStrictEqual(odd.netDrops.map((d) => d.name), ["insight.z"]);
+});
+
+test("004 re-creates the api views, creates system_clock, and its down restores them", () => {
+  const up = scanSql(fs.readFileSync(path.join(dir, "004_phase3_derive.sql"), "utf8"));
+  assert.deepStrictEqual(up.errors, []);
+  assert.deepStrictEqual(up.freshCreates.map((c) => c.name), ["insight.system_clock"]);
+  assert.deepStrictEqual(up.netDrops, []);
+  const down = scanSql(fs.readFileSync(path.join(dir, "004_phase3_derive.down.sql"), "utf8"));
+  assert.deepStrictEqual(down.errors, []);
+  assert.deepStrictEqual(down.netDrops.map((d) => d.name), ["insight.system_clock"]);
+});

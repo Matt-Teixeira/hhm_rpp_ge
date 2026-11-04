@@ -156,14 +156,36 @@ schema, rule registry per source), but nothing is built for them yet.
     stricter verify passes on the written data.
   - Commits on `dev` (not pushed): `76ede42`, `61fdfe1`, `46362ea`,
     `5bf5098`, `5c00636`.
-- **Phase 4 re-evaluated and AGREED 2026-11-04 (§14); nothing built
-  yet.** It starts at §14.6.
-  - The rules in §14.2 were agreed by the user.
-  - The questions in §14.3 were answered with the proposed defaults: the
-    user doesn't know how these systems operate and won't confirm system
-    behaviour.
-  - So the Phase 4 review is evidence-based (§14.4), and domain
-    confirmation comes from field service in Phase 7.
+- **Phase 4 DONE (2026-11-04 15:52 UTC).** All §14.4 exit criteria met;
+  details, choices, tuning and review fixes in §14.7.
+  - **Catch-up first** (§14.3 Q4): `backfill --apply` added 2,533 facts
+    (4,102 gesys rows; watermark 18547636), then `derive --apply`. `verify`
+    622/622 cells; `verify-derive` ALL PASS; the §13.1 replacement list and
+    the clock flags didn't change.
+  - **Migration 005** applied by the user 2026-11-04 14:43:42 UTC (scan,
+    dry run and roundtrip passed first). Committed afterwards as `4d8a345`.
+  - **Findings applied** as `insight_writer` (`node insight/cli.js findings
+    --apply --replay`, from `63377f7`): 112 findings (29 open) on 34
+    systems, 13 catalog rows, 9.4 s. `job_state ge_ct_findings` =
+    watermark 18547636, as of 2026-11-04.
+  - **`node insight/cli.js verify-findings` → ALL CHECKS PASS**: every
+    finding equals the independent SQL (112 = 112), catalog = registry,
+    invariants hold.
+  - The three named problems: SME21859 `tube_rotor_instability` **high**,
+    open since 2026-05-15; SME18531 `process_restart_loop` 2026-09-12 →
+    resolved 09-23; SME21867 `abort_rate_high` **chronic**, 2026-05-13 →
+    resolved 10-06.
+  - **Two rules tuned from the replay evidence** (user approved the
+    recommendations, 2026-11-04): aborts and safe states (§14.7).
+  - The evidence review (§14.3 Q5) was done on the full replayed list;
+    field-service confirmation is Phase 7.
+  - Two Codex reviews, 6 findings, all fixed (§14.7).
+  - Commits on `dev` (not pushed): `4d8a345`, `3420fcf`, `63377f7`.
+- **Phase 5 re-evaluated and AGREED 2026-11-04 (§15); nothing built
+  yet.** The user agreed the §15.2 design and the recommended answers in
+  §15.3. The stage, the hook and the kill switch don't exist; the §6
+  late-commit re-read was never built; derive has no touched-scope apply
+  path. It starts at §15.6.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -444,7 +466,8 @@ facts in `insight` and re-extracts them (dry run first).
 
 Each run re-reads gesys rows whose `capture_datetime` is within 2 h of
 the watermark's, not a fixed `id` count. That way a late-committing
-insert from an overlapping run can't be skipped.
+insert from an overlapping run can't be skipped. **(Not built: extract
+reads `id > watermark` only. See §15.1 and §15.3 Q2.)**
 
 The metric catalog is generated from the rule registry and upserted at
 stage start, so labels can't drift and facts never reference a missing
@@ -496,8 +519,8 @@ external scrub handles that.
 | **1b. Dedup root cause** | Find why records are re-ingested on a later capture (e.g. SME18531 epoch 1791178306 rnc 0 captured 10‑05 and again 10‑07; SME17371 30% dup). Likely the Redis file-size watermark vs. file rotation/truncation in `GE_CT_CV_MRI.js`. Fix in the parser; decide whether to clean existing duplicates in `log.ge_ct_gesys` (separate, reviewed step) | Repro explained ✅ (§11); new duplicates stop ✅ (fix live 2026-11-03 19:45 UTC); cleanup done ✅ (§11.6) |
 | **2. Extract** ✅ 2026-11-03 | `insight_writer` login + migration 003 (§12). Rule registry (including the two new metrics), scrubbed fixtures, `extract.js`, `--coverage` report. Dry run against prod (read-only, counts only), then `--apply` into `insight.*` as `insight_writer` | Rule tests pass. Per (system, metric), fact counts **exactly** equal hand-run SQL counts of matching rows (the only allowed differences: the 49 kept duplicates and DST-hour key collisions). Every message template above 500 rows/30 d either has a rule or is listed as deliberately ignored. The writer login is verified unable to write outside `insight` |
 | **3. Derive** ✅ 2026-11-04 | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3; all met (§13.5). (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
-| **4. Findings** | rules + open/resolve (proposed changes: §14) | Proposed in §14.4 (replaces: flags SME21859, SME18531, SME21867; false-positive review across the fleet ≤ a handful) |
-| **5. Prod** | (Migrations already applied, §11/§12.) One-off backfill via `cli.js --backfill` off-peak. Deploy the `index.js` hook (no new cron line) via dev → staging → prod, then `git pull` on `vm-debian`. Monitor the run logs | 7 consecutive days of clean runs; watermark advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED=false` and `true` |
+| **4. Findings** ✅ 2026-11-04 | Migration 005, findings registry, open/resolve replay, `cli.js findings` / `verify-findings` (§14) | See §14.4; all met (§14.7) |
+| **5. Prod** | Agreed in §15 (2026-11-04): the `run_ct_insight` stage (extract → derive touched → findings), the `index.js` hook (no new cron line), kill switch, a stage rehearsal, then deploy via dev → staging → prod and `git pull` on `vm-debian`. (The backfill was done in Phase 2 and the catch-up in Phase 4.) | §15.4 (keeps: 7 consecutive days of clean runs; watermarks advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED` off and on) |
 | **6. Viewer** | `sme_reports` CT report, internal | Team reviews fleet + 3 system views |
 | **7. Validate & extend** | FSE review of findings (start with SME21859 rotor), and of tube swaps (§13.3, incl. SME21873 2025-09-02); exam counts sanity-checked with 2–3 sites; threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
 
@@ -1644,3 +1667,304 @@ Ground rules carried over:
 - don't touch parser behaviour (`jobs/`, `acquisition/`, `persist/`,
   `read/`, `redis/`, `index.js`), `alert.*`, `fse_dispatch` or `utils/`.
 - The Phase 5 `index.js` hook isn't part of Phase 4.
+
+### 14.7 Phase 4 build status and results (2026-11-04)
+
+**Code** (all on `dev`):
+- `migrations/005_phase4_findings.sql`: `insight.finding_catalog`, the
+  `findings → finding_catalog` FK, `findings.data_through date NOT NULL`,
+  `api.ge_ct_findings_v` with catalog labels, grants to `insight_writer`.
+- `insight/findings/`:
+  - `rules.js`: the registry, rules 1–10 as 13 finding keys (rule 7 split
+    into `env_plenum`, `env_detector_temp`, `env_humidity`, `env_psu`). Pure
+    `evaluate(ctx, D)`; `tube_replaced` is event-driven. Generates the
+    catalog.
+  - `context.js`: per-system inputs as dense day arrays; `state.js`: the
+    open/resolve fold and replay; `load.js`: inputs (read-only).
+  - `run.js`: reconcile / rehearse / apply; `verify.js` and `verify_sql.js`:
+    the independent SQL; `report.js`: the per-rule review list.
+- `node insight/cli.js findings --rehearse | --apply [--replay] [--system S
+  | --systems A,B] [--report FILE]` and `node insight/cli.js
+  verify-findings`.
+- Tests: `insight/test/findings.test.js` (30), on fixtures from 13 §14.1
+  systems in `insight/rules/__fixtures__/findings/` (built by
+  `insight/tools/build_findings_fixtures.js`; expected findings come from
+  the independent SQL).
+
+**Implementation choices within the §14.2 decisions:**
+- **Evaluated days are data days** (days with any fact) up to `today`.
+  Production can only evaluate a day it has data for, so replay gives what
+  daily runs would. Data on later device days (a clock ahead) is ignored,
+  including boots, shutdowns and service-mode entries.
+- **Every run recomputes from history** (~0.2 s per system) and reconciles
+  the table. `--replay` makes the table exactly the replay. The default run
+  (the Phase 5 path) evaluates only systems with data in the last 7 device
+  days and never changes a resolved finding; a disagreement on any column
+  is reported as drift. Each system's as-of date is kept in
+  `job_state.last_run_stats.as_of_by_system`; `verify-findings` checks each
+  system at its own date.
+- **Times:** `opened_at` / `resolved_at` = the instant of the device day's
+  local midnight (offsets are whole hours on every system). Every finding
+  opens and resolves on a data day. `last_evaluated` = newest fact on
+  `data_through`. Nothing depends on the run's clock, so runs are
+  idempotent.
+- **Quiet period:** 14 evaluated days, 7 for `process_restart_loop`.
+- **Rule readings:**
+  - rule 1: weeks are rolling 7-day blocks ending at D; the 8-week median
+    uses prior weeks with data and needs ≥ 4 of them;
+  - rule 3: integer threshold comparisons; no spike without baseline exams;
+  - rule 4: ±30 min of a boot or shutdown; safe states without a code are
+    excluded;
+  - rule 5: only `Fast Calibration` and `Cold Tube Warmup (Fast
+    Calibration)` (not `GSI Fast Calibration`, 2 systems);
+  - rule 6: opens on the first data day on or after the install date;
+    resolves on the first data day ≥ install + 30, or at the next
+    replacement (SME21873, 19 days);
+  - rule 8: no minimum scan days;
+  - rule 9: service mode `enter` in [boot − 12 h, boot).
+- Categories: `powered_off_without_shutdown` and `air_calibration_overdue`
+  are `compliance`.
+- No raw log text in evidence: codes and counts only.
+
+**Tuning from the replay evidence** (user approved the recommendations
+2026-11-04; still `rule_version` 1, nothing had been written):
+- **`abort_rate_high`:** the count is abort log lines, and one exam can
+  carry hundreds (SME21851: 322 lines in one exam in 43 min; 12 spikes
+  rested on 3–9 lines). An exam-based rate was ruled out: SME21867 peaks
+  at 10.1% of exams, so it would lose its agreed chronic finding. Change: a
+  spike needs ≥ 10 abort lines, and both variants need aborts on ≥ 2 days
+  of the window. 38 → 24 findings; SME21867 still chronic.
+- **`safe_state_recurrent`:** 7 of 19 opened on a single incident logged
+  as 3–34 lines within minutes. Change: count incidents (the same code
+  again within 30 min of its previous event is the same incident). 19 →
+  11.
+
+**Rehearsal** (one transaction, rolled back) before the apply: pass 1
+(replay) 112 findings; pass 2 changed nothing; a default run after the
+replay changed nothing, 0 drift; incremental consistency (replay as of
+10-07, then default runs a week apart to 11-04) ended identical to the full
+replay, 0 drift; `verify-findings` PASS inside the transaction.
+
+**Replayed list** (as of 2026-11-04; 112 findings, 29 open):
+
+| Finding | Findings (open) | Severity |
+|---|---|---|
+| `tube_rotor_instability` | 4 (1) | 1 high (SME21859), 3 medium spikes (SME01430, SME18536 ×2) |
+| `process_restart_loop` | 1 (0) | medium (SME18531) |
+| `abort_rate_high` | 24 (4) | medium |
+| `safe_state_recurrent` | 11 (0) | medium, all Emergency Off (260112009) |
+| `env_plenum` / `env_humidity` / `env_psu` / `env_detector_temp` | 10 (5) / 3 (1) / 1 (1) / 2 (1) | medium |
+| `prep_noncompliance` | 6 (3) | low (SME21855, SME01429, SME16618 open) |
+| `tube_replaced` | 8 (0) | 7 info, 1 low (SME21873 `counter_only`) |
+| `warmup_bypass_habit` | 16 (10) | low, 12 systems |
+| `powered_off_without_shutdown` | 16 (0) | low, mostly SME01429/30/31 |
+| `air_calibration_overdue` | 10 (3) | low |
+
+**Evidence review of the 53 medium/high findings outside the three named
+ones** (§14.3 Q5): each is explained by the codes and series in its
+evidence.
+- Environment (16): ≥ 3 out-of-range days in 7. Chronic and open: SME20608
+  plenum + PSU (187 trip days), SME01430 plenum (186), SME18531 plenum
+  (145). Episodic: SME18531 humidity, SME01431, SME14521, SME14522 (open
+  until they stopped sending 08-03), SME16618 (tube install day), detector
+  temperature on SME00881 and SME21851.
+- Rotor spikes (3): 5–9 stops a week against a median of 0–1.
+- Aborts (23): 6 around a tube replacement (SME15218 ×2, SME16618,
+  SME21864, SME21873 ×2: the §14.1 pre-replacement pattern); 9 dominated
+  by one code; 7 recurring low-level codes 260118236 / 260118238; SME21859
+  chronic at its data start.
+- Safe state (11): Emergency Off pressed in ≥ 3 separate incidents. 10 of
+  the 11 had service mode entered in the 7 days before, 4 at a tube
+  install. **For Phase 7:** ask field service whether E-off during service
+  work should be excluded.
+
+**Codex reviews**, all fixed:
+- `REVIEW-PHASE4-RULES-CODEX.md`: **F1** raw safe-state message text in
+  customer-visible evidence (now codes only); **F2** later boots /
+  shutdowns could change an as-of result (now cut at the as-of day, JS and
+  SQL); **F3** the SQL dropped a replacement whose install day had no data
+  (now both open on the first data day on or after it).
+- `REVIEW-PHASE4-RUN-VERIFY-CODEX.md`: **F1** safe states without a code
+  were grouped as one code (now excluded); **F2** `verify-findings` used
+  the last fleet date after a `--systems` apply (now per-system as-of
+  dates); **F3** `--report` could omit stale systems (now requires
+  `--replay` and states its scope).
+- Also fixed before the second review: the drift check compared only
+  status and evidence; it now compares every stored column.
+
+**Notes:**
+- `insight_writer` can't read the `api` schema (by design); check the
+  views with another login.
+- **Phase 5:** after derive, run the default findings path for the touched
+  systems; once a day, all systems (`findings --apply` without `--replay`).
+- **Phase 7:** field service to confirm, starting with SME21859's rotor and
+  the chronic environment cases; plus the E-off-during-service question and
+  whether the abort spike/day minimums are right.
+
+## 15. Phase 5 re-evaluation (2026-11-04, after Phase 4)
+
+**AGREED with the user 2026-11-04:** the §15.2 design, the recommended
+answer to every §15.3 question, the §15.4 exit criteria and the §15.5
+build order. Phase 5 puts the pipeline into the `ge_ct` run.
+Phases 2–4 built every step as a manual CLI command; this section records
+what the stage needs on top, from the code and from prod (read-only).
+
+### 15.1 Evidence
+
+**Run cadence** (capture times, 2026-11-04): `ge_ct` runs every 30 min
+(:18 and :48 UTC). A run brings 210–420 gesys rows from 14–20 systems:
+about 12k rows a day, as §2 assumed (350k/month).
+
+**Measured costs** (Phases 3–4, against prod):
+
+| Step | Measured |
+|---|---|
+| extract | 4,102 rows in 0.8 s (one batch) |
+| derive, full rebuild | 27–31 s for 34 systems: too slow for every run |
+| derive, touched days | 11.8 s for the last 150k gesys ids (28 systems, 444 days); a 30-min run touches ~20 systems × 1–2 days |
+| findings, all systems | 7–9 s (about 0.2–0.3 s per system, mostly loading) |
+
+**What exists:**
+- `run_extract` (`load.js`): apply resumes from the `ge_ct_extract`
+  watermark, one transaction per 50k batch.
+- `run_derive` (`derive/run.js`): apply rebuilds **whole systems** only.
+  The touched path (`touched_from_source_range`, a scope with days, the
+  full-rebuild promotion when a fact is > 14 h off its device clock) is
+  built and proved identical to a full rebuild, but is only used by the
+  rehearsal's pass 3.
+- `run_findings` (`findings/run.js`): the default mode is the Phase 5
+  path (fresh systems, resolved history kept, per-system as-of dates).
+- Each of the three takes and releases the shared advisory lock itself.
+
+**What doesn't exist:**
+- `insight/index.js` / `run_ct_insight`, the `index.js` hook, the
+  `INSIGHT_ENABLED` switch.
+- **The §6 late-commit re-read.** Extract reads `id > watermark` only. If a
+  `ge_ct` run overlaps another (e.g. one hangs), rows the other run inserted
+  with lower ids but committed later are skipped for good. Derive's touched
+  scope is a source-id range too, so a re-read alone wouldn't mark their
+  days as touched.
+- A per-run ceiling on the stage's own work (only the per-batch "≤ 3 facts
+  per row" runaway guard exists).
+- The unmatched-template digest (§6 step 5).
+
+**Data since the last catch-up** (watermark 18547636) accumulates until
+the stage is live, about 12k rows a day.
+
+### 15.2 Design (agreed)
+
+1. **`insight/index.js` `run_ct_insight(run_log)`**, called from
+   `on_boot()` after the system loop, for `GE_CT` only, inside its own
+   try/catch: it logs to `run_log` and never fails the `ge_ct` run.
+   - Off unless `INSIGHT_ENABLED=true`.
+   - Connects as `insight_writer` (own pool, closed at the end).
+   - Preflight: schema version ≥ 5, the writer role; otherwise log and
+     skip.
+   - **One advisory lock held for the whole stage.** The three run
+     functions get lock-free cores; the CLI keeps its current behaviour.
+     If the lock is held (a manual CLI run), the stage skips and the next
+     run catches up.
+2. **Steps, each catching up from its own watermark** (self-healing: a
+   failed or skipped step is redone by the next run):
+   1. extract from `ge_ct_extract` (at most one 50k batch per run, Q5);
+   2. derive the touched days since `ge_ct_derive`, one transaction per
+      system, then the clock; advance `ge_ct_derive`;
+   3. findings, default mode, for the systems derive touched; once a day
+      (Q3) all systems, which also writes the fleet row of
+      `ge_ct_findings`.
+
+   A step runs only if the one before it succeeded. Each step's counts and
+   ms go to `run_log`.
+3. **Late commits (Q2):** re-read rows with `id ≤ watermark` and
+   `capture_datetime` ≥ the watermark's capture time − 2 h that produced
+   no facts. Take derive's touched days from the facts each upsert actually
+   inserted (`RETURNING`), recorded in `job_state ge_ct_derive` stats until
+   derive has covered them, not from the source-id range alone.
+4. **A stage rehearsal before deploy:** `cli.js stage --rehearse` runs the
+   whole stage on the current pending range in one rolled-back
+   transaction. It reports per-step time and proves that derive touched =
+   full rebuild and findings default = replay (as the Phase 3–4
+   rehearsals did). This is the evidence for "seconds, not minutes".
+5. **Deploy:** dev → staging → prod (fast-forward), the user pulls on
+   `vm-debian`. Deploy first with `INSIGHT_ENABLED` unset and confirm
+   ingest is unchanged. Then set `INSIGHT_ENABLED=true` in
+   `/home/prod/hhm_rpp_ge/.env` (the writer credentials are already
+   there). The first live runs catch up the backlog one batch at a time.
+6. **Monitoring for the 7 days:** the run-log events per step; once a day,
+   `verify`, `verify-derive` and `verify-findings` by hand.
+   `verify-derive`'s §13.1 list fails on a new tube replacement (review and
+   update it, §13.5), and its clock flags may move.
+
+### 15.3 Questions and answers (agreed 2026-11-04: the recommendation in each)
+
+1. **Kill switch default: AGREED, off unless `INSIGHT_ENABLED=true`**, so deploying the code changes nothing until it's
+   switched on.
+2. **Late commits: AGREED, build the re-read** as in §15.2 item 3 (≤ 2 h
+   of rows, ~1k, mostly no-ops). Not chosen: accepting the risk because
+   runs rarely overlap.
+3. **Daily all-systems findings pass: AGREED, the first run whose UTC
+   date differs from the last fleet run's `today`** (no new cron line).
+4. **Unmatched-template digest: AGREED, deferred to Phase 7.** The
+   Phase 2 coverage criterion was met, and `cli.js dry-run` prints the
+   same report on demand.
+5. **Per-run ceiling: AGREED, at most one 50k-row extract batch per run**,
+   so a backlog is caught up over several runs instead of one long one.
+   Not chosen: a hard skip above N rows plus a manual CLI catch-up.
+
+### 15.4 Exit criteria (agreed)
+
+- The stage rehearsal (§15.2 item 4) passes; a typical 30-min run adds
+  seconds to `ge_ct`, measured.
+- 7 consecutive days of clean runs; all three watermarks advance and stay
+  equal at the end of each run.
+- `verify`, `verify-derive` and `verify-findings` pass at the end (any
+  `verify-derive` failure is a reviewed new tube replacement or clock
+  flag).
+- Default findings runs report 0 drift.
+- Ingest is unaffected with `INSIGHT_ENABLED` off and on (`log.ge_ct_gesys`
+  inserts, Redis, `offline_hhm_conn`, `extract_tube_usage` unchanged).
+
+### 15.5 Build order (agreed)
+
+1. Lock-free cores for extract, derive and findings (CLI unchanged);
+   derive's touched-scope apply path.
+2. The late-commit re-read and the inserted-keys touched scope (if Q2 is
+   agreed).
+3. `insight/index.js` (stage, switch, daily trigger, ceiling) and `cli.js
+   stage --rehearse`; tests.
+4. Stage rehearsal against prod; Codex review.
+5. The `index.js` hook (the only change outside `insight/`); review.
+6. Deploy off, check ingest, switch on, monitor 7 days.
+
+Checkpoints for the user's go-ahead: after step 1–3's tests and review,
+after the stage rehearsal (step 4), before the `index.js` hook (step 5),
+and before each deploy action (step 6). The user promotes branches and
+pulls on `vm-debian` only when they say so.
+
+### 15.6 Handoff: where the Phase 5 implementation starts
+
+State at 2026-11-04 16:10 UTC:
+- **Phases 1–4 are done** (§14.7). Prod: 2,166,335 per-row facts + 3,407
+  derived; derived tables filled; 112 findings (29 open), 13 catalog rows.
+  Watermarks `ge_ct_extract` = `ge_ct_derive` = `ge_ct_findings` =
+  18547636. Migrations 001–005 applied.
+- **New gesys rows accumulate** after 18547636 (~12k a day) until the stage
+  is live; the first live runs catch up one batch at a time (Q5), or a
+  manual `backfill` → `derive` → `findings` catch-up can be run first.
+- **Branch:** `dev`, not pushed since `4fe02b1` (Phase 4 commits
+  `4d8a345`, `3420fcf`, `63377f7` and the plan update are local).
+  `staging` / `prod` untouched.
+
+Start with §15.5 step 1. Reuse the Phase 3–4 patterns: pure cores with
+tests; rehearse (rolled back) → apply → verify; a Codex review handoff per
+step; ask before committing; push or promote only when the user asks.
+
+Ground rules carried over:
+- prod DB only, through the §10 guards; ad-hoc queries read-only;
+- writes only as `insight_writer`; schema only through `migrations/run.js`
+  (the user applies migrations); none is expected for Phase 5;
+- `index.js` gets only the hook (§15.5 step 5); don't change parser
+  behaviour (`jobs/`, `acquisition/`, `persist/`, `read/`, `redis/`),
+  `alert.*`, `fse_dispatch` or `utils/`;
+- `/home/prod/hhm_rpp_ge` is the production checkout: don't touch it; the
+  user edits its `.env` and pulls.

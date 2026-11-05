@@ -521,7 +521,7 @@ external scrub handles that.
 | **3. Derive** ✅ 2026-11-04 | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3; all met (§13.5). (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
 | **4. Findings** ✅ 2026-11-04 | Migration 005, findings registry, open/resolve replay, `cli.js findings` / `verify-findings` (§14) | See §14.4; all met (§14.7) |
 | **5. Prod** | Agreed in §15 (2026-11-04): the `run_ct_insight` stage (extract → derive touched → findings), the `index.js` hook (no new cron line), kill switch, a stage rehearsal, then deploy via dev → staging → prod and `git pull` on `vm-debian`. (The backfill was done in Phase 2 and the catch-up in Phase 4.) | §15.4 (keeps: 7 consecutive days of clean runs; watermarks advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED` off and on) |
-| **6. Viewer** | `sme_reports` CT report, internal | Team reviews fleet + 3 system views |
+| **6. Viewer** | `sme_reports` CT report, internal. Agreed in §16 (2026-11-05; Q6 review set open) | §16.4 (agreed): verified numbers, checks, team review |
 | **7. Validate & extend** | FSE review of findings (start with SME21859 rotor), and of tube swaps (§13.3, incl. SME21873 2025-09-02); exam counts sanity-checked with 2–3 sites; threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
 
 ---
@@ -1968,3 +1968,325 @@ Ground rules carried over:
   `alert.*`, `fse_dispatch` or `utils/`;
 - `/home/prod/hhm_rpp_ge` is the production checkout: don't touch it; the
   user edits its `.env` and pulls.
+
+---
+
+## 16. Phase 6 re-evaluation (2026-11-05, during Phase 5 monitoring)
+
+**AGREED with the user 2026-11-05:** the §16.2 design, the recommended
+answer to §16.3 Q1–Q5, the §16.4 exit criteria and the §16.5 build order.
+**Q6 (the review set) is open:** the user isn't sure yet. Phase 6
+builds the internal viewer from §7. This section records what the
+`api` views and `sme_reports` actually offer, both read-only, on
+2026-11-05. It also records where that changes §7. Phase 6 only reads
+from prod, and it doesn't touch the `hhm_rpp_ge` pipeline. It can
+therefore run during the Phase 5 monitoring window.
+
+### 16.1 Evidence
+
+**What the contract holds.** The five `api.ge_ct_*` views exist and are
+current: migrations 004 and 005 rebuilt them for the new columns.
+
+| View | Rows | Systems | Notes |
+|---|---|---|---|
+| `ge_ct_daily_v` | 105,064 | 34 | 2025-05-06 to 2026-11-05. The last 180 days are 88.5k rows (32 MB as JSON). `error.ermes` has 451 distinct codes |
+| `ge_ct_exams_v` | 42,095 | 34 | The last 180 days are 37.6k rows (9.6 MB as JSON) |
+| `ge_ct_tube_v` | 42 | 34 | |
+| `ge_ct_findings_v` | 113 | 27 | `evidence` is 102 kB in total, 1.6 kB at most for one finding. No raw log text (review PHASE4-RULES F1) |
+| `ge_ct_system_summary_v` | 34 | 34 | |
+
+**What §7 asks for that the views can't give:**
+1. **Identity.** The views carry only `system_id`. Model, site and
+   customer come from `public.systems` → `sites` → `customers`, as in
+   `sme_reports/sql/get-system-identity.sql`. All 34 systems resolve (GE,
+   CT): Intelas 27, Lee Health 4, Piedmont HealthCare 3.
+2. **Local time of day.** `ge_ct_exams_v` has `started_at` (an instant)
+   and `local_day`, but nothing that gives the device's local hour. Local
+   midnight per device day exists only in the facts (findings
+   `DAYS_SQL`), and the busy-hour heatmap needs it. A fleet-wide
+   aggregate over the facts takes 0.4–0.6 s (5,057 system-days, 4
+   distinct clock offsets).
+3. **Capabilities.** The difference between "this model doesn't log it"
+   and "zero events" (§3) lives only in `insight.system_capabilities`.
+   Coverage is very uneven:
+   - `env.plenum_temp`: 9 systems;
+   - rotor metrics: 3–13 systems;
+   - humidity and PSU: 1 system each;
+   - `exam.start`, `tube.mas_total`, `system.boot`: all 34.
+
+**Data that changes the §7 fleet view:**
+- **Systems not reporting.** 6 of the 34 have had no data for more than 7
+  device days:
+  - SME00875, since 05-28;
+  - SME00881 and SME00882, since 06-09;
+  - SME14521 and SME14522, since 08-03;
+  - SME17371, since 09-21.
+
+  They still hold open findings, frozen by design (§14.2: they are no
+  longer evaluated). Sorted by attention, they would top the list.
+- **Tubes that predate the data.** For a current tube whose
+  `install_confidence` is `initial`, the install date is null and
+  `current_tube_mas` counts only from the start of our data. "Tube age"
+  (§7) must say "since data start".
+- **`tube_replaced` findings** stay open as info/low for 30 days after a
+  replacement. They are news, not a problem, and shouldn't drive
+  attention.
+- **Clock flags** are in `system_summary_v.clock_flag` (for example
+  SME20608 `jumps`, SME20594 ahead).
+- **88 GE CT systems in `public.systems`** have no gesys data in
+  `insight`.
+
+**`sme_reports` today** (reports repo `~/hep3/reports`, branch `DEV` at
+`2e060cb`):
+- **One-file app.** The System Activity app (`incident/system_app.js`)
+  is a dashboard plus per-system views held as inert templates/JSON, each
+  opened on click. Measured dashboard load: 0.9 s for 25 systems, 3.1 s
+  for 108.
+- **One-off runner** (`oneoff/`, `npm run report:*`). It writes to
+  `sme_reports/out/` and sends email only when asked.
+- **Internal/external marking** exists. But `incident/scrub.js` only
+  removes Avante users from notification rows. **It does not cover CT
+  raw material** (exam numbers, protocol names, source ids), contrary to
+  §7. A customer-facing CT view needs its own scrub.
+- **DB access** is the shared `utils/db/pg-pool` as `avantehs_admin`,
+  read-write, with no read-only mode.
+- **Work in progress:** 44 uncommitted paths on `DEV` (2026-11-04/05).
+  They include the integration points a new report would normally touch:
+  - `oneoff/{cli,config,args}.js` and `oneoff/jobs.config.json`;
+  - `render/*`;
+  - `incident/system_page.js`;
+  - `index.js`, `periods.js`.
+
+  `package.json` is not among them.
+- **Checks:** Node 16, as on this box; headless Chromium checks
+  (`dev/shoot.js`, `dev/check_system_pages.js`).
+
+### 16.2 Design (agreed)
+
+1. **One self-contained HTML file: "GE CT Insights — Internal".**
+   - Built on demand with `npm run report:ct` (a script in the reports
+     repo's `package.json`). It writes
+     `sme_reports/out/Avante-GE-CT-Insights-Internal-<date>.html`.
+   - It uses the System Activity app pattern: a dashboard, per-system
+     views as inert JSON, and a way back to the list. Avante brand bar.
+   - "Internal" appears in the title, header and file name.
+   - Deterministic for a given as-of date.
+   - Not emailed unless `--email` is passed, with recipients given on
+     the command line. Not scheduled.
+2. **New `sme_reports/ct/` directory** with its own CLI, data, model,
+   render and client modules. It edits no in-progress file; the only
+   shared change is one script line in `package.json`. It imports, and
+   doesn't copy, the brand assets (`render/assets/`) and the HTML escape
+   helper; `dev/check_ct.js` catches an import that a WIP change breaks.
+   The CLI joins `oneoff/` later (Phase 7).
+3. **Reads:**
+   - the `api.ge_ct_*` views;
+   - identity from `public.systems` / `sites` / `customers`;
+   - the two migration 006 views (Q1).
+
+   The builder uses its own connection with
+   `default_transaction_read_only=on` (same credentials), so it can't
+   write.
+4. **The builder aggregates; the page only renders.**
+   - Per-system compact daily series per metric.
+   - Error codes as the top 10 plus "other".
+   - Exams reduced to day-of-week × local-hour counts.
+
+   The whole history is embedded, with a period selector (30d / 90d /
+   6mo / all; default 90d, Q4). Budget: a file of 10 MB or less, and a
+   dashboard ready in 2 s or less on the DEV VM.
+5. **Fleet view.**
+   - **Two groups.** *Reporting* means data in the last 7 device days,
+     the window findings uses. *Not reporting* shows the last data date,
+     and its findings are labelled "as of <date>" (Q5).
+   - **Columns:**
+     - system, model, customer / site;
+     - last data;
+     - exams/day;
+     - mA·s/day;
+     - current tube: mA·s since install, or "since data start <date>"
+       for a tube that predates the data;
+     - abort rate per 100 exams (28 d);
+     - prep: share of scan days without Fast Cal (14 d);
+     - open findings by severity;
+     - clock flag.
+   - **The same definitions as the rules.** Abort rate and prep take the
+     `abort_rate_high` and `prep_noncompliance` computations (§14.2), so
+     a column never contradicts a finding. Exams/day = exams per data day
+     over the 30 device days ending on the system's last data day.
+   - **Order:** highest open severity, ignoring `info`; then the number
+     of open findings; then exams/day. The Not reporting group comes
+     below.
+   - **Footer:** "88 GE CT systems in inventory have no log data", with
+     the list collapsed.
+6. **System view.** A panel appears only when the system logs its metric
+   (from capabilities):
+   - **Header:** identity, last data, clock flag, current tube.
+   - **Findings:** open first, then resolved. Each shows its evidence in
+     readable form (thresholds, observed vs baseline, windows, top
+     codes). The raw evidence JSON sits behind a toggle.
+   - **Tube:** the mA·s counter over all history, with replacement
+     markers and their confidence; mA·s/day.
+   - **Utilization:** exams/day, series and images per exam, and a
+     busy-hour heatmap (day of week × local hour).
+   - **Reliability:**
+     - aborts per 100 exams (operator / system);
+     - errors by ermes code (top 10 plus other);
+     - safe states;
+     - boots (clean / unclean) and process restarts.
+   - **Compliance:** a prep calendar (Fast Cal / tube warm), warm-ups
+     skipped, scans in the warm-up zone, air calibration overdue, dose
+     display disabled.
+   - **Environment:** plenum and detector temperature, humidity, PSU.
+   - **Rotor:** SGB slope and unexpected stops.
+7. **Internal only in Phase 6.** The customer version moves to Phase 7,
+   with delivery and scheduling. It needs a CT scrub (exam numbers,
+   protocol names, any ids) and the `customer_visible` filter.
+
+### 16.3 Questions and answers (2026-11-05)
+
+1. **Contract gaps: AGREED, migration 006, views only.**
+   - `api.ge_ct_days_v`: system, device day, the local-midnight instant,
+     first and last fact time.
+   - `api.ge_ct_capabilities_v`: system, metric, first/last seen, n,
+     catalog labels.
+
+   It adds no table, no grant, and nothing the stage reads. The user
+   applies it through the §10 runner, like 001–005. The frontend will
+   need both views too.
+
+   Not chosen:
+   - the viewer reads `insight.*` directly (bypasses the contract);
+   - drop the heatmap and infer capabilities from `ge_ct_daily_v` rows.
+2. **Where to build, given the in-progress reports work: AGREED,
+   `sme_reports/ct/` plus one `package.json` line, committed on reports
+   `DEV` with only those paths staged.** Join `oneoff/` once the WIP
+   lands.
+
+   Not chosen: wait for the WIP to be committed first.
+3. **Delivery: AGREED, an on-demand file, no email, no schedule in
+   Phase 6.** The user shares the file with the team.
+
+   Not chosen: an internal email job now.
+4. **Period: AGREED, embed the whole history, with a 30d / 90d / 6mo /
+   all selector, default 90d.**
+
+   Not chosen: a fixed 30 days like the magnet reports. It's too short
+   for tube wear and the 28-day rules.
+5. **Systems not reporting: AGREED, a separate group below the
+   reporting systems, with findings shown as of their last data.**
+
+   Not chosen: mixed into the attention order, or hidden.
+6. **Review set: OPEN (the user doesn't know yet, 2026-11-05).** The
+   recommendation stands: the fleet view plus SME21859 (rotor, high),
+   SME18531 (restart loop) and SME21867 (chronic aborts). These are the
+   §14.4 named problems, with known expected findings.
+
+   Until the user decides, those three are only the **verification set**
+   for `ct/verify.js` (§16.4), and a flag can change them. Who reviews,
+   and which systems, is asked again at §16.5 step 6. Nothing before
+   that depends on it.
+
+   Not chosen: three systems picked by customer.
+
+### 16.4 Exit criteria (agreed)
+
+- **`dev/check_ct.js`** (no DB; the page is built from fixtures):
+  - the build is deterministic;
+  - headless Chromium reports zero page errors;
+  - nothing scrolls sideways at 390 px, on the dashboard or any system
+    view;
+  - "Internal" appears in the title, header and file name;
+  - panels are hidden where the capability is absent.
+- **A real build** is 10 MB or less. The dashboard is ready in 2 s or
+  less, and the largest system view in 2 s or less, on the DEV VM.
+- **Numbers are verified, not eyeballed.** A read-only `ct/verify.js`
+  recomputes, with independent SQL:
+  - every fleet column for all 34 systems;
+  - every panel total for the 3 verification systems (Q6).
+
+  There are zero differences. The abort-rate and prep columns equal the
+  rule's values on the days a finding trips.
+- **Migration 006** (if agreed) passes the runner's pre-checks, dry run
+  and roundtrip, and is applied by the user.
+- **Team review** of the fleet view and the systems chosen at Q6, with
+  feedback recorded here. Feedback on scanner behaviour goes to the Phase 7
+  field-service list rather than blocking Phase 6.
+
+### 16.5 Build order (agreed)
+
+1. Migration 006 and its tests; dry run and roundtrip; the user applies
+   it (if Q1 is agreed).
+2. `ct/data.js` (read-only queries) and `ct/model.js` (pure: fleet rows,
+   series, heatmap), with tests on fixtures taken from prod.
+3. `ct/verify.js` (independent SQL), run against prod read-only.
+4. Render and client (fleet, system view, panels), and
+   `dev/check_ct.js`.
+5. A real build; measure size and timing; Codex review handoff.
+6. Settle Q6, team review, then fixes, then a plan status update.
+
+**Checkpoints for the user's go-ahead:**
+- agreement on this section;
+- before migration 006 is applied;
+- after step 3 (numbers verified);
+- after the step 5 review;
+- before any commit, in either repo.
+
+### 16.6 Effect on Phase 7
+
+Phase 7 gains:
+- the customer version (a CT scrub plus `customer_visible`);
+- delivery and scheduling (a one-off email job, or the planned
+  `alert.sme_reports` table);
+- joining `oneoff/` after the reports WIP lands.
+
+The frontend handoff note also covers the 006 views.
+
+Ground rules carried over:
+- During Phase 5 monitoring, don't change the `hhm_rpp_ge` pipeline
+  (`insight/` stage code, `index.js`).
+- Read-only DB, apart from migration 006, which the user applies.
+- Don't edit the in-progress files in the reports repo.
+- `/home/prod/hhm_rpp_ge` stays untouched.
+
+### 16.7 Handoff: where the Phase 6 implementation starts
+
+State at 2026-11-05 ~15:30 UTC:
+- **Phase 5 is in its monitoring window.** The 7 clean days end
+  2026-11-11 19:48 UTC. The 0-drift window restarted at the deploy of
+  `b09674e` (2026-11-05 13:00 UTC), so it ends 2026-11-12 13:00 UTC.
+  Phase 6 must not change the pipeline (`insight/` stage code,
+  `index.js`) during the window.
+- **Prod:** migrations 001–005 applied; 34 systems, 113 findings. The
+  stage runs every 30 min (:18/:48 UTC) and holds the advisory lock while
+  it runs. Viewer reads don't take that lock.
+- **hhm_rpp_ge:** branch `dev`. `b09674e` is pushed; this plan update is
+  committed locally.
+- **reports repo** (`~/hep3/reports`): branch `DEV` at `2e060cb`, with 44
+  uncommitted in-progress paths (§16.1). Never stage, edit or revert
+  them. Stage only `sme_reports/ct/**`, `sme_reports/dev/check_ct.js` and
+  the `package.json` script line.
+
+Start with §16.5 step 1, migration 006:
+- `migrations/006_*.sql` and its `.down.sql`, in the style of 004/005;
+- view definitions only, built on the same day definition as findings
+  `DAYS_SQL`;
+- run `migrations/run.js scan`, then dry run and roundtrip. The user
+  applies it.
+
+Then steps 2–6. Reuse the Phase 3–5 patterns:
+- pure cores with tests;
+- read-only probes against prod;
+- independent-SQL verification;
+- a Codex review handoff (`REVIEW-PHASE6-*-HANDOFF.md`) per step;
+- ask before every commit; push or promote only when the user asks.
+
+Ground rules carried over:
+- prod DB only, and read-only, apart from migration 006, which the user
+  applies with the §10 runner;
+- the viewer reads as `avantehs_admin` on its own connection with
+  `default_transaction_read_only=on`;
+- don't open or print any `.env`;
+- don't touch `/home/prod/hhm_rpp_ge`, `alert.*` or `fse_dispatch`;
+- don't ask the user to judge scanner behaviour. Reviews are evidence
+  with a recommendation; field service confirms in Phase 7.

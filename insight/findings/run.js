@@ -12,8 +12,11 @@
 //   default  : the Phase 5 path. Only systems with data in the last 7
 //              device days are evaluated (others keep their state, §14.2
 //              item 1); open findings are updated or removed, new ones
-//              inserted, but a stored RESOLVED finding is never changed or
-//              deleted. A difference there is reported as drift.
+//              inserted. A stored RESOLVED finding whose resolve day is
+//              still inside that 7-device-day window is treated like an
+//              open one (its day may still be filling up: see
+//              resolved_final); an older one is never changed or deleted,
+//              and a difference there is reported as drift.
 // An update happens only when a column differs, so a re-run changes nothing.
 //
 //   rehearse: ONE transaction, rolled back: pass 1 (the chosen mode); pass 2
@@ -116,6 +119,40 @@ async function all_systems(t) {
   return (await t.any("SELECT DISTINCT system_id FROM insight.ge_ct_daily ORDER BY 1")).map((r) => r.system_id);
 }
 
+// A stored resolved finding is final (default mode never changes it) once
+// its resolve day (data_through) has left the system's evaluation window:
+// it is STALE_DAYS or more device days older than the newest data day.
+// Until then that day may still be filling up: a finding can resolve on the
+// first facts of a device day, after which later facts move last_evaluated
+// (= newest fact of data_through) or trip the rule again, so the replay
+// keeps it open; a backlog after an outage or a late commit can do the same
+// a few days later. (Monitoring 2026-11-05: SME01430 abort_rate_high
+// resolved on a partly filled day and drifted on every later run.)
+const resolved_final = (s, last_day) => s.status === "resolved" && dnum(s.data_through) <= dnum(last_day) - STALE_DAYS;
+
+// Pure reconcile decision for one system: stored rows (from STORED_SQL) and
+// the replay's rows, both Maps keyed by keyOf. replay: everything follows
+// the replay. Default: open rows and resolved rows that aren't final follow
+// the replay; final resolved rows are kept, a difference is drift.
+function reconcile(system_id, stored, want, { replay, last_day }) {
+  const frozen = (s) => !replay && resolved_final(s, last_day);
+  const del = [], ups = [], drift = [];
+  for (const [k, s] of stored) {
+    if (want.has(k)) continue;
+    if (frozen(s)) drift.push(`${system_id} ${k}: resolved finding no longer produced (kept)`);
+    else del.push(s);
+  }
+  for (const [k, r] of want) {
+    const s = stored.get(k);
+    if (s && frozen(s)) {
+      if (row_canon(r) !== row_canon(s)) drift.push(`${system_id} ${k}: resolved finding differs from the replay (kept)`);
+      continue;
+    }
+    ups.push(r);
+  }
+  return { del, ups, drift };
+}
+
 // One system: compute, then reconcile its rows. Returns counts and the rows.
 async function findings_system(t, system_id, { today, replay }) {
   const ctx = build_context(await load_inputs(t, system_id), today);
@@ -128,21 +165,8 @@ async function findings_system(t, system_id, { today, replay }) {
   const stored = new Map((await t.any(STORED_SQL, [system_id])).map((r) => [keyOf(r), r]));
   const want = new Map(rows.map((r) => [keyOf(r), r]));
 
-  const del = [];
-  for (const [k, s] of stored) {
-    if (want.has(k)) continue;
-    if (replay || s.status === "open") del.push(s);
-    else out.drift.push(`${system_id} ${k}: resolved finding no longer produced (kept)`);
-  }
-  const ups = [];
-  for (const [k, r] of want) {
-    const s = stored.get(k);
-    if (!replay && s && s.status === "resolved") {
-      if (row_canon(r) !== row_canon(s)) out.drift.push(`${system_id} ${k}: resolved finding differs from the replay (kept)`);
-      continue;
-    }
-    ups.push(r);
-  }
+  const { del, ups, drift } = reconcile(system_id, stored, want, { replay, last_day: last });
+  out.drift = drift;
   for (const s of del) {
     await t.none("DELETE FROM insight.findings WHERE system_id = $1 AND finding_key = $2 AND opened_at = $3", [system_id, s.finding_key, s.opened_at]);
     out.deleted++;
@@ -326,6 +350,6 @@ async function run_findings(db, { mode, replay = false, systems = null, today, r
 }
 
 module.exports = {
-  run_findings, findings_apply_core, findings_step, findings_system, all_systems, sync_catalog, read_as_of, totals,
+  run_findings, findings_apply_core, findings_step, findings_system, all_systems, sync_catalog, read_as_of, totals, reconcile, resolved_final,
   JOB, COUNTS_SQL, FINGERPRINT_SQL, UPSERT_SUFFIX, WRITE_JOB_SQL, canon, row_canon,
 };

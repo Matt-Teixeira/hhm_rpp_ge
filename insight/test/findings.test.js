@@ -390,6 +390,64 @@ test("drift comparison covers every stored column, not only evidence", () => {
   assert.notStrictEqual(row_canon({ ...stored, data_through: "2000-01-01" }), row_canon(r));
 });
 
+test("a finding resolved on a partly filled day follows the replay until its day leaves the 7-day window (monitoring 2026-11-05)", () => {
+  const { reconcile, resolved_final } = require("../findings/run");
+  // air overdue trips on day 2, resolves on day 36 (see the data-days test above)
+  const cells = [0, 1, 2].map((i) => [day(i), "calibration.air_overdue", "", 1]);
+  const skip = []; for (let i = 3; i < 23; i++) skip.push(day(i));
+  const at = (n, last_at) => {
+    const inp = sys({ n, skip, cells });
+    if (last_at) inp.days.find((d) => d.day === day(36)).last_at = `${day(36)}T${last_at}:00.000Z`;
+    return replay_system(build_context(inp, day(n - 1))).filter((r) => r.finding_key === "air_calibration_overdue");
+  };
+  const key = (r) => `${r.finding_key}|${new Date(r.opened_at).toISOString()}`;
+  // as read back from the database (STORED_SQL)
+  const asStored = (r) => ({ ...r, opened_at: new Date(r.opened_at), window_start: new Date(r.window_start), window_end: new Date(r.window_end),
+    last_evaluated: new Date(r.last_evaluated), resolved_at: r.resolved_at && new Date(r.resolved_at) });
+  const M = (rows, f = (x) => x) => new Map(rows.map((r) => [key(r), f(r)]));
+
+  // the 05:48-style run: day 36 has only its first facts, and the finding resolves on it
+  const partial = at(37, "06:00");
+  assert.strictEqual(partial.length, 1);
+  assert.strictEqual(partial[0].status, "resolved");
+  assert.strictEqual(partial[0].data_through, day(36));
+  const stored = M(partial, asStored);
+
+  // later the same day, and the next days while day 36 is in the window: updated, no drift
+  for (const n of [37, 38, 43]) {
+    const want = M(at(n, "20:00"));
+    const r = reconcile("SYN", stored, want, { replay: false, last_day: day(n - 1) });
+    assert.deepStrictEqual(r.drift, [], `n=${n}`);
+    assert.strictEqual(r.ups.length, 1, `n=${n}`);
+    assert.strictEqual(r.ups[0].last_evaluated, `${day(36)}T20:00:00.000Z`);
+  }
+  // day 36 is 7 device days old: final, a difference is drift and nothing is written
+  const old = reconcile("SYN", stored, M(at(44, "20:00")), { replay: false, last_day: day(43) });
+  assert.strictEqual(old.ups.length, 0);
+  assert.strictEqual(old.drift.length, 1);
+  assert.match(old.drift[0], /^SYN air_calibration_overdue\|.*resolved finding differs from the replay \(kept\)$/);
+  // ... and identical is silent; a replay run always follows the replay
+  assert.deepStrictEqual(reconcile("SYN", M(at(44, "20:00"), asStored), M(at(44, "20:00")), { replay: false, last_day: day(43) }),
+    { del: [], ups: [], drift: [] });
+  assert.strictEqual(reconcile("SYN", stored, M(at(44, "20:00")), { replay: true, last_day: day(43) }).ups.length, 1);
+
+  // the rule trips again later on the resolve day: the replay keeps it open, and the stored row is reopened
+  const s = partial[0];
+  const reopened = { ...s, status: "open", resolved_at: null };
+  const r2 = reconcile("SYN", stored, M([reopened]), { replay: false, last_day: day(36) });
+  assert.deepStrictEqual(r2.drift, []);
+  assert.strictEqual(r2.ups[0].status, "open");
+  // a resolved row the replay no longer produces: deleted inside the window, kept (drift) once final
+  assert.strictEqual(reconcile("SYN", stored, new Map(), { replay: false, last_day: day(42) }).del.length, 1);
+  const gone = reconcile("SYN", stored, new Map(), { replay: false, last_day: day(43) });
+  assert.strictEqual(gone.del.length, 0);
+  assert.match(gone.drift[0], /resolved finding no longer produced \(kept\)$/);
+  // open rows are never final
+  assert.strictEqual(resolved_final({ status: "open", data_through: day(0) }, day(100)), false);
+  assert.strictEqual(resolved_final({ status: "resolved", data_through: day(36) }, day(42)), false);
+  assert.strictEqual(resolved_final({ status: "resolved", data_through: day(36) }, day(43)), true);
+});
+
 test("safe states without a code never count as the same code (review PHASE4-RUN-VERIFY F1)", () => {
   const T = 30, k = rule("safe_state_recurrent");
   const s = (i, code) => ({ t: `${day(i)}T15:00:00.000Z`, day: day(i), code });

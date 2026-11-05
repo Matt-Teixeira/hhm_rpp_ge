@@ -4,6 +4,17 @@ Repo: `hhm_rpp_ge`, branch `dev`. The change is **uncommitted** in the
 working tree, on top of `78e080a`. It has **not** been applied to the
 database. The review happens before the owner applies it.
 
+> **Round 2 (2026-11-05, amendment before apply).** Round 1 (committed
+> `a3c5a4e`, `REVIEW-PHASE6-006-CODEX.md`: no findings) covered the days
+> and capabilities views. Before 006 was applied, building the viewer
+> showed one more gap: §16.2 item 6 asks for "boots (clean / unclean)",
+> and `ge_ct_daily_v` has only one boot count per day. 006 now also
+> creates **`api.ge_ct_boots_v`** (section 3 of the up file); the down
+> file drops it first. Review only the diff since `a3c5a4e`:
+> `git diff a3c5a4e -- migrations/`. Round-2 results are in
+> "Round 2: already verified" below; append round-2 findings to
+> `REVIEW-PHASE6-006-CODEX.md` under a `## Round 2` heading.
+
 ## What to review
 
 ```
@@ -16,7 +27,7 @@ cat migrations/006_phase6_viewer_views.sql migrations/006_phase6_viewer_views.do
 |---|---|
 | `migrations/006_phase6_viewer_views.sql` | new: up migration, 2 views |
 | `migrations/006_phase6_viewer_views.down.sql` | new: drops them |
-| `migrations/test/sqlscan.test.js` | 2 new tests |
+| `migrations/test/sqlscan.test.js` | 3 new tests (round 2: +1) |
 
 Background, if needed: `PLAN-CT-INSIGHTS.md` §16.1 (evidence, items 2
 and 3 under "What §7 asks for"), §16.3 Q1 (the agreed view contents), §3
@@ -82,6 +93,46 @@ nothing the `ge_ct` stage reads. Both views read only `insight.*`.
   protected relations after up or after down; "down restored the catalog
   exactly (3154 objects identical, incl. insight/api)"; ROLLBACK, nothing
   persisted.
+
+## Round 2: already verified
+
+- **`api.ge_ct_boots_v`**: one row per `system.boot` fact (the derived
+  boot, written by the derive stage), with `local_day = host_local::date`,
+  `booted_at = host_datetime`, and
+  `clean = (attrs ->> 'clean')::boolean IS TRUE`. That is the findings
+  loader's reading (`load.js` `EVENTS_SQL` plus `clean: e.clean === true`),
+  so a missing or false `attrs.clean` counts as unclean.
+- A read-only probe ran the view body and compared it with `load_inputs`
+  boots for every system: 34 systems, 3,417 boots, **0 differences** in
+  instant, day and clean. 435 are unclean. The total equals
+  `sum(n)` of daily `system.boot` (3,417). Fleet-wide read: 0.3 s.
+- In the facts, `attrs.clean` is `'true'` on 2,982 boots and `'false'` on
+  435 (with `value_text` `clean` / `unclean` alongside); no other values.
+- `run.js scan`: 006 has 6 statements and creates 3 objects; down has 3
+  statements. `migrations/test/sqlscan.test.js`: 17/17 (the 006 tests
+  updated for 3 views, plus one new test for the boots `clean` reading).
+- **Dry run of up 6 (round 2)**, run by the owner 2026-11-05: 3 objects
+  to create absent; 6 statements, 157 ms; no locks on protected
+  relations; all 2,897 protected fingerprints unchanged; in-scope
+  +3 -0 ~0 (the three views); declared objects created; ROLLBACK, and a
+  fresh connection shows the catalog identical (3,157 objects).
+- **`roundtrip` (round 2):** no locks on protected relations after up or
+  after down; down drops boots, capabilities, days in that order; "down
+  restored the catalog exactly (3157 objects identical, incl.
+  insight/api)"; ROLLBACK, nothing persisted.
+- The catalog grew from 3,154 to 3,157 objects (2,894 to 2,897
+  protected) between round 1 and round 2. That is outside `insight` /
+  `api.ge_ct_*` and not from this change (006 creates only views, and
+  each run fingerprints at its own start).
+
+Where to look in round 2:
+- `((attrs ->> 'clean')::boolean IS TRUE)`: the cast fails the whole query
+  if any `attrs.clean` ever holds a non-boolean string (the same trade-off
+  as `reopened` in `ge_ct_exams_v`; the pipeline is the only writer).
+- Whether the view should expose anything else the panel needs
+  (`since_prev_boot_h` is in `attrs` but left out).
+- The down order (boots view dropped first; no dependencies between the
+  three).
 
 ## Where to look hardest
 

@@ -11,3 +11,15 @@ I found no actionable defect in the two view definitions, their down migration, 
 - The new tests check the created object set, down migration, and key day-definition expressions.
 
 Evidence: code/schema inspection only. The handoff's read-only database comparison and migration dry-run results were considered as reported; I did not run tests, probes, or database commands.
+
+## Round 2
+
+### No findings
+
+I found no actionable defect in the added `api.ge_ct_boots_v` view, its down migration, or the new test.
+
+- The view selects one row per `system.boot` fact and exposes the agreed `system_id`, device `local_day`, boot instant, and clean flag. The date and timestamp fields use the same columns and interpretation as the findings loader.
+- `derive_boots` writes `attrs.clean` as a JSON boolean (`shutdown`, a JavaScript boolean), so the view's cast reads the producer's current output. The handoff's read-only comparison reports no differing boot rows. A malformed non-boolean string would make the cast fail, but the producer and existing loader/verification SQL use this same representation and cast.
+- The down migration drops the boots view before the other two views; there are no dependencies among them. Its scanner test includes all three expected view drops.
+
+Evidence: code inspection; the handoff's read-only comparison and migration roundtrip results were considered as reported. I did not run tests, probes, or database commands.

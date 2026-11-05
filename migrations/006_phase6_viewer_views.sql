@@ -1,5 +1,6 @@
 -- 006_phase6_viewer_views.sql
--- Phase 6 contract views (PLAN-CT-INSIGHTS.md §16.3 Q1). Views only: no
+-- Phase 6 contract views (PLAN-CT-INSIGHTS.md §16.3 Q1, plus the boots
+-- view agreed 2026-11-05 before apply). Views only: no
 -- table, no column, no grant, nothing the ge_ct stage reads. New names, so
 -- nothing is dropped. Both read only insight.*: no dependency on log.* or
 -- public.* objects. The internal viewer (reports sme_reports/ct) and later
@@ -55,3 +56,19 @@ FROM insight.system_capabilities s
 JOIN insight.metric_catalog c ON c.metric_key = s.metric_key;
 COMMENT ON VIEW api.ge_ct_capabilities_v IS
   'Metrics each system has ever emitted (first/last seen, fact count), with catalog labels. Absent = the system does not log it; present with no daily rows in a period = zero events.';
+
+-- 3. Boots, one row per derived system.boot fact, with the clean/unclean
+--    verdict (a desktop shutdown since the previous boot), which
+--    ge_ct_daily_v does not break down. Same day (host_local::date) and
+--    same clean reading as the findings loader (load.js EVENTS_SQL: clean
+--    only when attrs.clean is true). Added 2026-11-05 before 006 was
+--    applied (§16.2 item 6, "boots (clean / unclean)").
+CREATE VIEW api.ge_ct_boots_v AS
+SELECT f.system_id,
+       f.host_local::date AS local_day,
+       f.host_datetime AS booted_at,
+       ((f.attrs ->> 'clean')::boolean IS TRUE) AS clean
+FROM insight.ge_ct_facts f
+WHERE f.metric_key = 'system.boot';
+COMMENT ON VIEW api.ge_ct_boots_v IS
+  'One row per system boot (derived from software init), on the device wall-clock day. clean = a desktop shutdown was logged since the previous boot; unclean boots are the basis of the powered_off_without_shutdown finding (which also excludes boots with service mode entered in the 12 h before).';

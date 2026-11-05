@@ -213,19 +213,19 @@ test("005 creates finding_catalog, re-creates the findings view, and its down dr
   assert.deepStrictEqual(down.netDrops.map((d) => d.name), ["insight.finding_catalog"]);
 });
 
-test("006 creates only the two viewer views (no table, grant or drop), and its down drops them", () => {
+test("006 creates only the three viewer views (no table, grant or drop), and its down drops them", () => {
   const src = fs.readFileSync(path.join(dir, "006_phase6_viewer_views.sql"), "utf8");
   const up = scanSql(src);
   assert.deepStrictEqual(up.errors, []);
-  assert.deepStrictEqual(up.freshCreates.map((c) => c.name).sort(), ["api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
-  assert.deepStrictEqual(up.creates.map((c) => c.name).sort(), ["api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
+  assert.deepStrictEqual(up.freshCreates.map((c) => c.name).sort(), ["api.ge_ct_boots_v", "api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
+  assert.deepStrictEqual(up.creates.map((c) => c.name).sort(), ["api.ge_ct_boots_v", "api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
   assert.deepStrictEqual(up.drops, []);
   assert.deepStrictEqual(up.statements.map((s) => s.sql.split(/\s+/).slice(0, 2).join(" ")).sort(),
-    ["COMMENT ON", "COMMENT ON", "CREATE VIEW", "CREATE VIEW"]);
+    ["COMMENT ON", "COMMENT ON", "COMMENT ON", "CREATE VIEW", "CREATE VIEW", "CREATE VIEW"]);
   assert.doesNotMatch(src.replace(/--.*$/gm, ""), /\b(GRANT|REVOKE|ALTER|log\.|public\.)/i, "views only, insight.* sources only");
   const down = scanSql(fs.readFileSync(path.join(dir, "006_phase6_viewer_views.down.sql"), "utf8"));
   assert.deepStrictEqual(down.errors, []);
-  assert.deepStrictEqual(down.netDrops.map((d) => d.name).sort(), ["api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
+  assert.deepStrictEqual(down.netDrops.map((d) => d.name).sort(), ["api.ge_ct_boots_v", "api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
   assert.deepStrictEqual(down.creates, []);
 });
 
@@ -242,4 +242,12 @@ test("006 days view keeps the findings DAYS_SQL day definition", () => {
   assert.ok(d.includes("ORDER BY host_local::date, host_local, host_datetime"));
   assert.ok(v.includes("ORDER BY system_id, host_local::date, host_local, host_datetime"));
   assert.ok(d.includes("max(host_datetime) AS last_at") && v.includes("max(host_datetime) AS last_at"));
+});
+
+test("006 boots view reads clean like the findings loader (only attrs.clean = true is clean)", () => {
+  const v = fs.readFileSync(path.join(dir, "006_phase6_viewer_views.sql"), "utf8").replace(/\s+/g, " ");
+  const { load_inputs } = require("../../insight/findings/load");
+  assert.ok(load_inputs.toString().includes("clean: e.clean === true"));
+  assert.ok(v.includes("((f.attrs ->> 'clean')::boolean IS TRUE) AS clean"));
+  assert.ok(v.includes("f.host_local::date AS local_day") && v.includes("WHERE f.metric_key = 'system.boot'"));
 });

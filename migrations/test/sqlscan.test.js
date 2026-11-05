@@ -212,3 +212,34 @@ test("005 creates finding_catalog, re-creates the findings view, and its down dr
   assert.deepStrictEqual(down.errors, []);
   assert.deepStrictEqual(down.netDrops.map((d) => d.name), ["insight.finding_catalog"]);
 });
+
+test("006 creates only the two viewer views (no table, grant or drop), and its down drops them", () => {
+  const src = fs.readFileSync(path.join(dir, "006_phase6_viewer_views.sql"), "utf8");
+  const up = scanSql(src);
+  assert.deepStrictEqual(up.errors, []);
+  assert.deepStrictEqual(up.freshCreates.map((c) => c.name).sort(), ["api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
+  assert.deepStrictEqual(up.creates.map((c) => c.name).sort(), ["api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
+  assert.deepStrictEqual(up.drops, []);
+  assert.deepStrictEqual(up.statements.map((s) => s.sql.split(/\s+/).slice(0, 2).join(" ")).sort(),
+    ["COMMENT ON", "COMMENT ON", "CREATE VIEW", "CREATE VIEW"]);
+  assert.doesNotMatch(src.replace(/--.*$/gm, ""), /\b(GRANT|REVOKE|ALTER|log\.|public\.)/i, "views only, insight.* sources only");
+  const down = scanSql(fs.readFileSync(path.join(dir, "006_phase6_viewer_views.down.sql"), "utf8"));
+  assert.deepStrictEqual(down.errors, []);
+  assert.deepStrictEqual(down.netDrops.map((d) => d.name).sort(), ["api.ge_ct_capabilities_v", "api.ge_ct_days_v"]);
+  assert.deepStrictEqual(down.creates, []);
+});
+
+test("006 days view keeps the findings DAYS_SQL day definition", () => {
+  const norm = (s) => s.replace(/\bf\./g, "").replace(/\s+/g, " ");
+  const v = norm(fs.readFileSync(path.join(dir, "006_phase6_viewer_views.sql"), "utf8"));
+  const { DAYS_SQL } = require("../../insight/findings/load");
+  const d = norm(DAYS_SQL);
+  // same day key, same local-midnight expression, same tie-break order
+  assert.ok(d.includes("host_local::date AS d"));
+  assert.ok(v.includes("host_local::date AS local_day"));
+  const mid = "host_datetime - (host_local - host_local::date::timestamp)";
+  assert.ok(d.includes(mid) && v.includes(mid));
+  assert.ok(d.includes("ORDER BY host_local::date, host_local, host_datetime"));
+  assert.ok(v.includes("ORDER BY system_id, host_local::date, host_local, host_datetime"));
+  assert.ok(d.includes("max(host_datetime) AS last_at") && v.includes("max(host_datetime) AS last_at"));
+});

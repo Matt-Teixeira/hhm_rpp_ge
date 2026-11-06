@@ -10,7 +10,7 @@ then, an internal HTML viewer reads the same contract.
 Out of scope for v1: MRI and CV. The design keeps them in mind (shared
 schema, rule registry per source), but nothing is built for them yet.
 
-## Status (2026-11-04)
+## Status (2026-11-06)
 
 - **Phase 0 done.** Decisions in §9.
 - **Phase 1 done: applied to prod 2026-11-03 19:44:38 UTC** by the user
@@ -181,11 +181,81 @@ schema, rule registry per source), but nothing is built for them yet.
     field-service confirmation is Phase 7.
   - Two Codex reviews, 6 findings, all fixed (§14.7).
   - Commits on `dev` (not pushed): `4d8a345`, `3420fcf`, `63377f7`.
-- **Phase 5 re-evaluated and AGREED 2026-11-04 (§15); nothing built
-  yet.** The user agreed the §15.2 design and the recommended answers in
-  §15.3. The stage, the hook and the kill switch don't exist; the §6
-  late-commit re-read was never built; derive has no touched-scope apply
-  path. It starts at §15.6.
+- **Phase 5 built and deployed; in its monitoring window (§15).**
+  - Built: the insight stage (`45c2ab2`, review PHASE5-STAGE F1-F2) and
+    the `index.js` hook (`9c098f2`, review PHASE5-HOOK F1-F2). The first
+    live stage run was 2026-11-04 19:48 UTC.
+  - **Checkpoint during monitoring, the clock flag (`c8d15df`):** that
+    first run flagged SME20594 `ahead`. Reviewed and accepted into
+    `verify-derive`'s expected clock-ahead list. Every capture
+    2026-10-05..10-31 had lag +13..+35 min; every capture from
+    2026-11-01 (US DST end) has lag −17..−46 min, a ~60 min step. 27 of
+    251 captures in the 30-day window are negative, which puts p10 below
+    0. It is a device clock behaviour for the Phase 7 field-service list,
+    not a pipeline fault.
+  - **Drift fix (`b09674e`, review PHASE5-DRIFT: no findings):** resolved
+    findings follow the replay inside the 7-day window. Deployed
+    2026-11-05 13:00 UTC, which restarted the 0-drift window.
+  - **Remaining:** the §15.4 exit criteria. The 7 clean days end
+    2026-11-11 19:48 UTC; the 0-drift window ends 2026-11-12 13:00 UTC.
+    Until then nothing changes the pipeline (`insight/` stage code,
+    `index.js`).
+- **Phase 6 DONE (2026-11-06).** The internal viewer, "GE CT Insights —
+  Internal" (§16). All §16.4 exit criteria met:
+  - **Migration 006** (`api.ge_ct_days_v`, `api.ge_ct_capabilities_v`,
+    `api.ge_ct_boots_v`; views only): pre-checks, dry run and roundtrip
+    passed (two rounds; the boots view was added before the apply).
+    Applied by the user 2026-11-05 17:42:49 UTC at `883bad7`.
+  - **Numbers verified** (`sme_reports/ct/verify.js`, read-only, one
+    REPEATABLE READ snapshot, as of 2026-11-05): **0 differences in
+    23,434 comparisons.** It covers:
+    - every fleet column for all 34 systems, the order of both lists and
+      the inventory footer;
+    - every per-day series, period total, heatmap cell and error top 10
+      for SME21859, SME18531 and SME21867;
+    - every field of all 113 findings, including the stored evidence;
+    - on all 62 abort / prep trip days, the column = the rule's value =
+      the stored evidence.
+
+    A mutation probe planted 18 errors, one per kind; all were caught.
+  - **`dev/check_ct.js`** (no DB) passes:
+    - the build is deterministic, also with every input reversed;
+    - zero page errors in headless Chromium;
+    - no sideways scroll at 390 px in any view or period;
+    - "Internal" in the title, header and file name;
+    - panels are hidden without their capability;
+    - markup in site names and catalog labels stays text;
+    - `--as-of` accepts only the snapshot's UTC day.
+  - **Real build** (`npm run report:ct`): 1.31 MB (budget 10 MB). The
+    dashboard is ready in 106–187 ms and the slowest system view × period
+    in 74 ms on the DEV VM (budget 2 s each).
+  - **Review:** Q6 settled; the user is the reviewer. The user reviewed
+    the page 2026-11-05 and asked for no changes. The user may share the
+    file with the team; that feedback will be recorded in §16, and
+    anything about scanner behaviour goes to the Phase 7 field-service
+    list.
+  - **Decisions made while building** (user, 2026-11-05):
+    - `api.ge_ct_boots_v` was added to 006 before the apply;
+    - finding cards show the stored rule evidence, labelled as stored and
+      compared exactly by `verify.js`, as §16.2 item 6 says;
+    - a build is a "now" report: `--as-of` must be the snapshot's UTC
+      day, because findings and tube state are current.
+  - **For the Phase 7 field-service list:**
+    - the warm-up steps on the prep calendar (`Cold Tube Warmup`,
+      `WarmupI`, `WarmupII`);
+    - the PSU gauges' 2147483647 placeholder (the page shows PSU event
+      counts only);
+    - SME20594's DST-end clock step (above).
+  - **Codex reviews:** PHASE6-006 (two rounds, no findings), DATA-MODEL,
+    VERIFY and PAGE (F1–F2 each, all fixed).
+  - **Commits:**
+    - reports `DEV`: `6f4f46e`, `a10efeb`, `07a5693` (only
+      `sme_reports/ct/**`, `sme_reports/dev/check_ct.js` and the
+      `report:ct` line);
+    - hhm_rpp_ge `dev`: `a3c5a4e`, `883bad7`, `ccd4c38`, `cce1ffc`,
+      `9835853` and this update.
+
+    None pushed.
 - **Correction to §1 and the dedupe key:** `(system_id, epoch,
   record_number_concurrent)` is unique except in 8 known cases, which are
   distinct records. GE `epoch` is local wall-clock seconds, so it repeats
@@ -521,7 +591,7 @@ external scrub handles that.
 | **3. Derive** ✅ 2026-11-04 | Migration 004 (daily `dim`, `system_clock`). Derived facts (`system.boot`, `tube.replacement`). Daily, exams, tube segments, capabilities, clock offsets (§13) | See §13.3; all met (§13.5). (The original "sanity-check exams with 2–3 sites" and "swaps spot-checked by field service" move to Phase 7.) |
 | **4. Findings** ✅ 2026-11-04 | Migration 005, findings registry, open/resolve replay, `cli.js findings` / `verify-findings` (§14) | See §14.4; all met (§14.7) |
 | **5. Prod** | Agreed in §15 (2026-11-04): the `run_ct_insight` stage (extract → derive touched → findings), the `index.js` hook (no new cron line), kill switch, a stage rehearsal, then deploy via dev → staging → prod and `git pull` on `vm-debian`. (The backfill was done in Phase 2 and the catch-up in Phase 4.) | §15.4 (keeps: 7 consecutive days of clean runs; watermarks advancing; `ge_ct` run time up by seconds, not minutes; ingest unaffected with `INSIGHT_ENABLED` off and on) |
-| **6. Viewer** | `sme_reports` CT report, internal. Agreed in §16 (2026-11-05; Q6 review set open) | §16.4 (agreed): verified numbers, checks, team review |
+| **6. Viewer** ✅ 2026-11-06 | `sme_reports` CT report, internal. Agreed in §16 (2026-11-05; Q6 settled at step 6) | §16.4 (agreed): verified numbers, checks, team review. All met (Status) |
 | **7. Validate & extend** | FSE review of findings (start with SME21859 rotor), and of tube swaps (§13.3, incl. SME21873 2025-09-02); exam counts sanity-checked with 2–3 sites; threshold tuning; handoff notes: frontend (`api` views, after migration), `fse_dispatch` owner (`api.ge_ct_tube_v`), alert-engine owner (findings integration proposal) | Findings confirmed useful by field service; frontend has a stable contract |
 
 ---
@@ -1975,7 +2045,8 @@ Ground rules carried over:
 
 **AGREED with the user 2026-11-05:** the §16.2 design, the recommended
 answer to §16.3 Q1–Q5, the §16.4 exit criteria and the §16.5 build order.
-**Q6 (the review set) is open:** the user isn't sure yet. Phase 6
+Q6 (the review set) was settled at step 6. **DONE 2026-11-06** (see
+Status). Phase 6
 builds the internal viewer from §7. This section records what the
 `api` views and `sme_reports` actually offer, both read-only, on
 2026-11-05. It also records where that changes §7. Phase 6 only reads
@@ -2177,17 +2248,18 @@ current: migrations 004 and 005 rebuilt them for the new columns.
    reporting systems, with findings shown as of their last data.**
 
    Not chosen: mixed into the attention order, or hidden.
-6. **Review set: OPEN (the user doesn't know yet, 2026-11-05).** The
-   recommendation stands: the fleet view plus SME21859 (rotor, high),
-   SME18531 (restart loop) and SME21867 (chronic aborts). These are the
-   §14.4 named problems, with known expected findings.
+6. **Review set: AGREED (asked again at step 6, 2026-11-05).**
+   - **Systems:** the fleet view plus SME21859 (rotor, high), SME18531
+     (restart loop) and SME21867 (chronic aborts). These are the §14.4
+     named problems, with known expected findings. They are also
+     `ct/verify.js`'s default panel set (`--systems`).
+   - **Reviewer:** the user, for now. A wider team review waits until the
+     user shares the file. Feedback is recorded here; anything about
+     scanner behaviour goes to the Phase 7 field-service list.
 
-   Until the user decides, those three are only the **verification set**
-   for `ct/verify.js` (§16.4), and a flag can change them. Who reviews,
-   and which systems, is asked again at §16.5 step 6. Nothing before
-   that depends on it.
-
-   Not chosen: three systems picked by customer.
+   Not chosen: three systems picked by customer; the fleet view only; the
+   three plus a quiet system; adding Remote Solutions or field service
+   now.
 
 ### 16.4 Exit criteria (agreed)
 

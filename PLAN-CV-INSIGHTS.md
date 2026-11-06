@@ -2,7 +2,14 @@
 
 Status (2026-11-06): **Phase CV-0 (decide) AGREED with the user
 2026-11-06: the §2 design and the recommended answer to every §3
-question. Nothing built; CV-1b (ingest integrity) is next.** The
+question. CV-1b (ingest integrity) investigated 2026-11-06 (§5): records
+were lost (3,718 proven, plus an unknown number at early file resets);
+a CV-only parser fix is built on dev with tests, a simulation on real
+snapshots and a read-only prod rehearsal. The user agreed D1–D4 (§5.5,
+the recommendation in each) 2026-11-06. The parser fix is reviewed (Codex
+P3 fixed) and ready to commit; the collector change (D3a) is uncommitted,
+awaiting its Codex review (`REVIEW-CV1B-COLLECTOR-HANDOFF.md`);
+the device listing (D3b) awaits the user's output.** The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
 (field-service validation) paused. This plan follows the CT plan's method
 (`PLAN-CT-INSIGHTS.md`):
@@ -209,7 +216,7 @@ and 15,049 on 2026-10-20.
 | Phase | What | Exit criteria |
 |---|---|---|
 | **CV-0 Decide** ✅ 2026-11-06 | This plan; the user's answers to §3 | Agreed |
-| **CV-1b Ingest integrity** | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
+| **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D4 agreed; fixes built, in review | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
 | **CV-1 Schema** | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
 | **CV-2 Extract** | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
@@ -220,3 +227,206 @@ and 15,049 on 2026-10-20.
 Checkpoints for the user's go-ahead: the answers to §3; before each
 migration is applied; before any `index.js` / parser change; before each
 deploy; before every commit, in either repo.
+
+## 5. CV-1b — ingest integrity (investigated 2026-11-06)
+
+Everything below is read-only:
+- the prod DB through the read-only connection;
+- prod Redis with `GET` / `INFO` only;
+- `stat` and reads of `/home/prod/hhm_data_acquisition/files/<id>/sysError.log`;
+- the 194 raw snapshots in `log.saved_files` (2026-11-04 12:48 → 11-06 12:48 UTC; 97 per system).
+
+`/home/prod/hhm_rpp_ge` was not read. The probes are in the session
+scratchpad, not in the repos.
+
+### 5.1 How the file and the ingest work
+
+- **The file.** `sysError.log` is a CSV with a header line and
+  `\n` line ends. GE appends to it, and the records are in
+  `sequencenumber` order.
+  - GE starts a **new file at sequence 1**; it does not carry over a tail
+    the way CT gesys does (§11 of the CT plan).
+  - The highest number is **4000**: seen in `archive_log`; the live table
+    has 3999 (SME08640) and 3998 (SME02412).
+  - Files end between 158 KB and 1.36 MB, so rotation is not by size.
+- **Collection.** `hhm_data_acquisition`'s `ge_cv` job (`ge_cv_21.sh`,
+  `lftp mget` with `xfer:clobber`) downloads the **whole file** at :00 and
+  :30. `stats.job_runs` shows every run since March finishing within 86 s.
+  The download is written progressively: on 2026-11-06 at 13:00:15 the
+  local file was 798,720 of 920,604 bytes, on a new inode.
+- **The parser.** `GE_CV` runs at :18 and :48, so it never overlaps the
+  download.
+  - It keeps a byte watermark in Redis (`<sme>.sysError.log`): the file
+    size, measured **again after the insert**.
+  - It reads `tail -c delta` when the file grew, and the whole file when it
+    shrank or has no key.
+  - It has no duplicate guard and no rotation check.
+- **Current state.** Both prod watermarks equal the file sizes
+  (920,604 / 18,085). Prod Redis uptime is 526 days.
+- **Byte-exact check.** The DB rows rebuild the raw lines byte-for-byte:
+  all 2,978 + 83 lines of the current files. The rebuilt file sizes
+  (905,366 and 920,604) equal the snapshot sizes. This allows byte-level
+  reasoning about older files whose snapshots are gone.
+
+### 5.2 Every class of sequence gap, explained
+
+The §1.4 counts were taken **in device-time order**. Re-run that way they
+reproduce exactly (SME02412: 469 jumps, 5,456 missing, 45 between
+captures). Ordered by insertion (`id`, which is file order), they almost
+all disappear.
+
+| Class | What it looks like | Cause | Records | Fixable in the parser |
+|---|---|---|---|---|
+| **G1 Out-of-order timestamps** (not loss) | §1.4's small backward steps (1609 → 1603) and most of its jumps | GE writes records in sequence order, but the time stamped on a record can be earlier than the previous record's: 233 / 23 times, p50 93 ms, max 28 s, within one subsystem as well as across RTA / POS / DL. Sorting by device time interleaves them. In file order, SME08640 has **no gap at all** outside resets. | 0 lost | n/a: order by `id` / sequence within a file, never by device time |
+| **G2 Reset to 1** (not loss by itself) | 26 (SME02412), 3 (SME08640) | GE started a new file. After record 4000, or earlier: 601, 1416, 1990, 2113… These early resets cluster in storms. Two early files end on `User has requested Shutdown.` and the next starts with `Positioner CPU Boot Up`, but restarts inside a file also occur, so a restart is not always the trigger. **The trigger for the other early resets is unknown** (field service). | 0 | n/a |
+| **G3 Old file's last records never fetched** (loss, collection side) | A file ends at seq < 4000 | Records written to the old file after its last 30-min download and before GE switches to the new file. The collector only fetches `sysError.log`. | Certain: **5** (SME08640 3999 → 1 and 3998 → 1: 1 + 2; SME02412 3998 → 1: 2). Unknown for the early resets; upper bound 16,505 + 18 if every one was a 4000-rotation, which the shutdown-ended files and quiet gaps argue against | **No.** Only if GE keeps the previous file on the device (§5.5 D3) |
+| **G4 New file outgrew the watermark** (loss, parser) | 2026-07-10: 3831 → **3012** (backward, new data); 2026-09-18: 584 → **668** | The CT §11.1 edge. A new file passed the old byte watermark before the next run, so `tail -c delta` read only its end. The first line read was a fragment and was dropped. On 09-18 a same-file gap is impossible: a tail from the old watermark would start exactly at record 585. | **3,678**: 3,011 + 667 | **Yes** (§5.3) |
+| **G5 Batch-boundary record** (loss / corruption, parser) | 35 single gaps at capture boundaries; 3 records stored with a cut sequence number: 1052 as **52**, 2200 as **200**, 1233 as **233** (§1.4's "+1000/+2000 jumps") | All during the SME02412 storms (07-10/11, 10-20). The watermark (= file size) included bytes after the last newline, so the next read started inside the first record of the new batch. A fragment fails the regex (lost); a cut that removes only digits of the sequence number still matches. | **35 lost, 3 wrong** `sequencenumber` | **Yes** (§5.3) |
+
+Not found:
+- duplicate re-ingestion: 0 of 95,767 rows (rebuilt lines);
+- a parser run reading a half-downloaded file: no overlap with the
+  collector in `stats.job_runs`;
+- a Redis reset;
+- truncated-last-field rows at batch ends: 0;
+- partial lines in the 48 h of snapshots: all 194 end with `\n`, and 191
+  of 192 consecutive pairs are byte prefixes (the exception is the
+  SME08640 rotation on 2026-11-05 01:48).
+
+What G5 leaves open:
+- The cut record carries the **next** burst's timestamp, so the extra
+  bytes in the earlier copy were not the start of that record. They were
+  bytes GE later overwrote: padding, or an abandoned partial line.
+- Which of the two can't be told without the parser's "NO MATCH FOUND"
+  log lines, which are in the prod run logs (not read).
+- The fix covers both: the simulation's "prefix" and "NUL" variants
+  in §5.4.
+
+**Storm bursts follow our collection.** On storm days each 30-min batch
+is about 100 records over about 45 s of device time. The last record sits
+at a constant offset before the capture: 56.1–56.2 min on 07-11 and
+120.6–120.8 min on 10-20 (the device clock offset), across many hours.
+So SME02412 wrote these bursts in step with our 30-min collection cycle.
+This is evidence for field service, not a conclusion about the device.
+CV-4's storm finding must not count these collection-locked bursts as
+independent events without looking.
+
+**Totals in `log.ge_cv_syserror`** (2026-05-01 → 11-06):
+- **3,718 records proven lost**, all on SME02412 except 3 on SME08640:
+  - G4 3,678;
+  - G5 35;
+  - G3 5.
+- **3 rows have a wrong `sequencenumber`.**
+- An unknown number are missing at early resets (G3).
+
+`log.*` is not touched. These stay as known gaps (§5.5 D2).
+
+### 5.3 Proposed parser fix (built on dev 2026-11-06, uncommitted, not deployed)
+
+CV-only files. Nothing the CT run loads changes:
+- `acquisition/GE_CT_CV_MRI.js`, `redis/redisHelpers.js`, `index.js` and
+  `insight/` are untouched;
+- the CV parser stops calling the shared size / tail / update methods.
+
+| File | What |
+|---|---|
+| `read/syserror_file.js` (new) | `open_syserror`: size, first data line and bytes from **one file descriptor**. `plan_read`: append, `no_new_data`, `shrunk`, `new_file` (first data line changed: the G4 fix), `no_watermark`. `complete_lines`: the watermark advances **only to the end of the last complete line**, and a trailing partial line is read next run (the G5 fix) |
+| `persist/drop_already_ingested_cv.js` (new) | The CV twin of CT's `drop_already_ingested`. Drops parsed records already in the table (all 18 parsed columns, compared as text; integer columns normalised; range scan on `(system_id, host_datetime)`). Fails open. Makes every whole-file read (new file, short copy, lost key, retry after a failed insert) harmless |
+| `jobs/CV/sysError_parse.js` (new) | The per-line parse moved out unchanged, so tests and the simulation run it. `host_datetime` calls `dateTimeTemplate` with `generateDateTime`'s CV pattern and zone directly |
+| `jobs/CV/sysError_parser.js` | Wires them together. The Redis watermark key and format are unchanged (a byte offset); new key `<sme>.sysError.log.head`. The order stays parse → insert → watermark → `offline_hhm_conn`. No insert when nothing is new. Logs say why a whole file was read and how many rows were dropped |
+| `test/syserror_file.test.js`, `test/drop_already_ingested_cv.test.js`, `test/sysError_parse.test.js` (new) | `node --test test/`: all files pass |
+
+Codex review (`REVIEW-CV1B-PARSER-CODEX.md`, 2026-11-06): one P3 finding,
+fixed the same day. A file that keeps ending without a newline warned on
+every run. Now `read/syserror_file.js` `partial_tail` warns only when new
+complete lines came with the partial line (the G5 shape); a lone pending
+partial line is logged as info. Tests pass, and the read-only rehearsal
+is unchanged.
+
+Behaviour on normal input is identical: the same rows, and the same
+watermark (the file always ends in `\n`). The only visible difference is
+that the empty string after the last newline of every incremental read is
+no longer logged as `NO MATCH FOUND`.
+
+### 5.4 Simulation on real snapshots and the prod rehearsal
+
+`OLD` is an exact emulation of today's parser. `NEW` is the dev modules.
+Truth is the device's complete lines.
+
+| Scenario (real bytes) | OLD | NEW |
+|---|---|---|
+| S0 Replay of every capture in `log.saved_files` (96 + 96, incl. the SME08640 rotation) | = DB rows for all 192 captures | = DB rows for all 192; `host_datetime` equal on all 288 rows; final watermarks equal |
+| S1 Copy ends 1 complete new record + k bytes of the next (every k, every real growth step; 8,530 cuts) | prefix bytes: **8,487 lost, 403 wrong**; NUL bytes: **8,530 lost** | 0 lost, 0 wrong |
+| S2 New file outgrew the watermark (SME02412 1..3831 → a 1..3984 file, rebuilt) | **3,012 of 3,984 lost**: reads from record 3013, as on 07-10 (3012) | 0 lost |
+| S3a Short copy (< watermark), then the full copy (47 steps) | **115,016 rows re-inserted** | 0 |
+| S3b Copy cut inside the new data, then the full copy (47 steps) | **35 lost, 1 wrong** | 0 |
+| S4 Redis key lost | whole file re-inserted (2,978 / 83) | 0 re-inserted |
+
+**Prod rehearsal (read-only, 2026-11-06 ~13:20 UTC):**
+- With the current watermarks, both systems plan `no_new_data`.
+- A forced whole-file read parses 2,978 and 83 rows. The duplicate guard
+  finds **every one already in the table**: would insert 0, 2.4 s for
+  SME02412.
+- The first live run after a deploy stores the `.head` key and otherwise
+  behaves as today.
+
+### 5.5 Decisions (agreed 2026-11-06: the recommendation in each)
+
+- **D1 Parser fix: AGREED, adopt it.** It closes G4 and G5 and makes
+  whole-file reads safe.
+  - Next: Codex review (`REVIEW-CV1B-PARSER-HANDOFF.md`), fix, commit
+    (ask), then deploy when the user says.
+  - `npm run ge_cv` is its own cron process; the CT run doesn't load these
+    files.
+  - Rollback is `git revert`. The extra Redis key is ignored by the old
+    code.
+- **D2 Existing gaps: AGREED, leave them.**
+  - The lost records can't be recovered, and `log.*` is not touched.
+  - CV-2+ treats `sequencenumber` as a within-file order only, never as a
+    count, and documents the 3,718 lost and 3 wrong-sequence rows (all
+    before the fix).
+- **D3 Collection side (`hhm_data_acquisition`, separate repo): AGREED.**
+  - (a) Download to a temporary name and `mv` it into place (= CT §11.4
+    step 3).
+  - (b) Take a one-time read-only `ls` of `.../DL/Log/` on the two devices
+    to see whether GE keeps the previous `sysError` file. If it does,
+    fetching it would close G3; if not, G3 stays bounded by the 30-min
+    collection interval.
+  - (a) Built 2026-11-06, uncommitted, on `hhm_data_acquisition` branch
+    `DEV`: the five CV scripts in use (`ge_cv_21.sh` FTP, 12 systems;
+    `ge_cv_22*.sh` scp, 7). Each downloads to `.sysError.log.part` in the
+    system folder and `mv`s it over `sysError.log` only when the transfer
+    exits 0; otherwise the temp file is removed. Exit status and output
+    are the transfer's own (`mget:` becomes `get:` in lftp messages; no
+    connection regex reads that prefix). `ge_cv_sftp.sh` is unused and
+    left as is. Tested locally: lftp against a `file:` remote, scp with a
+    fake `sshpass`. Results are in `REVIEW-CV1B-COLLECTOR-HANDOFF.md`.
+  - (b) The listing needs device credentials, which only the collector
+    decrypts (its `.env`). The user runs the command and pastes the
+    output.
+- **D4 Field service: AGREED, raise it.** SME02412's storm bursts are
+  locked to our collection cycle (§5.2), and the trigger for early resets
+  is unknown. Draft note for field service:
+
+  > SME02412 (INNOVA 3100): on the error-storm days 2026-07-10/11 and
+  > 2026-10-20, its sysError log filled in bursts of about 100 records
+  > (mostly `FPGA_Driver::update Detector com error`) over about 45
+  > seconds, every 30 minutes, at the same moment in each of our
+  > collection cycles. We download the log by FTP every 30 minutes. Could
+  > you check whether the FTP session coincides with, or causes, the
+  > detector communication errors? Separately: SME02412 starts a new
+  > sysError.log well before its 4000-record limit (e.g. after 601, 1416,
+  > 2113 records). Do you know what triggers that, and does the system
+  > keep the previous file?
+- **Optional confirmation of G4 / G5.** The prod run logs of 2026-07-10
+  23:48, 2026-07-11 06:18 and 2026-09-18 19:18 UTC (if still kept) should
+  each hold a `NO MATCH FOUND` fragment line. For example:
+  `grep -l '"NO MATCH FOUND"' /home/prod/hhm_rpp_ge/utils/logger/hhm_rpp_ge-log.prod.*`
+  over the runs of those times.
+
+**CV-1b exit criteria:**
+- "Cause of every sequence gap class explained": met. G5's trailing-byte
+  origin is open, but it doesn't change the fix.
+- "No record loss going forward, shown on raw file snapshots": met for the
+  parser classes (G4, G5) once D1 is deployed. **G3 cannot be closed by
+  the parser**; it needs D3(b), or the user's acceptance of the residual.

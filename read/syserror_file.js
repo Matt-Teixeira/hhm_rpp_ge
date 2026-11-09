@@ -85,6 +85,20 @@ function plan_read({ prev_offset, prev_head, file_size, file_head }) {
   return { start: prev_offset, reason: "append" };
 }
 
+// Should the file's first line be stored on a run that inserts nothing?
+// The .head key is normally written after a successful insert. A run that
+// reads no complete line (nothing new, or only a partial line after the
+// watermark) never gets there, so on an idle system the key would never be
+// set and the new-file check would stay size-only. Storing it early is safe
+// only when the watermark already refers to this file: reason no_new_data,
+// or append. Never on a full read (new_file / shrunk / no_watermark): if that
+// read's insert failed, a stored new head next to the old watermark would
+// make the next run append from the wrong offset.
+function store_head_early({ reason, consumed, prev_head, file_head }) {
+  if (typeof file_head !== "string" || file_head === "" || prev_head === file_head) return false;
+  return reason === "no_new_data" || (reason === "append" && consumed === 0);
+}
+
 // Read the file once through one descriptor: size, first data line and the
 // bytes from `start`. Returns null if the file can't be opened.
 async function open_syserror(file_path) {
@@ -119,4 +133,4 @@ async function open_syserror(file_path) {
 
 const head_key = (file_name) => `${file_name}.head`;
 
-module.exports = { open_syserror, plan_read, complete_lines, partial_tail, first_data_line, head_key, HEADER_RE };
+module.exports = { open_syserror, plan_read, complete_lines, partial_tail, store_head_early, first_data_line, head_key, HEADER_RE };

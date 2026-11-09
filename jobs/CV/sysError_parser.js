@@ -3,7 +3,7 @@ const pgp = require("pg-promise")();
 const { ge_cv_syserror_schema } = require("../../persist/pg-schemas");
 const mapDataToSchema = require("../../persist/map-data-to-schema");
 const { build_upsert_str } = require("../../tooling");
-const { open_syserror, plan_read, complete_lines, partial_tail, head_key } = require("../../read/syserror_file");
+const { open_syserror, plan_read, complete_lines, partial_tail, store_head_early, head_key } = require("../../read/syserror_file");
 const { parse_syserror_lines } = require("./sysError_parse");
 const { drop_already_ingested_cv } = require("../../persist/drop_already_ingested_cv");
 const { getRedisFileSize, getRedisLine, updateRedisLine } = require("../../redis/redisHelpers");
@@ -35,9 +35,6 @@ async function ge_cv_sys_error(System, capture_datetime) {
 
     // ** Start Data Acquisition
 
-    const prev_offset = await getRedisFileSize(System.sme, file_name, System.run_log);
-    const prev_head = await getRedisLine(System.sme, head_key(file_name), System.run_log);
-
     file = await open_syserror(System.complete_file_path);
     if (!file || !file.size) {
       await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error", System.det,
@@ -45,10 +42,23 @@ async function ge_cv_sys_error(System, capture_datetime) {
       return;
     }
 
+    // Redis is read after the file check, so systems without a file don't
+    // log getRedisLine's "No line returned" warning every run.
+    const prev_offset = await getRedisFileSize(System.sme, file_name, System.run_log);
+    const prev_head = await getRedisLine(System.sme, head_key(file_name), System.run_log);
+
     const plan = plan_read({ prev_offset, prev_head, file_size: file.size, file_head: file.head });
     const read_note = { ...note, prev_offset, file_size: file.size, start: plan.start, reason: plan.reason, head_changed: prev_head !== null && file.head !== null && prev_head !== file.head };
+    // Runs that insert nothing still record which file the watermark is in
+    // (see store_head_early).
+    const remember_head = async (consumed) => {
+      if (store_head_early({ reason: plan.reason, consumed, prev_head, file_head: file.head })) {
+        await updateRedisLine(System.sme, head_key(file_name), file.head, System.run_log);
+      }
+    };
     if (plan.start === null) {
       await System.addLogEvent(System.I, System.run_log, "ge_cv_sys_error: read", System.det, { ...read_note, message: "No new file data" }, null);
+      await remember_head(0);
       return;
     }
     // A full read of a file we had already read part of: say why (the
@@ -67,7 +77,10 @@ async function ge_cv_sys_error(System, capture_datetime) {
       await System.addLogEvent(tail.warn ? System.W : System.I, System.run_log, "ge_cv_sys_error: read", System.det,
         { ...note, message: tail.message, partial_bytes: tail.bytes }, null);
     }
-    if (consumed === 0) return;
+    if (consumed === 0) {
+      await remember_head(0);
+      return;
+    }
 
     // ** End Data Acquisition
 

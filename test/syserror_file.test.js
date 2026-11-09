@@ -5,7 +5,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { open_syserror, plan_read, complete_lines, partial_tail, first_data_line, head_key } = require("../read/syserror_file");
+const { open_syserror, plan_read, complete_lines, partial_tail, store_head_early, first_data_line, head_key } = require("../read/syserror_file");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "syserror-file-"));
 const write = (name, content) => {
@@ -118,6 +118,26 @@ test("partial_tail: warn only when new complete lines came with the partial line
     assert.strictEqual(t.bytes, 40);
     assert.strictEqual(t.warn, false);
   }
+});
+
+test("store_head_early: only when the watermark already refers to this file", () => {
+  // idle system right after the deploy: no key yet, file unchanged (prod 2026-11-06)
+  assert.strictEqual(store_head_early({ reason: "no_new_data", consumed: 0, prev_head: null, file_head: L1 }), true);
+  assert.strictEqual(store_head_early({ reason: "no_new_data", consumed: 0, prev_head: undefined, file_head: L1 }), true); // Redis read failed
+  // only a partial line after the watermark
+  assert.strictEqual(store_head_early({ reason: "append", consumed: 0, prev_head: null, file_head: L1 }), true);
+  // already stored -> no write
+  assert.strictEqual(store_head_early({ reason: "no_new_data", consumed: 0, prev_head: L1, file_head: L1 }), false);
+  assert.strictEqual(store_head_early({ reason: "append", consumed: 0, prev_head: L1, file_head: L1 }), false);
+  // new lines read: stored after the insert as before, not early
+  assert.strictEqual(store_head_early({ reason: "append", consumed: 500, prev_head: null, file_head: L1 }), false);
+  // full reads never store early (a failed insert would leave old watermark + new head)
+  for (const reason of ["new_file", "shrunk", "no_watermark"]) {
+    assert.strictEqual(store_head_early({ reason, consumed: 0, prev_head: L1, file_head: L2 }), false);
+    assert.strictEqual(store_head_early({ reason, consumed: 0, prev_head: null, file_head: L2 }), false);
+  }
+  // no complete first line in the file
+  for (const v of [null, undefined, ""]) assert.strictEqual(store_head_early({ reason: "no_new_data", consumed: 0, prev_head: null, file_head: v }), false);
 });
 
 test("head key sits next to the watermark key", () => {

@@ -6,10 +6,12 @@ question. CV-1b (ingest integrity) investigated 2026-11-06 (§5): records
 were lost (3,718 proven, plus an unknown number at early file resets);
 a CV-only parser fix is built on dev with tests, a simulation on real
 snapshots and a read-only prod rehearsal. The user agreed D1–D4 (§5.5,
-the recommendation in each) 2026-11-06. The parser fix is reviewed (Codex
-P3 fixed) and ready to commit; the collector change (D3a) is uncommitted,
-awaiting its Codex review (`REVIEW-CV1B-COLLECTOR-HANDOFF.md`);
-the device listing (D3b) awaits the user's output.** The
+the recommendation in each) 2026-11-06. The parser fix (D1) is committed (`b0bc513`) and
+deployed to prod 2026-11-06 17:24 UTC (§5.5). A follow-up that stores the
+file-identity key on idle systems is built and awaiting Codex review
+(`REVIEW-CV1B-HEAD-HANDOFF.md`). The collector change (D3a) is
+uncommitted: Codex P2 (shared temp name) is fixed. The device listing
+(D3b) awaits the user's output.** The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
 (field-service validation) paused. This plan follows the CT plan's method
 (`PLAN-CT-INSIGHTS.md`):
@@ -216,7 +218,7 @@ and 15,049 on 2026-10-20.
 | Phase | What | Exit criteria |
 |---|---|---|
 | **CV-0 Decide** ✅ 2026-11-06 | This plan; the user's answers to §3 | Agreed |
-| **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D4 agreed; fixes built, in review | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
+| **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D4 agreed; parser fix (D1) deployed 2026-11-06, collector change in review | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
 | **CV-1 Schema** | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
 | **CV-2 Extract** | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
@@ -396,7 +398,10 @@ Truth is the device's complete lines.
     `DEV`: the five CV scripts in use (`ge_cv_21.sh` FTP, 12 systems;
     `ge_cv_22*.sh` scp, 7). Each downloads to `.sysError.log.part` in the
     system folder and `mv`s it over `sysError.log` only when the transfer
-    exits 0; otherwise the temp file is removed. Exit status and output
+    exits 0; otherwise the temp file is removed. Review round 1
+    (`REVIEW-CV1B-COLLECTOR-CODEX.md`, P2: overlapping runs shared the temp
+    name) is fixed: the temp name is per run (`.sysError.log.part.$$`), an
+    EXIT trap removes it, and leftovers older than 2 h are swept. Exit status and output
     are the transfer's own (`mget:` becomes `get:` in lftp messages; no
     connection regex reads that prefix). `ge_cv_sftp.sh` is unused and
     left as is. Tested locally: lftp against a `file:` remote, scp with a
@@ -423,6 +428,61 @@ Truth is the device's complete lines.
   each hold a `NO MATCH FOUND` fragment line. For example:
   `grep -l '"NO MATCH FOUND"' /home/prod/hhm_rpp_ge/utils/logger/hhm_rpp_ge-log.prod.*`
   over the runs of those times.
+
+**D1 status: DEPLOYED 2026-11-06.** `b0bc513` was pushed to
+dev/staging/prod at 17:24:57 UTC, and the user pulled on prod right after.
+The first run on the new code was 17:48 UTC: both systems were checked
+and the exit check passed (`--since 2026-11-06T17:24Z`).
+- Neither device has written to `sysError.log` since 2026-11-05 (~18:55
+  and ~18:21 UTC), so that run read nothing. As designed, it returned
+  before storing `<sme>.sysError.log.head`.
+- The key is stored on the first run that reads new lines. Until then the
+  new-file check falls back to the size check, as before.
+- Residual risk in that window: GE starts a new file before writing any
+  line to the current one, and that file outgrows the watermark
+  (SME02412 920,604 B; SME08640 18,085 B) before a parser run sees it.
+- 18:18 UTC: SME08640 read 5 new lines (seq 84–88, `append` from 18,085
+  to 19,312). Its `.head` key is now stored and verified equal to the
+  file's first line; the exit check passes.
+- **2026-11-09 12:51 UTC check (`--since 2026-11-06T17:24Z`): both
+  systems pass**, 97 snapshots each, 0 missing / duplicated / stray, and
+  both `.head` keys are set and equal to the file's first line.
+  - New rows since the deploy are contiguous: SME02412 seq 2979–2999
+    (21 rows), SME08640 seq 84–138 (55).
+  - Run logs (135 GE_CV runs): 20 reads with new lines, all inserts
+    successful, no errors, no full re-reads, no unmatched lines, no
+    duplicate drops.
+  - No new GE file and no storm in the window yet, so G4/G5 are not
+    exercised.
+- The prod run logs showed that idle systems (12 of the 13 CV systems with
+  a file) never get the key, and that `getRedisLine` warns every run for
+  every system without it.
+- **Follow-up (CV-1b-head):** store the key on runs that insert nothing,
+  when the watermark already refers to this file. Read Redis only after
+  the file check.
+  - Built on dev and tested; read-only rehearsal on prod state clean.
+  - Review: `REVIEW-CV1B-HEAD-HANDOFF.md`.
+
+**Deploy steps (done):**
+1. `git push origin dev dev:staging dev:prod`.
+2. The user pulls in `/home/prod/hhm_rpp_ge`. `npm run ge_cv` is a
+   short cron process, so the next :18/:48 run uses the new code; no
+   restart is needed.
+3. The first run that reads new lines stores `<sme>.sysError.log.head`;
+   otherwise it reads as before.
+
+**Verify** (read-only probe `verify_cv1b.js`, session scratchpad). For
+each saved snapshot it checks:
+- every complete data line is in `log.ge_cv_syserror` exactly once;
+- no row captured in the window is missing from every snapshot;
+- the Redis watermark sits on a line boundary;
+- the `.head` key equals the file's first data line.
+
+Baseline 2026-11-06 15:48 UTC, before the deploy: **both systems pass**
+(97 + 97 snapshots, 0 missing, 0 duplicated, 0 stray). After the deploy,
+run it daily with `--since <deploy time>` until a new file (G2) or a storm
+has gone through the window. That is the evidence for "no loss going
+forward".
 
 **CV-1b exit criteria:**
 - "Cause of every sequence gap class explained": met. G5's trailing-byte

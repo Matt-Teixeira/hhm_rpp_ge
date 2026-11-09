@@ -251,3 +251,71 @@ test("006 boots view reads clean like the findings loader (only attrs.clean = tr
   assert.ok(v.includes("((f.attrs ->> 'clean')::boolean IS TRUE) AS clean"));
   assert.ok(v.includes("f.host_local::date AS local_day") && v.includes("WHERE f.metric_key = 'system.boot'"));
 });
+
+// ------------------------------------------------------------- 007 (GE CV)
+test("runner scope covers api.ge_cv_* (007) and nothing else new in api", () => {
+  allow("CREATE VIEW api.ge_cv_x_v AS SELECT * FROM insight.a");
+  allow("DROP VIEW api.ge_cv_x_v");
+  allow("COMMENT ON VIEW api.ge_cv_x_v IS 'x'");
+  allow("CREATE VIEW api.ge_cv_x_v AS SELECT api.ge_cv_fn(a.x) FROM insight.a a");
+  refuse("CREATE VIEW api.ge_mr_x_v AS SELECT 1", /outside the allowed scope/);
+  refuse("CREATE VIEW api.ge_cvx AS SELECT 1", /outside the allowed scope/);
+  refuse("CREATE VIEW api.ge_c_x AS SELECT 1", /outside the allowed scope/);
+  refuse("DROP VIEW api.hca_odata", /outside the allowed scope/);
+  refuse("CREATE VIEW api.ge_cv_probe AS SELECT api.other_fn(1)", /outside insight\/pg_catalog/);
+  const { inScope } = require("../lib/catalog");
+  assert.ok(inScope({ schema: "api", name: "ge_cv_daily_v" }));
+  assert.ok(inScope({ schema: "api", name: "ge_ct_daily_v" }));
+  assert.ok(!inScope({ schema: "api", name: "ge_mr_daily_v" }));
+  assert.ok(!inScope({ schema: "api", name: "hca_odata" }));
+  assert.ok(!inScope({ schema: "log", name: "ge_cv_syserror" }));
+});
+
+test("007 creates only new CV objects (no CT change, no drop), and its down drops exactly them", () => {
+  const src = fs.readFileSync(path.join(dir, "007_cv_schema.sql"), "utf8");
+  const code = src.replace(/--.*$/gm, "").replace(/'(?:[^']|'')*'/g, "''"); // comments and string literals out
+  const up = scanSql(src);
+  assert.deepStrictEqual(up.errors, []);
+  const created = ["insight.ge_cv_facts_id_seq", "insight.ge_cv_facts", "insight.ge_cv_facts_sys_metric_time_idx", "insight.ge_cv_facts_sys_local_idx",
+    "insight.ge_cv_facts_source_idx", "insight.ge_cv_daily", "insight.ge_cv_daily_metric_day_idx", "insight.ge_cv_codes",
+    "api.ge_cv_daily_v", "api.ge_cv_capabilities_v", "api.ge_cv_codes_v", "api.ge_cv_findings_v", "api.ge_cv_system_summary_v"];
+  assert.deepStrictEqual(up.freshCreates.map((c) => c.name).sort(), [...created].sort());
+  assert.deepStrictEqual(up.creates.map((c) => c.name).sort(), [...created].sort(), "nothing re-created");
+  assert.deepStrictEqual(up.drops, []);
+  // Every statement targets a new ge_cv object: the only ALTER is the sequence's OWNED BY, grants name only new objects.
+  for (const s of up.statements) {
+    const head = s.sql.replace(/\s+/g, " ");
+    if (/^ALTER /i.test(head)) assert.match(head, /^ALTER SEQUENCE insight\.ge_cv_facts_id_seq OWNED BY insight\.ge_cv_facts\.id$/);
+    if (/^(GRANT|REVOKE) /i.test(head)) assert.doesNotMatch(head.replace(/insight\.ge_cv_\w+/g, ""), /insight\.|api\./, head);
+    if (/^COMMENT ON /i.test(head)) assert.match(head, /^COMMENT ON (TABLE|VIEW|COLUMN) (insight|api)\.ge_cv_/);
+  }
+  assert.doesNotMatch(code, /\bge_ct_|\blog\.|\bpublic\.|\balert\./, "reads only insight.*; never names a CT object");
+  assert.doesNotMatch(code.replace(/^(GRANT|REVOKE)\b[^;]*;/gm, ""), /\b(INSERT|UPDATE|DELETE|TRUNCATE)\b/,
+    "no row writes (catalog rows come from the registry at stage start)");
+  // Shared tables are referenced only as FK targets / view sources.
+  for (const t of ["metric_catalog", "finding_catalog", "findings", "job_state"]) {
+    for (const m of code.matchAll(new RegExp(String.raw`[^\n]*\binsight\.${t}\b[^\n]*`, "g"))) {
+      assert.match(m[0], /REFERENCES insight\.metric_catalog|JOIN insight\.(metric_catalog|finding_catalog)|FROM insight\.findings/, m[0]);
+    }
+  }
+  const down = scanSql(fs.readFileSync(path.join(dir, "007_cv_schema.down.sql"), "utf8"));
+  assert.deepStrictEqual(down.errors, []);
+  assert.deepStrictEqual(down.creates, []);
+  assert.deepStrictEqual(down.netDrops.map((d) => d.name).sort(),
+    ["api.ge_cv_capabilities_v", "api.ge_cv_codes_v", "api.ge_cv_daily_v", "api.ge_cv_findings_v", "api.ge_cv_system_summary_v",
+      "insight.ge_cv_codes", "insight.ge_cv_daily", "insight.ge_cv_facts"]);
+});
+
+test("007 CV views and tables keep CV rows apart from CT ones", () => {
+  const v = fs.readFileSync(path.join(dir, "007_cv_schema.sql"), "utf8").replace(/\s+/g, " ");
+  // findings: only source ge_cv, in the findings view and in every summary subquery
+  assert.ok(v.includes("JOIN insight.finding_catalog c ON c.finding_key = f.finding_key WHERE f.source = 'ge_cv';"));
+  assert.strictEqual((v.match(/FROM insight\.findings f WHERE f\.(system_id = s\.system_id AND f\.)?source = 'ge_cv'/g) || []).length, 3);
+  assert.doesNotMatch(v, /source = 'ge_ct'/);
+  // facts and daily accept only cv.* metric keys; code labels join cv.error only
+  assert.ok(v.includes("CONSTRAINT ge_cv_facts_cv_metric CHECK (metric_key LIKE 'cv.%')"));
+  assert.ok(v.includes("CONSTRAINT ge_cv_daily_cv_metric CHECK (metric_key LIKE 'cv.%')"));
+  assert.ok(v.includes("LEFT JOIN insight.ge_cv_codes k ON d.metric_key = 'cv.error' AND k.errorcode::text = d.dim"));
+  // natural key = the source row identity proven unique (plan §6) + metric
+  assert.ok(v.includes("CONSTRAINT ge_cv_facts_natural_key UNIQUE (system_id, host_datetime, sequencenumber, metric_key)"));
+});

@@ -1,17 +1,25 @@
 # GE CV Insights — plan
 
-Status (2026-11-06): **Phase CV-0 (decide) AGREED with the user
-2026-11-06: the §2 design and the recommended answer to every §3
-question. CV-1b (ingest integrity) investigated 2026-11-06 (§5): records
-were lost (3,718 proven, plus an unknown number at early file resets);
-a CV-only parser fix is built on dev with tests, a simulation on real
-snapshots and a read-only prod rehearsal. The user agreed D1–D4 (§5.5,
-the recommendation in each) 2026-11-06. The parser fix (D1) is committed (`b0bc513`) and
-deployed to prod 2026-11-06 17:24 UTC (§5.5). A follow-up that stores the
-file-identity key on idle systems is built and awaiting Codex review
-(`REVIEW-CV1B-HEAD-HANDOFF.md`). The collector change (D3a) is
-uncommitted: Codex P2 (shared temp name) is fixed. The device listing
-(D3b) awaits the user's output.** The
+Status (2026-11-09):
+- **CV-0 (decide): AGREED** 2026-11-06 (the §2 design and the
+  recommended answer to every §3 question).
+- **CV-1b (ingest integrity): done apart from its sign-off.** All fixes
+  are deployed: parser D1 + D5, collector D3a + D5 (§5.5). The 361-record
+  backfill (D6) is applied and verified. Every review is closed. The
+  sign-off waits for the first real rotation on SME02412 or SME08640.
+  At the 2026-11-09 15:00 UTC check, both systems pass, with no rotation
+  yet: SME02412 is at seq 2999, SME08640 at 138.
+- **CV-2 groundwork (§6): done, read-only.** Every error code is
+  inventoried (`PLAN-CV-INSIGHTS-CODES.md`), and a mapping is proposed.
+  It awaits the user's decision (§6.4).
+- **CV-1 schema (§7): migration 007 drafted** (new objects only).
+  - Tests pass.
+  - Pre-checks, dry run and roundtrip are clean on a local throwaway
+    database, and the §6.2 mapping loads into it and reconciles exactly.
+  - Next: Codex review (`REVIEW-CV1-SCHEMA-HANDOFF.md`). Then the user
+    applies 007 on prod after the GE CT Phase 5 close-out (§7.5).
+
+The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
 (field-service validation) paused. This plan follows the CT plan's method
 (`PLAN-CT-INSIGHTS.md`):
@@ -95,7 +103,7 @@ new files that nothing in the CT run loads. Shared `insight/` code and
 |---|---|---|---|---|
 | 1200014 | RTA | `[FPGA_Driver::update] Detector com error: …` | 39,714 | 13 (SME02412) |
 | 1200019 | RTA | `[Apollo_Camera::_OffsetFactoryTask] mean value for offset …` | 11,326 | 12 |
-| 1050710 | POS | `Table: lateral axis encoder, potentiometer failure, TBL LAT out of range` | 5,331 (repeats 121,445) | 60 |
+| 1050710 | POS | `Table: lateral axis encoder, potentiometer failure, TBL LAT out of range` | 5,331 (2,679 after removing RTA relays, §6.1) | 60 |
 | 1050168 / 1050170 | POS | `LIFT COLLISION` / `COLLIMATOR COLLISION` | 4,271 / 2,917 | 288 / 288 (system-days, both) |
 | 1050302 / 1050143 / 1050144 | POS | `ANTICOLLISION CINEMATIC ERROR …` | 2,799 / 2,028 / 957 | 161 / 25 / 15 |
 | 1050297 | POS | `Emergency backout has been pressed / released`; `Rack has been resetted for a PIB loss of communication` | 2,502 | 231 |
@@ -219,8 +227,8 @@ and 15,049 on 2026-10-20.
 |---|---|---|
 | **CV-0 Decide** ✅ 2026-11-06 | This plan; the user's answers to §3 | Agreed |
 | **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D6 agreed; all fixes deployed 2026-11-06/09 (parser D1+D5, collector D3a+D5), 361-record backfill (D6) applied 2026-11-09; sign-off after the first rotation (§5.5) | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
-| **CV-1 Schema** | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
-| **CV-2 Extract** | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
+| **CV-1 Schema** — 007 drafted 2026-11-09 (§7); Codex review next; apply after the CT Phase 5 close-out | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
+| **CV-2 Extract** — groundwork done 2026-11-09 (§6); mapping awaits the user's decision | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 |
@@ -588,3 +596,282 @@ forward".
 - "No record loss going forward, shown on raw file snapshots": met for the
   parser classes (G4, G5) once D1 is deployed. **G3 cannot be closed by
   the parser**; it needs D3(b), or the user's acceptance of the residual.
+
+## 6. CV-2 groundwork: error-code inventory and proposed mapping (2026-11-09, read-only)
+
+**Evidence:**
+- All 96,204 rows of `log.ge_cv_syserror` (SME02412 87,096; SME08640
+  9,108), device days 2026-04-30 → 11-08.
+- Only non-encoded columns were read: code, subsystem, category, debug
+  text, source file, `repeatcount`, sequence and time.
+- The per-code tables (all 204 codes, grouped by proposed class) are in
+  `PLAN-CV-INSIGHTS-CODES.md`. The probe scripts are in
+  `~/cv_d3b_evidence/cv2/`, outside the repos.
+
+### 6.1 What the inventory shows
+
+- **204 codes:** SME02412 has 193, SME08640 105. Subsystems are RTA / POS /
+  DL; categories AR / DO / WR / IH.
+- **RTA relays double the positioner errors.** 11,878 rows (12.3%) are
+  RTA relaying an error first logged elsewhere. Every one has subsystem
+  `RTA`, source file `XRImChainPos` and debug text `(null)`; no other
+  row has that combination.
+  - 98% (11,625) follow a same-code original within the previous 30 rows
+    of the file. The device-time lag has a median of 44 ms.
+  - The rest fall in storms or after the known gaps (§5.2).
+  - Counting both would double count, e.g. 1050710: 2,679 originals and
+    2,652 relays.
+  - One code, 1050141, appears only as a relay (1 row).
+  - Most of the "unreadable debug text" in §1.2 is these relays. Without
+    them, only 13 codes (855 rows) have no readable text at all.
+- **`repeatcount` is a running index, not a count of suppressed repeats.**
+  - In file order, 14,797 of the 14,817 non-zero values are the previous
+    same-code, same-text row's value + 1 (0, 1, 2, …). Each repeat is its
+    own row.
+  - So the event count is the row count, and summing `repeatcount` counts
+    nothing.
+  - The "repeats 121,445" for 1050710 in §1.3 was that sum (corrected
+    there).
+- **One code can carry several events, so named metrics need the debug
+  text.** 1050297 (2,506 rows) holds:
+  - "Emergency backout has been pressed" / "released": 724 + 724;
+  - "Rack has been resetted for a PIB loss of communication": 730;
+  - other rack resets (TSSC, SmartBox/SmartHandle, MCB, capacitive
+    sensor, PST request, ALMA near-collision, the safety task): about 170;
+  - "Positioner CPU Boot Up": 151.
+- **Pairs that are one event:**
+  - Every "PIB : COM Reset" (1050024) has a "Rack has been resetted for
+    a PIB loss" (1050297) 10 ms later: 730 of 730, both ways.
+  - Backout pressed and released pair 1:1, median 374 ms apart.
+  - 226 of 247 "COLLISION SENSOR ACTIVATED" (1050167) rows come within
+    2 s of a lift collision (1050168).
+- **SME02412 has two storm types:**
+  - Detector storms: 1200014 detector com error and 1200019 detector
+    offset out of limits, on 11 shared days. The top days are 07-11
+    (16,183 rows), 10-20 (15,395) and 07-10 (7,937).
+  - A positioner episode on 2026-09-11 → 09-18: PIB COM reset / fail,
+    SMA/MCB/stepping board PRD failures, 1050171 "Operating System
+    Fail", and 1050177 anticollision errors on the front axes.
+- **§2's "network failure" is the DICOM modality worklist query.**
+  2800036 `BROWSER_NETWORK_FAILED` and 2800175 `BROWSER_WL_QUERY_FAILED`
+  both come from `MwlDJRLogger.cxx`.
+- **A natural key exists.** (system_id, host_datetime, sequencenumber)
+  is unique over all 96,204 rows, and no key column has a null.
+- **Debug-text templates are generic software messages.** No hostnames,
+  addresses, AE titles or patient data were found in the 334 distinct
+  templates, so the code labels can live in the repo and the DB.
+
+### 6.2 Proposed mapping
+
+Per source row, in order:
+1. **RTA relay** (subsystem `RTA` and source file `XRImChainPos`):
+   ignored, no fact. 11,878 rows.
+2. **Every other row:** `cv.error`, with dim = the error code and attrs
+   `repeatcount`, `sourcefile`, `sourceline`. 84,326 rows, 203 codes.
+3. **Plus at most one named metric,** matched on code + debug text. No
+   row matches two.
+
+| Metric (§2 item 3) | Codes and match | Dim | Rows SME02412 | Rows SME08640 | Sys-days | Category |
+|---|---|---|---|---|---|---|
+| `cv.detector_com_error` | 1200014, 1200114 "Detector com error" | detector operation (5) | 40,007 | 6 | 31 | reliability |
+| `cv.positioner_collision` | 1050168 LIFT, 1050170 COLLIMATOR | lift / collimator | 2,289 | 1,828 | 322 | reliability |
+| `cv.anticollision_error` | 1050142–1050145, 1050301–1050302 "ANTICOLLISION CINEMATIC ERROR"; 1050177 "Anticollision error on axis" | axis (10) | 4,139 | 1,185 | 202 | reliability |
+| `cv.table_encoder_failure` | 1050709 / 1050710 / 1050711 potentiometer; 1050182 longitudinal; 1050187 / 1050188 rotation | axis (4) | 2,934 | 38 | 94 | reliability |
+| `cv.pib_com_loss` | 1050024 "PIB : COM Reset / Fail" | reset / fail | 779 | 0 | 7 | reliability |
+| `cv.emergency_backout` | 1050297 "Emergency backout has been pressed" | — | 269 | 455 | 213 | reliability |
+| `cv.dose_export_rejected` | 2800176 "Association rejected" | — | 531 | 719 | 296 | compliance |
+| `cv.worklist_query_failed` (§2's "network failure") | 2800036, 2800175 | network_failed / wl_query_failed | 358 | 319 | 198 | reliability |
+
+**Totals:** 140,182 facts, of which 84,326 are `cv.error` and 55,856 are
+named.
+
+**Coverage (CT Phase 2 rule):**
+- Every source row is either counted in `cv.error` or on the ignore
+  list.
+- The ignore list has one reviewed entry: RTA relays. It covers code
+  1050141, which only ever appears as a relay.
+- Every counted code gets a row in `insight.ge_cv_codes` with its label.
+  190 codes have a readable label; 13 have none and are shown by code.
+
+**Choices in the proposal, with their evidence:**
+- **Relays:** count the original, never the relay (§6.1).
+- **PIB:** count 1050024 only. The paired 1050297 rack reset is the
+  same event.
+- **Emergency backout:** count "pressed" only. "Released" is its pair.
+- **Not in `cv.positioner_collision`** (they stay in `cv.error`, to
+  avoid double counting):
+  - 1050167 "COLLISION SENSOR ACTIVATED": 226 of 247 come with a lift
+    collision.
+  - 1050305 / 1050178 "COLLISION NOT CLEARED": 19 of 24 come within 60 s
+    of a collision.
+- **Not in `cv.table_encoder_failure`:** 1050015 / 1050102
+  "potentiometerEncoderMismatch" (8 rows, axis unknown) stay in
+  `cv.error`.
+- **No informational code is removed from `cv.error`**, e.g. "Colimator
+  : set Auto", "User has requested Shutdown", "Collimator power supply
+  recovered". `cv.error` stays a faithful count of GE's log, so it
+  reconciles exactly with independent SQL. CV-4's storm finding chooses
+  which codes it counts.
+
+### 6.3 Candidate metrics (watch list, not in v1 unless agreed)
+
+| Candidate | Codes | Rows | Why it might matter |
+|---|---|---|---|
+| `cv.detector_offset_out_of_range` | 1200019 | 11,418 (SME02412, 12 days) | Comes with the detector com storms (11 of 12 days) |
+| `cv.positioner_reset` | 1050297 "Rack has been resetted …" / "Reset generated by SAFETY task", dim = reason | 868 | PIB is 730 of them; the other reasons are rare |
+| `cv.positioner_boot`, `cv.shutdown_requested` | 1050297 "Positioner CPU Boot Up"; 3400037 | 151; 98 | A CV analogue of CT's boot / unclean-shutdown finding |
+| `cv.collimator_comm_failure` | 600104 CAN, 600501 power (600502 = "recovered") | 881 | 41 sys-days, both systems |
+| `cv.positioner_link_lost` | 600105, 1000025 Arcnet, 1050686 RTAC timeout | 1,046 | Mostly the positioner episode |
+
+All of these stay visible in `cv.error` by code either way.
+
+### 6.4 Decisions for the user (recommendation first)
+
+- **M1 Mapping:** adopt §6.2 (`cv.error` + 8 named metrics, relays
+  ignored). Recommended.
+- **M2 Name:** call §2's "network failure" `cv.worklist_query_failed`,
+  because that is what the source says. Recommended.
+- **M3 Candidates:** keep §6.3 out of v1. They are still counted per
+  code in `cv.error`; CV-4 revisits them with the findings.
+- **M4 Field service** (adds to the §5.5 D4 note, optional). The
+  2026-09-11 → 18 positioner episode on SME02412 (PIB COM resets, board
+  PRD failures) and its persistent lateral table potentiometer warning
+  (1050710, 60 sys-days) are worth asking about.
+
+## 7. CV-1 schema: migration 007 (drafted 2026-11-09)
+
+**Files:**
+- `migrations/007_cv_schema.sql`, `migrations/007_cv_schema.down.sql`.
+- Runner scope extended to `api.ge_cv_*`: `migrations/lib/sqlscan.js`,
+  `migrations/lib/catalog.js`, and the messages in `migrations/run.js`.
+- Tests in `migrations/test/sqlscan.test.js`.
+- Nothing the CT run loads changes: `insight/`, `index.js` and the
+  parsers are untouched.
+
+### 7.1 What 007 creates (new objects only)
+
+| Object | What |
+|---|---|
+| `insight.ge_cv_facts` (+ id sequence, 3 indexes) | One row per (source row × metric). Holds:<br>• natural key `(system_id, host_datetime, sequencenumber, metric_key)` (§6.1);<br>• `host_local` (device wall clock), `errorcode`, `subsystem` (trimmed, CHECK), `exceptioncategory`, `dim`, `value_num` / `value_text`, `attrs`;<br>• `source_id` + `source_capture_datetime` (the log row's primary key), `rule_version`.<br>`CHECK (metric_key LIKE 'cv.%')`. **Not partitioned:** about 140k facts per 6 months. |
+| `insight.ge_cv_daily` | `(system_id, local_day, metric_key, dim)` → n (> 0), value sum / min / max / last, first_at / last_at. Same cv.* CHECK. |
+| `insight.ge_cv_codes` | One row per error code: subsystem, label (most common readable template), label_share, source file, n, systems, first / last seen (§2 item 4). |
+| Grants | `insight_writer`: DML on the three tables, and USAGE / SELECT on the sequence (as in 003 / 004). |
+| `api.ge_cv_daily_v` | Daily rows with catalog labels; for `cv.error`, `code_label` and `code_subsystem` from `ge_cv_codes`. |
+| `api.ge_cv_capabilities_v` | **A view over the facts, not a table**, so there is nothing to derive or verify. Absent = never logged. |
+| `api.ge_cv_codes_v` | The code labels. |
+| `api.ge_cv_findings_v` | `insight.findings WHERE source = 'ge_cv'` with `finding_catalog` labels. |
+| `api.ge_cv_system_summary_v` | Per system: newest fact, newest device day, open ge_cv findings and their highest severity. |
+
+**Shared tables are only referenced, never changed:**
+- the facts and daily foreign keys to `metric_catalog`;
+- the views' joins to `metric_catalog` and `finding_catalog`, and reads
+  of `findings`.
+
+007 writes no rows. The `cv.*` catalog rows come from the CV registry at
+stage start, as for CT.
+
+**Left out on purpose:**
+- **A CV clock table.** SME02412 runs 34–114 min ahead. CV-3 decides,
+  and would add `insight.ge_cv_clock`; CT's `insight.system_clock` is
+  compared row by row by the CT verifier.
+- **A days view.** That is for CV-6, the viewer.
+- **Any change to `api.ge_ct_findings_v`** (§7.4 C3).
+
+### 7.2 Tests (no DB) — `node --test migrations/test`: 20 of 20 pass
+
+- **007 creates exactly its 13 new objects:**
+  - no drop, no re-create;
+  - the only ALTER is the sequence's OWNED BY;
+  - grants name only new objects, and there are no row writes;
+  - no CT, `log.*`, `public.*` or `alert.*` name.
+- **007 down drops exactly the 8 objects** (views and tables).
+- **CV views select only `source = 'ge_cv'`.** The cv.* CHECKs and the
+  natural key are pinned.
+- **Runner scope:** `api.ge_cv_*` is allowed. `api.ge_mr_*`,
+  `api.ge_cvx`, `api.hca_odata` and `log.*` are still refused, and
+  `inScope` agrees.
+- **001–006 are unchanged:** the same checksums as applied on prod.
+
+### 7.3 Rehearsal on a local throwaway database (2026-11-09)
+
+**Setup:**
+- PostgreSQL 14.11 (prod is 16.15), in the session scratchpad.
+- Unix socket only, permissions 0700.
+- Stub `api` / `log` schemas, an `api.hca_odata` stand-in and the role
+  `insight_writer`.
+- The real runner, with the target given by environment variables. The
+  prod DB was not touched.
+
+**Runner results:**
+- 001–006 applied.
+- `roundtrip`:
+  - 007 up then down;
+  - no locks on protected relations;
+  - after up, in-scope **+17 -0 ~0**: no existing insight or CT object
+    changed;
+  - down restored all 267 catalog objects exactly.
+- `up` dry run: clean. `up --apply`: clean.
+
+**The §6.2 mapping loaded as `insight_writer`:**
+- 140,182 facts inserted; re-inserting a batch adds 0.
+- Daily and code rows built.
+- `api.ge_cv_capabilities_v` equals the classifier on 17 of 17 (system,
+  metric) cells.
+- `cv.error` per (system, code) in `api.ge_cv_daily_v` equals a plain
+  count of the non-relay rows on 297 of 297 cells.
+
+**What the database refuses:**
+- a CT key in the CV facts;
+- an untrimmed subsystem;
+- DDL or TRUNCATE by the writer.
+
+As for CT, the writer has no access to `api`.
+
+### 7.4 Before CV-2 can write (constraints found, not part of 007)
+
+- **C1: CT verifiers count every catalog row.** They would fail as soon
+  as `cv.*` metric rows or CV finding keys exist:
+  - `insight/verify_facts.js` (`catalog.n === expected`);
+  - `insight/derive/verify.js` `check_invariants`
+    (catalog = CT rule count);
+  - `insight/findings/verify.js` "catalog = registry".
+
+  The stage rehearsal gates on all three. So they must be scoped to CT
+  keys before CV-2's first catalog write. That is a small CT code change,
+  allowed only after the Phase 5 close-out, with its own review and
+  deploy.
+
+  Applying 007 is safe without it, because 007 writes no rows.
+- **C2: the writer can't read the CV log table.** `insight_writer` needs
+  `SELECT ON log.ge_cv_syserror`. A migration can't grant that (the
+  runner refuses grants on `log.*`), so it is a step the user runs with
+  `maintenance/create_insight_writer.js` or a one-off, before CV-2's
+  apply.
+- **C3: `api.ge_ct_findings_v` has no source filter.** The CT viewer,
+  the CT findings run and the CT verifier each filter
+  `source = 'ge_ct'` themselves, so CV findings don't affect them. But
+  any other consumer of that view would see CV rows. A later migration
+  can add `WHERE f.source = 'ge_ct'`; decide before CV-4.
+
+### 7.5 Applying 007 on prod (the user, after the CT Phase 5 close-out)
+
+Recommended: after the close-out check (2026-11-12 13:00 UTC), once the
+Codex review is closed and 007 is committed.
+
+From the checkout whose `.env` targets prod:
+```
+node migrations/run.js status
+node migrations/run.js up            # dry run: type the DB name
+node migrations/run.js roundtrip     # up + down, catalog identical, rolled back
+node migrations/run.js up --apply    # type the DB name, then APPLY
+```
+
+**What to expect:**
+- 13 objects created and version 7 recorded.
+- Protected objects unchanged, and in-scope `+17 -0 ~0`.
+- The foreign keys briefly lock `insight.metric_catalog`. If a CT stage
+  run holds it, `lock_timeout` (5 s) aborts cleanly; rerun.
+
+**After the apply** (I verify read-only): the views exist and are empty,
+the CT views are byte-identical (the runner's fingerprint), and
+`schema_migrations` has 7 rows.

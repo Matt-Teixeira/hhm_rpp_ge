@@ -58,7 +58,7 @@ WHERE t.typtype IN ('e', 'd', 'r', 'm')
 // Objects a migration is allowed to change.
 function inScope(row) {
   if (row.schema === "insight") return true;
-  if (row.schema === "api" && row.name && /^ge_ct_/.test(row.name)) return true;
+  if (row.schema === "api" && row.name && /^ge_c[tv]_/.test(row.name)) return true; // api.ge_ct_* (CT), api.ge_cv_* (CV, 007)
   return false;
 }
 

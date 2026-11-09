@@ -12,7 +12,7 @@
 //
 // Safeguards, in order:
 //   1. Static scan of every migration file (up and down). Whitelisted
-//      statement forms only; writes/DDL outside insight.* and api.ge_ct_*
+//      statement forms only; writes/DDL outside insight.*, api.ge_ct_* and api.ge_cv_*
 //      are refused, as are transaction control, SET, CASCADE, unqualified
 //      names, FKs to protected tables (lib/sqlscan.js).
 //   2. Target confirmation: prints database/host/user; operator types the
@@ -25,7 +25,7 @@
 //   5. Dry run by default: everything runs in one transaction that is
 //      rolled back. --apply commits.
 //   6. In-transaction post-checks before COMMIT/ROLLBACK: catalog
-//      fingerprint of every object outside insight/api.ge_ct_* unchanged;
+//      fingerprint of every object outside insight/api.ge_ct_*/api.ge_cv_* unchanged;
 //      no locks stronger than AccessShare on protected relations; declared
 //      objects exist (up) / are gone (down).
 //   7. After ROLLBACK: verify nothing persisted. After COMMIT: re-verify
@@ -359,9 +359,9 @@ async function main() {
         const post = await cat.snapshot(c);
         const d = cat.diff(preProt, cat.protectedOf(post));
         if (!d.same) throw fail(`protected objects changed:\n${fmtDiff(d)}`);
-        out(`    ok  protected objects unchanged (${preProt.size} fingerprints: log.*, public.*, alert.*, api.* except ge_ct_*, ...)`);
+        out(`    ok  protected objects unchanged (${preProt.size} fingerprints: log.*, public.*, alert.*, api.* except ge_ct_* / ge_cv_*, ...)`);
         const sd = cat.diff(cat.scopedOf(pre), cat.scopedOf(post));
-        out(`    in-scope changes (insight.*, api.ge_ct_*): +${sd.added.length} -${sd.removed.length} ~${sd.changed.length}`);
+        out(`    in-scope changes (insight.*, api.ge_ct_*, api.ge_cv_*): +${sd.added.length} -${sd.removed.length} ~${sd.changed.length}`);
         if (sd.added.length) out(fmtDiff({ added: sd.added, removed: [], changed: [] }, 12));
         if (args.cmd !== "roundtrip") {
           for (const m of ups) for (const o of m.upScan.creates) if (!(await objectExists(c, o))) throw fail(`${o.kind} ${o.name} missing after ${m.upFile}`);

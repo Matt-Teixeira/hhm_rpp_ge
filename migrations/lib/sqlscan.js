@@ -3,7 +3,7 @@
 //
 // Whitelist, not blacklist: every top-level statement must match a known
 // form whose write target is inside the allowed scope (insight.* or
-// api.ge_ct_*). Anything unrecognised is refused. Dollar-quoted bodies
+// api.ge_ct_* / api.ge_cv_*). Anything unrecognised is refused. Dollar-quoted bodies
 // (functions) are scanned for write verbs too, including dynamic SQL in
 // format() literals. This is defence in depth: the runner's catalog
 // post-check is the authoritative guard on protected objects.
@@ -157,8 +157,8 @@ function isAllowedTarget(name) {
   const n = normName(name);
   if (/^insight\.(?:[a-z_][a-z0-9_%]*|%[is][a-z0-9_%]*)$/.test(n)) return true;
   if (/^insight\.[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/.test(n)) return true; // insight.table.column (COMMENT ON COLUMN)
-  if (/^api\.ge_ct_[a-z0-9_]*$/.test(n)) return true;
-  if (/^api\.ge_ct_[a-z0-9_]*\.[a-z_][a-z0-9_]*$/.test(n)) return true;
+  if (/^api\.ge_c[tv]_[a-z0-9_]*$/.test(n)) return true; // api.ge_ct_* (CT), api.ge_cv_* (CV, 007)
+  if (/^api\.ge_c[tv]_[a-z0-9_]*\.[a-z_][a-z0-9_]*$/.test(n)) return true;
   return false;
 }
 
@@ -174,7 +174,7 @@ const FORBIDDEN_ANYWHERE = [
 // function bodies), because they run later, outside the migration's catalog
 // checks (review F1). Unqualified names resolve via the runner's pinned
 // search_path (pg_catalog), so only schema-qualified calls can reach user
-// code: those must target insight.*, pg_catalog.* or api.ge_ct_*.
+// code: those must target insight.*, pg_catalog.*, api.ge_ct_* or api.ge_cv_*.
 const SIDE_EFFECT_BUILTINS = /\b(setval|pg_advisory\w*|pg_try_advisory\w*|pg_notify|lo_\w+|pg_sleep\w*|pg_switch_wal|pg_create_\w+|pg_drop_\w+|pg_replication_\w+|pg_stat_reset\w*|pg_stat_statements_reset|pg_rotate_logfile|pg_promote|pg_file_\w+|txid_current\w*|pg_current_xact_id\w*|pg_log_backend_memory_contexts|pg_import_system_collations|pg_logical_emit_message)\s*\(/i;
 
 // Qualified calls and side-effecting built-ins: run on text whose string
@@ -187,8 +187,8 @@ function checkCalls(text, line) {
   while ((m = q.exec(text))) {
     const schema = m[1].replace(/"/g, "").toLowerCase();
     const name = m[2].replace(/"/g, "").toLowerCase();
-    if (schema === "insight" || schema === "pg_catalog" || (schema === "api" && /^ge_ct_/.test(name))) continue;
-    throw new ScanError(`call or reference ${schema}.${name}(...) outside insight/pg_catalog/api.ge_ct_*`, line);
+    if (schema === "insight" || schema === "pg_catalog" || (schema === "api" && /^ge_c[tv]_/.test(name))) continue;
+    throw new ScanError(`call or reference ${schema}.${name}(...) outside insight/pg_catalog/api.ge_ct_*/api.ge_cv_*`, line);
   }
 }
 
@@ -242,7 +242,7 @@ function requireQualified(name, what, line) {
 function requireAllowed(name, what, line) {
   requireQualified(name, what, line);
   if (!isAllowedTarget(name)) {
-    throw new ScanError(`${what} "${name}" is outside the allowed scope (insight.* / api.ge_ct_*)`, line);
+    throw new ScanError(`${what} "${name}" is outside the allowed scope (insight.* / api.ge_ct_* / api.ge_cv_*)`, line);
   }
 }
 

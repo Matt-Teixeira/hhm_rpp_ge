@@ -277,7 +277,7 @@ test("007 creates only new CV objects (no CT change, no drop), and its down drop
   const up = scanSql(src);
   assert.deepStrictEqual(up.errors, []);
   const created = ["insight.ge_cv_facts_id_seq", "insight.ge_cv_facts", "insight.ge_cv_facts_sys_metric_time_idx", "insight.ge_cv_facts_sys_local_idx",
-    "insight.ge_cv_facts_source_idx", "insight.ge_cv_daily", "insight.ge_cv_daily_metric_day_idx", "insight.ge_cv_codes",
+    "insight.ge_cv_daily", "insight.ge_cv_daily_metric_day_idx", "insight.ge_cv_codes",
     "api.ge_cv_daily_v", "api.ge_cv_capabilities_v", "api.ge_cv_codes_v", "api.ge_cv_findings_v", "api.ge_cv_system_summary_v"];
   assert.deepStrictEqual(up.freshCreates.map((c) => c.name).sort(), [...created].sort());
   assert.deepStrictEqual(up.creates.map((c) => c.name).sort(), [...created].sort(), "nothing re-created");
@@ -316,6 +316,8 @@ test("007 CV views and tables keep CV rows apart from CT ones", () => {
   assert.ok(v.includes("CONSTRAINT ge_cv_facts_cv_metric CHECK (metric_key LIKE 'cv.%')"));
   assert.ok(v.includes("CONSTRAINT ge_cv_daily_cv_metric CHECK (metric_key LIKE 'cv.%')"));
   assert.ok(v.includes("LEFT JOIN insight.ge_cv_codes k ON d.metric_key = 'cv.error' AND k.errorcode::text = d.dim"));
-  // natural key = the source row identity proven unique (plan §6) + metric
-  assert.ok(v.includes("CONSTRAINT ge_cv_facts_natural_key UNIQUE (system_id, host_datetime, sequencenumber, metric_key)"));
+  // key = the source row's primary key + metric (unique by construction; review CV1-SCHEMA P2),
+  // never the device-time / sequence identity, which can repeat across a DST fall-back and a file reset
+  assert.ok(v.includes("CONSTRAINT ge_cv_facts_source_key UNIQUE (source_id, source_capture_datetime, metric_key)"));
+  assert.doesNotMatch(v, /UNIQUE \([^)]*sequencenumber/);
 });

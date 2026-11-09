@@ -15,9 +15,13 @@
 --    gives a cv.error fact (dim = error code) and at most one named-metric
 --    fact. RTA relays of positioner errors (sourcefile XRImChainPos, debug
 --    text "(null)") are skipped by the extract, not stored here (§6.2).
---    Natural key: (system_id, host_datetime, sequencenumber) is unique over
---    all 96,204 source rows (checked 2026-11-09); sequencenumber is a
---    within-file order only, never a count (§5.5 D2).
+--    Key: the source row's primary key (source_id, source_capture_datetime)
+--    + metric. Not (system_id, host_datetime, sequencenumber): that was
+--    unique over all 96,204 rows (checked 2026-11-09) but is not unique by
+--    construction, because the device logs local time with no offset (the
+--    DST fall-back hour repeats) and sequencenumber resets with each file
+--    (review CV1-SCHEMA P2). Source rows are already one per record: the
+--    ingest duplicate guard compares the whole record.
 CREATE SEQUENCE insight.ge_cv_facts_id_seq AS bigint;
 
 CREATE TABLE insight.ge_cv_facts (
@@ -38,16 +42,15 @@ CREATE TABLE insight.ge_cv_facts (
   source_capture_datetime timestamptz NOT NULL,     -- with source_id = log.ge_cv_syserror primary key
   rule_version            integer     NOT NULL CHECK (rule_version > 0),
   extracted_at            timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT ge_cv_facts_natural_key UNIQUE (system_id, host_datetime, sequencenumber, metric_key),
+  CONSTRAINT ge_cv_facts_source_key UNIQUE (source_id, source_capture_datetime, metric_key),
   CONSTRAINT ge_cv_facts_cv_metric CHECK (metric_key LIKE 'cv.%'),
   CONSTRAINT ge_cv_facts_subsystem_trimmed CHECK (subsystem <> '' AND subsystem = btrim(subsystem))
 );
 ALTER SEQUENCE insight.ge_cv_facts_id_seq OWNED BY insight.ge_cv_facts.id;
 CREATE INDEX ge_cv_facts_sys_metric_time_idx ON insight.ge_cv_facts (system_id, metric_key, host_datetime);
 CREATE INDEX ge_cv_facts_sys_local_idx ON insight.ge_cv_facts (system_id, host_local);
-CREATE INDEX ge_cv_facts_source_idx ON insight.ge_cv_facts (source_id);
 COMMENT ON TABLE insight.ge_cv_facts IS
-  'GE CV: one row per (log.ge_cv_syserror row x metric). cv.error for every counted row (dim = error code), plus at most one named metric. RTA relays of positioner errors are not stored. Upserted on the natural key; a fact is replaced only by a newer rule version.';
+  'GE CV: one row per (log.ge_cv_syserror row x metric). cv.error for every counted row (dim = error code), plus at most one named metric. RTA relays of positioner errors are not stored. Upserted on ge_cv_facts_source_key (source row primary key + metric); a fact is replaced only by a newer rule version.';
 COMMENT ON COLUMN insight.ge_cv_facts.dim IS
   'Breakdown within a metric: error code (cv.error), axis or part (collision, anticollision, encoder), operation (detector com), sub-kind (PIB, worklist); '''' otherwise.';
 COMMENT ON COLUMN insight.ge_cv_facts.sequencenumber IS

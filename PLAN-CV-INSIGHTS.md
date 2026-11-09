@@ -10,14 +10,16 @@ Status (2026-11-09):
   At the 2026-11-09 15:00 UTC check, both systems pass, with no rotation
   yet: SME02412 is at seq 2999, SME08640 at 138.
 - **CV-2 groundwork (§6): done, read-only.** Every error code is
-  inventoried (`PLAN-CV-INSIGHTS-CODES.md`), and a mapping is proposed.
-  It awaits the user's decision (§6.4).
+  inventoried (`PLAN-CV-INSIGHTS-CODES.md`). The mapping is **AGREED
+  2026-11-09** (the recommendation in each of M1–M4, §6.4).
 - **CV-1 schema (§7): migration 007 drafted** (new objects only).
-  - Tests pass.
-  - Pre-checks, dry run and roundtrip are clean on a local throwaway
-    database, and the §6.2 mapping loads into it and reconciles exactly.
-  - Next: Codex review (`REVIEW-CV1-SCHEMA-HANDOFF.md`). Then the user
-    applies 007 on prod after the GE CT Phase 5 close-out (§7.5).
+  - Codex review closed: one P2 (the fact key), fixed and re-rehearsed
+    (§7.6).
+  - Tests pass. Pre-checks, dry run and roundtrip are clean on a local
+    throwaway database, and the §6.2 mapping loads into it and reconciles
+    exactly.
+  - Next: the user applies 007 on prod after the GE CT Phase 5 close-out
+    (§7.5).
 
 The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
@@ -520,6 +522,15 @@ Truth is the device's complete lines.
   > sysError.log well before its 4000-record limit (e.g. after 601, 1416,
   > 2113 records). Do you know what triggers that, and does the system
   > keep the previous file?
+  >
+  > Two more questions on SME02412 (added 2026-11-09, M4):
+  > 1. From 2026-09-11 to 09-18 its positioner logged repeated PIB
+  >    communication resets and failures, board failures (SMA / MCB /
+  >    stepping board) and "Operating System Fail". Was there a service
+  >    visit or a part replaced around then?
+  > 2. A lateral table potentiometer warning (error 1050710) appears on
+  >    about 60 days since May. Is that sensor known to be faulty, or
+  >    due for replacement?
 - **Optional confirmation of G4 / G5.** The prod run logs of 2026-07-10
   23:48, 2026-07-11 06:18 and 2026-09-18 19:18 UTC (if still kept) should
   each hold a `NO MATCH FOUND` fragment line. For example:
@@ -655,8 +666,10 @@ forward".
 - **§2's "network failure" is the DICOM modality worklist query.**
   2800036 `BROWSER_NETWORK_FAILED` and 2800175 `BROWSER_WL_QUERY_FAILED`
   both come from `MwlDJRLogger.cxx`.
-- **A natural key exists.** (system_id, host_datetime, sequencenumber)
-  is unique over all 96,204 rows, and no key column has a null.
+- **A natural key exists in today's data.** (system_id, host_datetime,
+  sequencenumber) is unique over all 96,204 rows, and no key column has a
+  null. It is not unique by construction (DST fall-back hour + a file
+  reset), so the facts key on the source row instead (§7.6).
 - **Debug-text templates are generic software messages.** No hostnames,
   addresses, AE titles or patient data were found in the 334 distinct
   templates, so the code labels can live in the repo and the DB.
@@ -725,7 +738,7 @@ named.
 
 All of these stay visible in `cv.error` by code either way.
 
-### 6.4 Decisions for the user (recommendation first)
+### 6.4 Decisions (AGREED 2026-11-09: the recommendation in each)
 
 - **M1 Mapping:** adopt §6.2 (`cv.error` + 8 named metrics, relays
   ignored). Recommended.
@@ -733,7 +746,8 @@ All of these stay visible in `cv.error` by code either way.
   because that is what the source says. Recommended.
 - **M3 Candidates:** keep §6.3 out of v1. They are still counted per
   code in `cv.error`; CV-4 revisits them with the findings.
-- **M4 Field service** (adds to the §5.5 D4 note, optional). The
+- **M4 Field service: AGREED, add to the §5.5 D4 note** (two
+  questions, drafted there). The
   2026-09-11 → 18 positioner episode on SME02412 (PIB COM resets, board
   PRD failures) and its persistent lateral table potentiometer warning
   (1050710, 60 sys-days) are worth asking about.
@@ -752,7 +766,7 @@ All of these stay visible in `cv.error` by code either way.
 
 | Object | What |
 |---|---|
-| `insight.ge_cv_facts` (+ id sequence, 3 indexes) | One row per (source row × metric). Holds:<br>• natural key `(system_id, host_datetime, sequencenumber, metric_key)` (§6.1);<br>• `host_local` (device wall clock), `errorcode`, `subsystem` (trimmed, CHECK), `exceptioncategory`, `dim`, `value_num` / `value_text`, `attrs`;<br>• `source_id` + `source_capture_datetime` (the log row's primary key), `rule_version`.<br>`CHECK (metric_key LIKE 'cv.%')`. **Not partitioned:** about 140k facts per 6 months. |
+| `insight.ge_cv_facts` (+ id sequence, 2 indexes) | One row per (source row × metric). Holds:<br>• unique key `(source_id, source_capture_datetime, metric_key)`: the log row's primary key + metric (§7.6);<br>• `system_id`, `host_datetime`, `sequencenumber` (the device-side identity, not a key);<br>• `host_local` (device wall clock), `errorcode`, `subsystem` (trimmed, CHECK), `exceptioncategory`, `dim`, `value_num` / `value_text`, `attrs`;<br>• `source_id` + `source_capture_datetime` (the log row's primary key), `rule_version`.<br>`CHECK (metric_key LIKE 'cv.%')`. **Not partitioned:** about 140k facts per 6 months. |
 | `insight.ge_cv_daily` | `(system_id, local_day, metric_key, dim)` → n (> 0), value sum / min / max / last, first_at / last_at. Same cv.* CHECK. |
 | `insight.ge_cv_codes` | One row per error code: subsystem, label (most common readable template), label_share, source file, n, systems, first / last seen (§2 item 4). |
 | Grants | `insight_writer`: DML on the three tables, and USAGE / SELECT on the sequence (as in 003 / 004). |
@@ -779,14 +793,14 @@ stage start, as for CT.
 
 ### 7.2 Tests (no DB) — `node --test migrations/test`: 20 of 20 pass
 
-- **007 creates exactly its 13 new objects:**
+- **007 creates exactly its 12 new objects:**
   - no drop, no re-create;
   - the only ALTER is the sequence's OWNED BY;
   - grants name only new objects, and there are no row writes;
   - no CT, `log.*`, `public.*` or `alert.*` name.
 - **007 down drops exactly the 8 objects** (views and tables).
 - **CV views select only `source = 'ge_cv'`.** The cv.* CHECKs and the
-  natural key are pinned.
+  source key are pinned, and no unique key uses `sequencenumber`.
 - **Runner scope:** `api.ge_cv_*` is allowed. `api.ge_mr_*`,
   `api.ge_cvx`, `api.hca_odata` and `log.*` are still refused, and
   `inScope` agrees.
@@ -807,8 +821,8 @@ stage start, as for CT.
 - `roundtrip`:
   - 007 up then down;
   - no locks on protected relations;
-  - after up, in-scope **+17 -0 ~0**: no existing insight or CT object
-    changed;
+  - after up, in-scope **+16 -0 ~0** (+17 before the §7.6 fix): no
+    existing insight or CT object changed;
   - down restored all 267 catalog objects exactly.
 - `up` dry run: clean. `up --apply`: clean.
 
@@ -867,11 +881,41 @@ node migrations/run.js up --apply    # type the DB name, then APPLY
 ```
 
 **What to expect:**
-- 13 objects created and version 7 recorded.
-- Protected objects unchanged, and in-scope `+17 -0 ~0`.
+- 12 objects created and version 7 recorded.
+- Protected objects unchanged, and in-scope `+16 -0 ~0`.
 - The foreign keys briefly lock `insight.metric_catalog`. If a CT stage
   run holds it, `lock_timeout` (5 s) aborts cleanly; rerun.
 
 **After the apply** (I verify read-only): the views exist and are empty,
 the CT views are byte-identical (the runner's fingerprint), and
 `schema_migrations` has 7 rows.
+
+### 7.6 Codex review CV1-SCHEMA (2026-11-09): one P2, fixed
+
+`REVIEW-CV1-SCHEMA-CODEX.md`. Everything else passed: the runner scope,
+"no CT change", the lock timeout, unpartitioned volume (about 1.3M facts
+per 6 months at 18 systems), the views, the down file, and C1–C3 as the
+complete list of shared-table interactions.
+
+- **P2: the fact key could collide.** `(system_id, host_datetime,
+  sequencenumber, metric_key)` is unique in today's data but not by
+  construction. The device logs local time with no offset, so the DST
+  fall-back hour happens twice; with a file reset in between, two
+  different records can get the same time and sequence number. Adding
+  `errorcode` would not help for a repeat of the same code.
+- **Fix:** the unique key is now `ge_cv_facts_source_key (source_id,
+  source_capture_datetime, metric_key)`, the source row's primary key +
+  metric. It replaces the separate `source_id` index (12 objects, not
+  13).
+  - This is safe because source rows are already one per record: the
+    ingest duplicate guard (`persist/drop_already_ingested_cv.js`)
+    compares the whole record.
+  - **For CV-2:** its verify reports any repeat of (system_id,
+    host_datetime, sequencenumber, errorcode) in the source as a data
+    quality note (none today), instead of the key silently dropping one.
+- **Re-checked locally** with the real runner: roundtrip clean
+  (+16 -0 ~0, 267 objects identical after down); the §6.2 mapping
+  reloads 140,182 facts, re-insert adds 0, and 17 / 17 and 297 / 297
+  cells reconcile. The P2 case itself, two source rows with the same
+  device time and sequence number, keeps both facts. The capabilities
+  view still pushes `system_id` down to an index (7 ms).

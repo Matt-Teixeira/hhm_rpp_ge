@@ -218,7 +218,7 @@ and 15,049 on 2026-10-20.
 | Phase | What | Exit criteria |
 |---|---|---|
 | **CV-0 Decide** ✅ 2026-11-06 | This plan; the user's answers to §3 | Agreed |
-| **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D4 agreed; parser fix (D1) deployed 2026-11-06, collector change in review | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
+| **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D6 agreed; all fixes deployed 2026-11-06/09 (parser D1+D5, collector D3a+D5), 361-record backfill (D6) applied 2026-11-09; sign-off after the first rotation (§5.5) | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
 | **CV-1 Schema** | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
 | **CV-2 Extract** | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
@@ -451,6 +451,42 @@ Truth is the device's complete lines.
     - **Urgency:** SME02412 is at seq ~3000 of 4000. Its next rotation
       overwrites the device's `sysErrorPrev.log`; the copies above are
       unaffected.
+  - **Deployed and applied 2026-11-09.** Pushed 13:59 UTC
+    (`hhm_rpp_ge` 0b6fa11, `hhm_data_acquisition` da90c48); the user
+    pulled both at 14:00:51.
+    - **D6 backfill:** dry runs matched the rehearsal. APPLY committed
+      346 rows (SME02412 seq 3655–4000) and 15 rows (SME08640 seq
+      3986–4000) at 14:03 UTC.
+      - Verified read-only (scratchpad `backfill_verify.js`): every one of
+        the 4,000 lines of each `sysErrorPrev.log` is in
+        `log.ge_cv_syserror` exactly once.
+      - A re-run refuses ("nothing to insert"), and the exit check still
+        passes.
+      - G3 is now closed for these two rotations. Earlier rotations stay
+        lost (§5.2 bound).
+    - **D5 collector:** the 14:30 run fetched `sysErrorPrev.log` for both
+      systems, byte-identical to the evidence copies and with the device
+      mtime kept. Both runs succeeded with no output; no temp files are
+      left.
+    - **D5 parser:** first exercised at the next rotation (SME02412 is at
+      seq ~3000). The daily exit check watches for it.
+    - **Exit check, kept outside the repos:** `~/cv_d3b_evidence/tools/`
+      (matt-teixeira):
+      ```
+      node verify_cv1b.js --since 2026-11-06T17:24:00Z
+      ```
+      It is read-only and accepts lines from `sysErrorPrev.log` (D5/D6).
+      It also holds `backfill_verify.js`, `prev_verify.js`, `recon.js` and
+      `runlog.js`.
+      - 2026-11-09 14:50 UTC: both systems ok. In the window, SME02412 has
+        349 rows (346 from Prev) and SME08640 33 (15 from Prev); 0
+        missing, duplicated or stray.
+    - **CV-1b status: all fixes deployed.** Exit criteria:
+      - "every gap class explained": met;
+      - "no record loss going forward": met for G4/G5/G3 by design and
+        rehearsal. To be **signed off after the first real rotation** on
+        SME02412 or SME08640 passes the exit check with D5's tail
+        recovery in the logs (`ge_cv_sys_error: prev tail`).
   - **Decisions as proposed:**
     - **D5:** close G3 going forward.
       - Collector: also fetch `sysErrorPrev.log`, with the same

@@ -1,0 +1,11 @@
+[
+ {
+  "templates_seen": 728,
+  "errorcode": 1050297,
+  "subsystem": "POS",
+  "debugtext": "  - Emergency backout has been pressed.",
+  "sourcefile": "Z:/heroic/poslayer.c",
+  "repeatcount": 0,
+  "sourceline": 1440
+ }
+]

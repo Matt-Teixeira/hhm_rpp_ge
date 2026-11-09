@@ -1,0 +1,74 @@
+[
+ {
+  "templates_seen": 2653,
+  "errorcode": 1050710,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 1840,
+  "errorcode": 1050168,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 1276,
+  "errorcode": 1050170,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 1216,
+  "errorcode": 1050302,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 678,
+  "errorcode": 1050171,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 523,
+  "errorcode": 1050024,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 359,
+  "errorcode": 1050143,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ },
+ {
+  "templates_seen": 275,
+  "errorcode": 1050088,
+  "subsystem": "RTA",
+  "debugtext": " (null)",
+  "sourcefile": "XRImChainPos",
+  "repeatcount": 0,
+  "sourceline": 203
+ }
+]

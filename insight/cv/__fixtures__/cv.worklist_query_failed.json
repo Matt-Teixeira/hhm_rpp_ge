@@ -1,0 +1,38 @@
+[
+ {
+  "templates_seen": 619,
+  "errorcode": 2800036,
+  "subsystem": "DL",
+  "debugtext": "\"Internal Error, 1206 : BROWSER_NETWORK_FAILED\"",
+  "sourcefile": "MwlDJRLogger.cxx",
+  "repeatcount": 0,
+  "sourceline": 153
+ },
+ {
+  "templates_seen": 26,
+  "errorcode": 2800036,
+  "subsystem": "DL",
+  "debugtext": "\", 1206 : BROWSER_NETWORK_FAILED\"",
+  "sourcefile": "MwlDJRLogger.cxx",
+  "repeatcount": 0,
+  "sourceline": 153
+ },
+ {
+  "templates_seen": 26,
+  "errorcode": 2800175,
+  "subsystem": "DL",
+  "debugtext": "\"Association timeout, 1207 : BROWSER_WL_QUERY_FAILED\"",
+  "sourcefile": "MwlDJRLogger.cxx",
+  "repeatcount": 0,
+  "sourceline": 153
+ },
+ {
+  "templates_seen": 14,
+  "errorcode": 2800175,
+  "subsystem": "DL",
+  "debugtext": "\"unexpected disconnection, 1207 : BROWSER_WL_QUERY_FAILED\"",
+  "sourcefile": "MwlDJRLogger.cxx",
+  "repeatcount": 0,
+  "sourceline": 153
+ }
+]

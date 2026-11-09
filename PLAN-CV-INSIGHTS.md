@@ -20,6 +20,20 @@ Status (2026-11-09):
     exactly.
   - Next: the user applies 007 on prod after the GE CT Phase 5 close-out
     (§7.5).
+- **CV-2 extract (§8): built 2026-11-09, uncommitted**, as new files in
+  `insight/cv/` that nothing in the CT run loads.
+  - Read-only dry run on prod: 17 of 17 cells equal the independent SQL.
+  - Local rehearsal of the write path: clean.
+  - Codex review closed: one P2 (validate the registry before the
+    catalog write), fixed (§8.5). Writing on prod waits for 007, C1 and
+    C2 (§8.4).
+- **CV-3 derive (§9): built 2026-11-09, uncommitted** (daily rollup and
+  code labels; `insight/cv/derive.js`).
+  - Local rehearsal: every check equals independent SQL.
+  - Codex review closed: P2 (the code-label retry) and P3 (non-ASCII
+    labels) fixed (§9.5).
+  - K1 (no CV clock table in v1): the recommendation stands unless the
+    user objects (§9.4).
 
 The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
@@ -230,8 +244,8 @@ and 15,049 on 2026-10-20.
 | **CV-0 Decide** ✅ 2026-11-06 | This plan; the user's answers to §3 | Agreed |
 | **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D6 agreed; all fixes deployed 2026-11-06/09 (parser D1+D5, collector D3a+D5), 361-record backfill (D6) applied 2026-11-09; sign-off after the first rotation (§5.5) | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
 | **CV-1 Schema** — 007 drafted 2026-11-09 (§7); Codex review next; apply after the CT Phase 5 close-out | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
-| **CV-2 Extract** — groundwork done 2026-11-09 (§6); mapping awaits the user's decision | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
-| **CV-3 Derive** | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
+| **CV-2 Extract** — mapping agreed 2026-11-09 (§6.4); built and reviewed 2026-11-09 (§8); prod backfill after 007 + C1 + C2 | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
+| **CV-3 Derive** — built and reviewed 2026-11-09 (§9); prod after CV-2's apply | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 |
 | **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
@@ -851,7 +865,9 @@ As for CT, the writer has no access to `api`.
   - `insight/findings/verify.js` "catalog = registry".
 
   The stage rehearsal gates on all three. So they must be scoped to CT
-  keys before CV-2's first catalog write. That is a small CT code change,
+  keys before CV-2's first catalog write. **Interlock (§8):** CV's
+  `backfill --apply` refuses until each of the three modules exports
+  `CV_AWARE = true`, which that CT change adds. That is a small CT code change,
   allowed only after the Phase 5 close-out, with its own review and
   deploy.
 
@@ -919,3 +935,255 @@ complete list of shared-table interactions.
   cells reconcile. The P2 case itself, two source rows with the same
   device time and sequence number, keeps both facts. The capabilities
   view still pushes `system_id` down to an index (7 ms).
+
+## 8. CV-2 extract: built 2026-11-09 (uncommitted)
+
+The §6.2 mapping as agreed (M1–M3), in the CT method: a rule registry,
+an extract that streams the source by id, a version-gated upsert, an
+independent SQL count, fixtures from real rows, and a rehearsal that is
+rolled back.
+
+### 8.1 Files: all new, in `insight/cv/`
+
+**Isolation:** nothing outside `insight/cv/` loads these files, and a
+test checks it. CV reuses only side-effect-free CT pieces:
+`rules/engine.js` (`validate_rules`, `catalog_rows`), `load.js`
+`catalog_statement`, and `db.js`.
+
+| File | What |
+|---|---|
+| `rules.js` | The registry:<br>• `cv.error` (dim = code) + 8 named metrics, each with its complete `codes` list and a `match` on the debug text that returns the dim;<br>• the ignore list (`rta_relay`);<br>• `classify(row)`;<br>• catalog rows: `cv.*`, all `customer_visible = false` (the CV viewer is internal). |
+| `codes_reviewed.js` | The 204 codes reviewed on 2026-11-09. A new code is still counted in `cv.error`, and is listed as "unreviewed" until someone reviews it. |
+| `extract.js` | Streams `log.ge_cv_syserror` by id, 50k per batch. Selects only non-encoded columns. `host_local` = host_date + host_time, built in JS, so a malformed time skips one row instead of failing the batch. Skip reasons cover the facts table's NOT NULL columns. |
+| `load.js` | `run_extract`, as `insight_writer` only, under its own lock `insight_ge_cv`. Per batch, one transaction holds:<br>• the upsert on `ge_cv_facts_source_key`, only when the rule version is higher;<br>• the `ge_cv_extract` watermark;<br>• the touched device days for CV-3, in `job_state 'ge_cv_derive'.last_run_stats.pending` (as CT; more than 31 days → "full").<br>Also: the late-commit re-read (as CT §15.2), a runaway guard (2 facts per row), and rule errors abort the batch. |
+| `reconcile_sql.js` | The independent SQL: per-metric conditions written from §6.2 (code lists + text), the relay definition, the storable-row filter, coverage, and source repeats. |
+| `verify.js` | The exit check. Facts per (system, metric) = SQL. Every row is relay, counted or unstorable, and `cv.error` = counted. The `cv.*` catalog = the registry (CT rows are not looked at). Also reports unreviewed codes and source repeats. |
+| `cli.js` | `dry-run` (read-only); `backfill --rehearse [--batches N]` (one transaction, rolled back: catalog, extract, a second pass for idempotency, verify); `backfill --apply`; `verify` (read-only). |
+| `tools/build_fixtures.js`, `__fixtures__/` | 65 real rows labelled by the independent SQL. They include look-alikes that must stay in `cv.error` only: backout "released", PIB rack reset, collision sensor, COLLISION NOT CLEARED, potentiometerEncoderMismatch, 1200019. Only the columns the rules read are kept, and IPv4 is masked. |
+| `test/cv.test.js` | 14 tests, no DB. |
+
+**Interlocks in `backfill`:**
+- **C2:** `insight_writer` must be able to SELECT `log.ge_cv_syserror`.
+  Checked for both rehearse and apply.
+- **C1:** `--apply` is refused until the three CT verifier modules export
+  `CV_AWARE = true`.
+- **Schema:** version 7 or later.
+
+### 8.2 Tests: `node insight/cv/test/cv.test.js`, 14 of 14 pass
+
+They pin:
+- the registry against M1–M3;
+- every fixture's facts;
+- relay detection;
+- the paired events, counted once;
+- the dims;
+- `repeatcount` as an attribute only;
+- skip reasons;
+- the upsert SQL (source key, version gate, SQL NULL attrs) and dedupe,
+  including the P2 case (same device time and sequence, two source rows:
+  both kept);
+- the pending-days merge;
+- the C1 interlock (today the real CT modules are not CV-aware, so
+  `--apply` is refused);
+- that the SQL covers every named code;
+- that no SQL selects an encoded field;
+- the CLI flags;
+- isolation.
+
+Every existing suite still passes: `insight/test` (7 files), `test/`
+(6) and `migrations/test`.
+
+### 8.3 Evidence (2026-11-09)
+
+**Registry vs the §6 evidence classifier:** identical on all 96,204 rows
+(0 differences, 0 rule errors).
+
+**Read-only dry run on prod**, using the reports read-only connection
+(never the repo `.env`). It covered 96,286 rows up to id 472,880 and
+took 3 s:
+- 140,289 facts;
+- 17 of 17 (system, metric) cells equal the independent SQL;
+- 11,902 relays + 84,384 counted = every row; 0 unstorable;
+- 203 codes, none unreviewed;
+- 0 source repeats.
+
+**Local throwaway DB** (007 applied with the real runner; the 96,204
+real rows loaded into a local `log.ge_cv_syserror`; `insight/db.js`
+stubbed so no `.env` is read):
+
+| Step | Result |
+|---|---|
+| Without SELECT on the source | Refused (C2) |
+| `rehearse` (full) | 140,182 facts; second pass upserts 0; verify ok (17 / 17 cells, coverage complete, catalog 9 = registry); pending "full" for both systems; **nothing persisted** |
+| `rehearse --batches 1` | 50,000 rows, rolled back |
+| `apply` before C1 | Refused, nothing written |
+| `apply` (C1 stubbed) to the median id, then resume | 70,638 + 69,544 = 140,182; watermark 472,798; verify ok from a read-only session |
+| `apply` again | 0 rows, 0 upserted |
+| A row committed late, below the watermark | Picked up by the re-read (2 facts); verify still ok |
+| A second run while the lock is held | Skipped |
+
+The CT catalog row in the local DB was not touched. Full rehearsal:
+37 s; full apply: 17 s.
+
+### 8.4 Order on prod (each step after the previous one)
+
+1. **CT Phase 5 close-out**, after 2026-11-12 13:00 UTC.
+2. **The user applies 007** (§7.5).
+3. **C2:** the user grants `insight_writer` SELECT on
+   `log.ge_cv_syserror`. I give the exact statement then.
+4. **The user runs `node insight/cv/cli.js backfill --rehearse`** on
+   prod. It writes nothing; expect verify ok and a second pass of 0.
+5. **C1:** scope the three CT verifiers to CT keys and add `CV_AWARE`.
+   This is a CT code change, with its own review, the stage rehearsal and
+   a deploy.
+6. **The user runs `backfill --apply`, then `verify`.** That completes the
+   CV-2 exit criterion on prod.
+
+CV-3 (derive: daily, code labels, clock) reads the pending days recorded
+here.
+
+### 8.5 Codex review CV2-EXTRACT (2026-11-09): one P2, fixed
+
+`REVIEW-CV2-EXTRACT-CODEX.md`. Everything else passed:
+- the independence of the SQL (every predicate compared);
+- the upsert and the batch transaction;
+- the late-commit re-read;
+- the pending merge;
+- both interlocks, and the rehearsal before C1;
+- no effect on CT beyond C1;
+- the rule-error policy;
+- fixture contents;
+- what CV-3 needs.
+
+**P2:** `backfill` did not validate the registry before the shared
+catalog upsert. A bad edit could commit a catalog row before the batch
+failed.
+
+**Fixed:** `run_extract` validates first and refuses both modes before
+any connection or write. `validate()` can take a given registry, and a
+test shows the database is never touched, plus a non-`cv.` key and
+overlapping code lists being caught. `cv.test.js` now has 15 tests. The
+read-only prod dry run, re-run after the fix, is still 17 of 17 equal.
+
+**Known limit:** a version bump that makes a rule stop matching rows
+leaves their old facts in place. The upsert only replaces facts. Such a
+change needs a targeted delete in the same change, and v1 has none.
+
+## 9. CV-3 derive: built 2026-11-09 (uncommitted)
+
+### 9.1 What it builds (`insight/cv/derive.js`)
+
+- **`insight.ge_cv_daily`:** per system, device day (`host_local`),
+  metric and dim: n, value aggregates (NULL for v1's event metrics) and
+  first / last `host_datetime`.
+  - **Scope:** the days the extract recorded in
+    `job_state 'ge_cv_derive'.last_run_stats.pending` (§8). A system with
+    more than 31 pending days, or `--full`, is rebuilt in full.
+  - **One transaction per system:** delete and rebuild its days, and
+    clear its pending entry. A failed run is redone by the next one.
+- **`insight.ge_cv_codes`:** rebuilt in full on each run that had
+  something pending (about 200 rows). One row per error code of the
+  `cv.error` facts:
+  - n, systems, first / last seen;
+  - the most common subsystem and source file;
+  - **label:** the most common readable debug-text template, with its
+    share of the code's rows.
+
+  The **template** trims GE's quote / dash framing and masks 0x-hex,
+  hex tokens that contain a digit (`4B10`, `FEC28000`) and numbers as
+  `#`. Hex-looking words without a digit (`FFFF`, `DC`) stay.
+
+  The **text** comes from the source rows behind the facts (joined on
+  the source primary key). Encoded fields are never read.
+- **Capabilities:** already a view (`api.ge_cv_capabilities_v`, 007);
+  nothing to derive.
+- **Locking:** the derive runs under the CV advisory lock, so it never
+  overlaps an extract.
+- **Commands:** `cli.js derive --rehearse`, `derive --apply [--full]`,
+  `verify-derive`.
+- **Isolation:** as in §8, nothing CT loads requires these files.
+
+### 9.2 The check (`insight/cv/verify_derive.js`), all from the source
+
+| Check | Compares |
+|---|---|
+| A | Daily per (system, device day, metric), summed over dims, with an independent count from `log.ge_cv_syserror` (the §8 conditions; device day = `host_date`) |
+| B | `cv.error` daily per (system, day, code) with a source count |
+| C | Daily with a plain GROUP BY over the facts, every column, both directions (covers the named-metric dims) |
+| D | `ge_cv_codes`, every field, with the same fields rebuilt from the source in SQL. The template is rewritten as PostgreSQL regexes, not the JS function; ties go to the smallest value under `COLLATE "C"` on both sides. |
+
+### 9.3 Evidence (2026-11-09, local throwaway DB, the facts from §8.3)
+
+| Step | Result |
+|---|---|
+| `derive --rehearse` | 5,262 daily rows (SME02412 2,843, SME08640 2,419) and 203 codes (13 without a readable label, as in §6.1). A second pass is byte-identical; rebuilding the last 7 days by day equals the full rebuild. Verify: A 1,697 cells, B 3,516 cells, C both directions and D 203 codes, all with 0 differences. Nothing persisted. |
+| `derive --apply` (pending "full" for both systems from §8) | Same contents; pending cleared; `verify-derive` ok from a read-only session |
+| `derive --apply` again | Nothing pending; nothing done |
+| A new device day (3 new source rows, one a relay, one a new code) → extract → derive | Pending = that one day; derive rebuilt only it; the new code was flagged as unreviewed and got its own label; verify ok |
+| `derive --apply --full` | Byte-identical to the pending path |
+
+**Known limit:** checks A, B and D read the source log. If old
+`log.ge_cv_syserror` partitions are ever dropped (retention), those
+checks must be limited to the retained range, and the labels then come
+only from the surviving rows. No CV log partition has been dropped so
+far (data from 2026-04-30).
+
+Rehearsal: 7 s; apply: 1.5 s. Tests: `insight/cv/test/derive.test.js`
+8 of 8, plus `cv.test.js` 14 of 14. Every existing suite passes.
+
+### 9.4 Decision for the user: K1, the device clock (recommendation first)
+
+SME02412's device time runs 34–114 minutes (p10–p90) ahead of our
+capture time (§1.4). A record is captured after it is written, so the
+clock is at least that far ahead. SME08640 is within about ±14 minutes.
+CT keeps a clock table (`insight.system_clock`) for this.
+
+**K1: no CV clock table in v1. Recommended.**
+- Daily counts use the device's own day, as CT's do. A wrong clock moves
+  at most the events of the last 2 hours of a day into the next day.
+- No v1 metric or planned CV-4 finding compares CV times with outside
+  times. The storm and recurrence findings are per device day.
+- `first_at` / `last_at` and the views' `last_seen` are device times, so
+  they inherit the offset. The viewer (CV-6) should say so.
+- If a later finding needs real time (for example, linking errors to
+  our collection runs, as the D4 storm analysis did), migration 008 adds
+  `insight.ge_cv_clock`, built from `capture_datetime` against the
+  device time of the newest row in each capture.
+
+### 9.5 Codex review CV3-DERIVE (2026-11-09): P2 and P3, fixed
+
+`REVIEW-CV3-DERIVE-CODEX.md`. Everything else passed:
+- daily delete-and-rebuild (an emptied day is removed);
+- the range join and `host_local::date` = `host_date`;
+- `value_last`;
+- the shared lock against the extract;
+- the pending merge;
+- code aggregation with missing source rows (the §9.3 retention limit);
+- cost at 18 systems;
+- the tie-breaks;
+- **K1:** sound for device-day counts and the planned findings. The
+  viewer must label times as device time.
+
+**P2: a failed code rebuild was never retried.** The daily transactions
+clear the pending days, and the codes were rebuilt afterwards in their
+own transaction. A crash in between left nothing pending, so the next
+run skipped the codes.
+- **Fix:** each system's daily transaction now also sets
+  `last_run_stats.codes_pending = true`. `rebuild_codes` clears it in its
+  own transaction, and a default `--apply` rebuilds the codes whenever it
+  is set.
+- **Local check:** a simulated crash in the code rebuild left
+  `codes_pending` set. The next default run rebuilt the codes (replacing
+  a planted stale label) and cleared it, and the run after that did
+  nothing.
+
+**P3: labels could differ between JS and SQL on non-ASCII text**
+(UTF-16 `slice` vs `left`, `\b` vs locale word boundaries).
+- **Fix:** both sides first turn every non-ASCII character into `?`,
+  one per code point. Everything after that is ASCII, where the regexes
+  and the 200-character cut agree.
+- **Check:** JS and SQL agree on 10 tricky strings (emoji at the cut,
+  non-breaking and ideographic spaces, accented and CJK text, a raw
+  `\x01`), checked on the local DB. Tests: `derive.test.js` 9, with a
+  non-ASCII test added.
+- GE's debug text is ASCII today, so no current label changes.

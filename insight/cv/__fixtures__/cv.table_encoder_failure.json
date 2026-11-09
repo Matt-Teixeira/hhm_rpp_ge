@@ -1,0 +1,65 @@
+[
+ {
+  "templates_seen": 2680,
+  "errorcode": 1050710,
+  "subsystem": "POS",
+  "debugtext": "\" - Table:lateral axis encoder, potentiometer failure,TBL LAT out of range\"",
+  "sourcefile": "Z:/heroic/table_geometry_task.c",
+  "repeatcount": 0,
+  "sourceline": 1607
+ },
+ {
+  "templates_seen": 135,
+  "errorcode": 1050188,
+  "subsystem": "POS",
+  "debugtext": "\" - Table rotation encoder failure, encoder not calibrated (T:0x4B13 H:0x000B U:0x0001)\"",
+  "sourcefile": "Z:/heroic/table_rotation.c",
+  "repeatcount": 0,
+  "sourceline": 267
+ },
+ {
+  "templates_seen": 92,
+  "errorcode": 1050182,
+  "subsystem": "POS",
+  "debugtext": "  - Table Long : Potentiometer/encoder mismatch. Motion halted. (T:0x4AC3 H:0x0000 U:0x2000)",
+  "sourcefile": "Z:/heroic/saf_motionerrors.c",
+  "repeatcount": 0,
+  "sourceline": 1143
+ },
+ {
+  "templates_seen": 32,
+  "errorcode": 1050709,
+  "subsystem": "POS",
+  "debugtext": "\" - Table:Height potentiometer failure,TBL HEIGHT out of range\"",
+  "sourcefile": "Z:/heroic/table_geometry_task.c",
+  "repeatcount": 0,
+  "sourceline": 1650
+ },
+ {
+  "templates_seen": 23,
+  "errorcode": 1050182,
+  "subsystem": "POS",
+  "debugtext": "  - Table Long : Encoder failure. Motion halted. (T:0x4AC3 H:0x0000 U:0x1000)",
+  "sourcefile": "Z:/heroic/saf_motionerrors.c",
+  "repeatcount": 0,
+  "sourceline": 1114
+ },
+ {
+  "templates_seen": 9,
+  "errorcode": 1050711,
+  "subsystem": "POS",
+  "debugtext": "\" - Table:Longitudinal axis potentiometer failure,TBL LONG out of range\"",
+  "sourcefile": "Z:/heroic/table_geometry_task.c",
+  "repeatcount": 0,
+  "sourceline": 1558
+ },
+ {
+  "templates_seen": 2,
+  "errorcode": 1050187,
+  "subsystem": "POS",
+  "debugtext": "  - Can't communicate with table rotation encoder (T:4B14 H:0x000B U:0x0002)",
+  "sourcefile": "Z:/heroic/table_rotation.c",
+  "repeatcount": 0,
+  "sourceline": 229
+ }
+]

@@ -1,0 +1,74 @@
+[
+ {
+  "templates_seen": 1620,
+  "errorcode": 1050302,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0009 & US:0x8000), speed error on table lat\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7532
+ },
+ {
+  "templates_seen": 1371,
+  "errorcode": 1050143,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0001 & US:0x4000), position error on Pivot\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7397
+ },
+ {
+  "templates_seen": 789,
+  "errorcode": 1050144,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0002 & US:0x4000), position error on C_Arc\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7437
+ },
+ {
+  "templates_seen": 298,
+  "errorcode": 1050143,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0001 & US:0x8000), speed error on Pivot\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7376
+ },
+ {
+  "templates_seen": 291,
+  "errorcode": 1050145,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0003 & US:0x4000), position error on Lift\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7475
+ },
+ {
+  "templates_seen": 205,
+  "errorcode": 1050301,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0008 & US:0x4000), position error on table long\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7512
+ },
+ {
+  "templates_seen": 174,
+  "errorcode": 1050301,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0008 & US:0x8000), speed error on table long\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7494
+ },
+ {
+  "templates_seen": 119,
+  "errorcode": 1050145,
+  "subsystem": "POS",
+  "debugtext": "\" - ANTICOLLISION CINEMATIC ERROR (0x4B10 HW:0x0003 & US:0x8000), speed error on Lift\"",
+  "sourcefile": "Z:/heroic/anticol_task.c",
+  "repeatcount": 0,
+  "sourceline": 7457
+ }
+]

@@ -1,0 +1,20 @@
+[
+ {
+  "templates_seen": 730,
+  "errorcode": 1050024,
+  "subsystem": "POS",
+  "debugtext": "  - PIB : COM Reset",
+  "sourcefile": "Z:/heroic/pib_task.c",
+  "repeatcount": 0,
+  "sourceline": 1533
+ },
+ {
+  "templates_seen": 49,
+  "errorcode": 1050024,
+  "subsystem": "POS",
+  "debugtext": "  - PIB : COM Fail",
+  "sourcefile": "Z:/heroic/pib_task.c",
+  "repeatcount": 0,
+  "sourceline": 1493
+ }
+]

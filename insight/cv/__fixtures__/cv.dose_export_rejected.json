@@ -1,0 +1,11 @@
+[
+ {
+  "templates_seen": 1260,
+  "errorcode": 2800176,
+  "subsystem": "DL",
+  "debugtext": "\"Dose Export logger - Debug text:Association rejected, Minor code:MC_ASSOCIATION_REJECTED, Note:\"",
+  "sourcefile": "DJRDELogger.cxx",
+  "repeatcount": 1,
+  "sourceline": 55
+ }
+]

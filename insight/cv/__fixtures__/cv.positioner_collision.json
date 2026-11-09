@@ -1,0 +1,20 @@
+[
+ {
+  "templates_seen": 2477,
+  "errorcode": 1050168,
+  "subsystem": "POS",
+  "debugtext": "  - LIFT COLLISION (T:0x4A12 H:0x4 U:0x0000).",
+  "sourcefile": "Z:/heroic/saf_safetytask.c",
+  "repeatcount": 0,
+  "sourceline": 1486
+ },
+ {
+  "templates_seen": 1657,
+  "errorcode": 1050170,
+  "subsystem": "POS",
+  "debugtext": "  - COLLIMATOR COLLISION (T:0x4A13 H:0x0010 U:0x0000).",
+  "sourcefile": "Z:/heroic/saf_safetytask.c",
+  "repeatcount": 0,
+  "sourceline": 1463
+ }
+]

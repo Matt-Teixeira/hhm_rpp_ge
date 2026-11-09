@@ -1,0 +1,74 @@
+[
+ {
+  "templates_seen": 11685,
+  "errorcode": 1200014,
+  "subsystem": "RTA",
+  "debugtext": " [FPGA_Driver::update] Detector com error: CDetectorImpl::scanSetupDm Ack error - Expected: 4020 - FEC28000 - Received: FFFF - 4020 ",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 527
+ },
+ {
+  "templates_seen": 11660,
+  "errorcode": 1200014,
+  "subsystem": "RTA",
+  "debugtext": " [FPGA_Driver::update] Detector com error: CDetectorImpl::setCommonVoltageDm Ack error - Expected: 6001 - 92 - Received: FFFF - 6001 ",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 527
+ },
+ {
+  "templates_seen": 11643,
+  "errorcode": 1200014,
+  "subsystem": "RTA",
+  "debugtext": " [FPGA_Driver::update] Detector com error: CDetectorImpl::scanModeDm Ack error - Expected: 4080 - 0 - Received: FFFF - 4080 ",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 527
+ },
+ {
+  "templates_seen": 4782,
+  "errorcode": 1200014,
+  "subsystem": "RTA",
+  "debugtext": " [FPGA_Driver::update] Detector com error: CDetectorImpl::_getSensorDm Ack error - Expected: 7900 - Received: FFFF ",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 527
+ },
+ {
+  "templates_seen": 189,
+  "errorcode": 1200014,
+  "subsystem": "RTA",
+  "debugtext": "\"[FPGA_Driver::update] Detector com error: CDetectorDipb::waitRxCommandDm RX read timeout (350 ms), RX IT never received, 0 RX Command read (last one is: 0 0) \"",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 527
+ },
+ {
+  "templates_seen": 47,
+  "errorcode": 1200114,
+  "subsystem": "RTA",
+  "debugtext": "\"[FPGA_Driver::update] Detector com error: CDetectorDipb::waitRxCommandDm RX read timeout (350 ms), RX IT never received, 0 RX Command read (last one is: 0 0) \"",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 529
+ },
+ {
+  "templates_seen": 5,
+  "errorcode": 1200014,
+  "subsystem": "RTA",
+  "debugtext": "\"[FPGA_Driver::update] Detector com error: CDetectorDipb::waitRxCommandDm RX IT never received, 0 RX Command read (last one is: 0 0) \"",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 527
+ },
+ {
+  "templates_seen": 2,
+  "errorcode": 1200114,
+  "subsystem": "RTA",
+  "debugtext": "\"[FPGA_Driver::update] Detector com error: CDetectorDipb::waitRxCommandDm RX read timeout (1000 ms), RX IT received, 1 RX Command read (last one is: 4010 73b073b) \"",
+  "sourcefile": "fpga_driver.cpp",
+  "repeatcount": 0,
+  "sourceline": 529
+ }
+]

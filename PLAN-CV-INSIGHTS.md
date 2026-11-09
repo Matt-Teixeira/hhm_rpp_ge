@@ -409,6 +409,59 @@ Truth is the device's complete lines.
   - (b) The listing needs device credentials, which only the collector
     decrypts (its `.env`). The user runs the command and pastes the
     output.
+  - **(b) Result, 2026-11-09: GE keeps exactly one previous file,
+    `DL/Log/sysErrorPrev.log`.** The user ran the listing and fetched both
+    `sysErrorPrev.log` files to `/tmp/cv_d3b/` (read-only on the devices).
+    - The Prev file's timestamp equals the rotation moment. SME08640:
+      Nov 4 17:53, and the current file's seq 1 is 17:53:12.
+    - Both Prev files hold exactly 4,000 records and end on a newline.
+      Nothing older survives; the only other `*Prev*` / `.bkp` files
+      belong to other logs.
+    - Checked byte for byte (scratchpad `prev_verify.js`): the stored
+      rows of each previous file equal the first N lines of
+      `sysErrorPrev.log`. The unread tail is not in the DB anywhere and
+      parses cleanly (0 unmatched, 0 datetime null).
+
+      | System | Stored (prev file) | Stored part ends at byte | Unread tail (G3) |
+      |---|---|---|---|
+      | SME02412 | seq 1–3654 | 1,236,666 | **seq 3655–4000, 346 records**, 2026-10-20 16:44:25–16:46:42 local (a storm, then rotation) |
+      | SME08640 | seq 1–3985 | 905,366 (= the watermark before rotation) | **seq 3986–4000, 15 records**, 2026-11-04 17:39:47–17:53:11 local |
+    - So G3 is **recoverable going forward**: the old file's tail is on the
+      device until the next rotation (days at least; we collect every
+      30 min).
+    - It is recoverable **once** for these two latest rotations (361
+      records). Earlier rotations are gone; the upper bound in §5.2
+      stands for them.
+    - The stored part ends exactly at the old watermark (SME08640:
+      905,366). A parser that sees `new_file` can therefore read
+      `sysErrorPrev.log` from the stored watermark, when that file's first
+      line equals the stored `.head`, and get exactly the missing tail.
+  - **D5 and D6 AGREED by the user 2026-11-09.** Built the same day,
+    uncommitted. Codex review `REVIEW-CV1B-PREV-CODEX.md`: one finding, P2 (the backfill could race concurrent inserts), fixed with an in-transaction re-check under an advisory lock and by refusing `--apply` around the parser's :18/:48 runs:
+    - **Parser:** `plan_prev_tail` plus the rotation path in
+      `jobs/CV/sysError_parser.js`.
+    - **Collector:** the five `ge_cv` scripts also fetch
+      `sysErrorPrev.log`.
+    - **Backfill:** `maintenance/backfill_ge_cv_prev_tail.js`.
+    - **Rehearsed read-only on the two real rotations:** D5 would insert
+      exactly the tails (346 / 15); D6 plans the same and refuses bad
+      inputs.
+    - **Evidence copies with checksums:** `~/cv_d3b_evidence/`
+      (matt-teixeira) and `/tmp/cv_d3b/` (prod).
+    - **Urgency:** SME02412 is at seq ~3000 of 4000. Its next rotation
+      overwrites the device's `sysErrorPrev.log`; the copies above are
+      unaffected.
+  - **Decisions as proposed:**
+    - **D5:** close G3 going forward.
+      - Collector: also fetch `sysErrorPrev.log`, with the same
+        temp-and-rename.
+      - Parser: on `new_file`, if Prev's first line equals the stored
+        `.head`, read Prev from the stored watermark first. The duplicate
+        guard stays.
+    - **D6:** one-off backfill of the 361 tail records from
+      `/tmp/cv_d3b/`. Same parser and duplicate guard; rehearsed
+      read-only; run by the user on prod. This revisits D2, which assumed
+      the gaps were unrecoverable.
 - **D4 Field service: AGREED, raise it.** SME02412's storm bursts are
   locked to our collection cycle (§5.2), and the trigger for early resets
   is unknown. Draft note for field service:
@@ -454,6 +507,15 @@ and the exit check passed (`--since 2026-11-06T17:24Z`).
     duplicate drops.
   - No new GE file and no storm in the window yet, so G4/G5 are not
     exercised.
+- **2026-11-09 ~13:00 UTC: follow-up `8c0d130` and collector `a5713d9`
+  deployed** (the user pulled both on prod).
+  - Collector run 13:00: SME02412 and SME08640 succeeded with no output;
+    no `.sysError.log.part*` left in any `files/<sme>/`.
+  - Parser run 13:18: all 13 CV systems with a file stored `.head`
+    (sequence 1, equal to the file's first line); the 5 without a file no
+    longer read Redis; the exit check passes.
+  - The 11 `getRedisLine` warnings in that run were the last: every key
+    is now set.
 - The prod run logs showed that idle systems (12 of the 13 CV systems with
   a file) never get the key, and that `getRedisLine` warns every run for
   every system without it.

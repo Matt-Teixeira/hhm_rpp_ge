@@ -99,6 +99,40 @@ function store_head_early({ reason, consumed, prev_head, file_head }) {
   return reason === "no_new_data" || (reason === "append" && consumed === 0);
 }
 
+// GE keeps exactly one previous generation of the log: on rotation it
+// renames sysError.log to sysErrorPrev.log and starts a new sysError.log at
+// sequence 1 (PLAN-CV-INSIGHTS.md §5.5 D3b, D5). Records written after our
+// last collection of the old file are therefore still in sysErrorPrev.log,
+// starting exactly at the old watermark (verified byte for byte on
+// SME02412 and SME08640, 2026-11-09). The collector fetches it next to
+// sysError.log.
+const PREV_FILE_NAME = "sysErrorPrev.log";
+
+// On a run that reads sysError.log from 0, decide whether to read the old
+// file's unread tail from sysErrorPrev.log.
+//   reason, prev_offset, prev_head, file_head: as for plan_read
+//   prev_file: { size, head } of the local sysErrorPrev.log, or null
+// Returns { action, reason, start? }:
+//   none  not a rotation (no read from 0, no watermark, or a shorter copy
+//         of the same file)
+//   skip  a rotation, but the tail can't be taken from sysErrorPrev.log
+//         (reason says why); the caller logs it
+//   read  read sysErrorPrev.log from `start` (= the old watermark)
+// Proof that sysErrorPrev.log is the old file: its first data line equals
+// the stored .head. The duplicate guard still runs on what is read.
+function plan_prev_tail({ reason, prev_offset, prev_head, file_head, prev_file }) {
+  if (reason !== "new_file" && reason !== "shrunk") return { action: "none", reason: "not_a_full_reread" };
+  if (!valid_offset(prev_offset) || prev_offset === 0) return { action: "none", reason: "no_watermark" };
+  const head_known = typeof prev_head === "string" && prev_head !== "";
+  if (head_known && reason === "shrunk" && file_head === prev_head) return { action: "none", reason: "same_file_shorter" };
+  if (!head_known) return { action: "skip", reason: "old_head_unknown" };
+  if (!prev_file) return { action: "skip", reason: "prev_missing" };
+  if (prev_file.head !== prev_head) return { action: "skip", reason: "prev_is_another_file" };
+  if (prev_file.size < prev_offset) return { action: "skip", reason: "prev_shorter_than_watermark" };
+  if (prev_file.size === prev_offset) return { action: "none", reason: "prev_has_no_tail" };
+  return { action: "read", reason: "rotation", start: prev_offset };
+}
+
 // Read the file once through one descriptor: size, first data line and the
 // bytes from `start`. Returns null if the file can't be opened.
 async function open_syserror(file_path) {
@@ -133,4 +167,4 @@ async function open_syserror(file_path) {
 
 const head_key = (file_name) => `${file_name}.head`;
 
-module.exports = { open_syserror, plan_read, complete_lines, partial_tail, store_head_early, first_data_line, head_key, HEADER_RE };
+module.exports = { open_syserror, plan_read, plan_prev_tail, complete_lines, partial_tail, store_head_early, first_data_line, head_key, HEADER_RE, PREV_FILE_NAME };

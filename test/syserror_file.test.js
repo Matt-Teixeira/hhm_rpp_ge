@@ -5,7 +5,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { open_syserror, plan_read, complete_lines, partial_tail, store_head_early, first_data_line, head_key } = require("../read/syserror_file");
+const { open_syserror, plan_read, plan_prev_tail, complete_lines, partial_tail, store_head_early, first_data_line, head_key, PREV_FILE_NAME } = require("../read/syserror_file");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "syserror-file-"));
 const write = (name, content) => {
@@ -138,6 +138,31 @@ test("store_head_early: only when the watermark already refers to this file", ()
   }
   // no complete first line in the file
   for (const v of [null, undefined, ""]) assert.strictEqual(store_head_early({ reason: "no_new_data", consumed: 0, prev_head: null, file_head: v }), false);
+});
+
+test("plan_prev_tail: read the old file's tail from sysErrorPrev.log only when it is the old file", () => {
+  // SME08640 rotation of 2026-11-04: watermark 905,366, Prev 908,423 (seq 3986-4000 unread)
+  const rot = { reason: "shrunk", prev_offset: 905366, prev_head: L1, file_head: L2, prev_file: { size: 908423, head: L1 } };
+  assert.deepStrictEqual(plan_prev_tail(rot), { action: "read", reason: "rotation", start: 905366 });
+  // new file already larger than the watermark (2026-07-10 shape)
+  assert.deepStrictEqual(plan_prev_tail({ ...rot, reason: "new_file" }), { action: "read", reason: "rotation", start: 905366 });
+  // new file without a complete first record yet: still the old file in Prev
+  assert.strictEqual(plan_prev_tail({ ...rot, file_head: null }).action, "read");
+  // old file had been read to its end
+  assert.deepStrictEqual(plan_prev_tail({ ...rot, prev_file: { size: 905366, head: L1 } }), { action: "none", reason: "prev_has_no_tail" });
+  // not a rotation
+  for (const reason of ["append", "no_new_data", "no_watermark"]) assert.strictEqual(plan_prev_tail({ ...rot, reason }).action, "none");
+  assert.deepStrictEqual(plan_prev_tail({ ...rot, file_head: L1 }), { action: "none", reason: "same_file_shorter" }); // shorter copy of the same file
+  for (const v of [null, 0, NaN]) assert.strictEqual(plan_prev_tail({ ...rot, prev_offset: v }).action, "none");
+  // rotation, but Prev can't supply the tail
+  assert.deepStrictEqual(plan_prev_tail({ ...rot, prev_file: null }), { action: "skip", reason: "prev_missing" });
+  assert.deepStrictEqual(plan_prev_tail({ ...rot, prev_file: { size: 908423, head: L2 } }), { action: "skip", reason: "prev_is_another_file" }); // two rotations, or Prev not refreshed
+  assert.deepStrictEqual(plan_prev_tail({ ...rot, prev_file: { size: 900000, head: L1 } }), { action: "skip", reason: "prev_shorter_than_watermark" });
+  for (const v of [null, undefined, ""]) assert.deepStrictEqual(plan_prev_tail({ ...rot, prev_head: v }), { action: "skip", reason: "old_head_unknown" });
+});
+
+test("prev file name is GE's", () => {
+  assert.strictEqual(PREV_FILE_NAME, "sysErrorPrev.log");
 });
 
 test("head key sits next to the watermark key", () => {

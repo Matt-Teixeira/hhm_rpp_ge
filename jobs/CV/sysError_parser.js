@@ -3,7 +3,8 @@ const pgp = require("pg-promise")();
 const { ge_cv_syserror_schema } = require("../../persist/pg-schemas");
 const mapDataToSchema = require("../../persist/map-data-to-schema");
 const { build_upsert_str } = require("../../tooling");
-const { open_syserror, plan_read, complete_lines, partial_tail, store_head_early, head_key } = require("../../read/syserror_file");
+const path = require("path");
+const { open_syserror, plan_read, plan_prev_tail, complete_lines, partial_tail, store_head_early, head_key, PREV_FILE_NAME } = require("../../read/syserror_file");
 const { parse_syserror_lines } = require("./sysError_parse");
 const { drop_already_ingested_cv } = require("../../persist/drop_already_ingested_cv");
 const { getRedisFileSize, getRedisLine, updateRedisLine } = require("../../redis/redisHelpers");
@@ -18,6 +19,9 @@ const { pg_column_sets: pg_cs } = require("../../utils/db/sql/pg-helpers_hhm");
 //                            re-measured after the insert).
 //   <sme>.sysError.log.head  NEW: first data line of the file last read; a
 //                            different first line means GE started a new file.
+// On a new file, the old file's unread tail is read from sysErrorPrev.log
+// (GE's previous generation, fetched by the collector) starting at the old
+// watermark, and inserted together with the new file's records (D5).
 // Order is unchanged: parse -> insert -> watermark -> offline_hhm_conn. If
 // the insert fails, nothing in Redis moves and the next run reads the same
 // bytes again; drop_already_ingested_cv makes that re-read harmless.
@@ -29,6 +33,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
     file: file_name
   };
   let file = null;
+  let prev = null;
 
   try {
     await System.addLogEvent(System.I, System.run_log, "ge_cv_sys_error", System.cal, note, null);
@@ -82,24 +87,64 @@ async function ge_cv_sys_error(System, capture_datetime) {
       return;
     }
 
+    // GE started a new file (rotation): the old file's records written after
+    // our last read are in sysErrorPrev.log, from the old watermark on
+    // (PLAN-CV-INSIGHTS.md §5.5 D5). They go into the same insert as the new
+    // file's records, so a failed insert leaves Redis untouched and the next
+    // run tries both again.
+    let prev_text = "";
+    if (plan.start === 0 && (plan.reason === "new_file" || plan.reason === "shrunk")) {
+      // Handle the rotation only once the new file has its first record, so
+      // .head moves to the new file in this same run.
+      if (file.head === null) {
+        await System.addLogEvent(System.I, System.run_log, "ge_cv_sys_error: read", System.det,
+          { ...note, reason: plan.reason, message: "New file has no complete record yet; waiting" }, null);
+        return;
+      }
+      const prev_path = path.join(path.dirname(System.complete_file_path), PREV_FILE_NAME);
+      prev = await open_syserror(prev_path);
+      const prev_plan = plan_prev_tail({
+        reason: plan.reason, prev_offset, prev_head, file_head: file.head,
+        prev_file: prev && prev.size ? { size: prev.size, head: prev.head } : null
+      });
+      const prev_note = { ...note, prev_file: PREV_FILE_NAME, rotation_check: prev_plan.reason, old_watermark: prev_offset, prev_size: prev ? prev.size : null };
+      if (prev_plan.action === "read") {
+        const r = complete_lines(await prev.read_from(prev_plan.start));
+        prev_text = r.text;
+        await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error: prev tail", System.det,
+          { ...prev_note, tail_bytes: r.consumed, message: "New file: reading the old file's unread tail from sysErrorPrev.log" }, null);
+      } else if (prev_plan.action === "skip") {
+        await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error: prev tail", System.det,
+          { ...prev_note, old_head: prev_head, prev_head_line: prev ? prev.head : null,
+            message: `New file: old file's tail NOT recovered (${prev_plan.reason}); backfill with maintenance/backfill_ge_cv_prev_tail.js if sysErrorPrev.log is fetched` }, null);
+      }
+    }
+
     // ** End Data Acquisition
 
     // ** Begin Parse
 
-    const { rows, unmatched, dt_null } = await parse_syserror_lines(text, {
+    const parse_ctx = {
       job_id: System.job_id,
       system_id: System.sysConfigData.id,
       parser: System.file_config.parsers[0],
       time_zone_id: System.sysConfigData.time_zone_id,
       capture_datetime
-    });
-    for (const u of unmatched) {
-      await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error", System.det,
-        { job_id: System.job_id, system_id: System.sme, message: "NO MATCH FOUND", line_num: u.line_num, line_data: u.line }, null);
-    }
-    for (const d of dt_null) {
-      await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error", System.det,
-        { job_id: System.job_id, system_id: System.sme, line_num: d.line_num, match_group: d.groups, message: "datetime object null" }, null);
+    };
+    const parsed_prev = prev_text ? await parse_syserror_lines(prev_text, parse_ctx) : { rows: [], unmatched: [], dt_null: [] };
+    const parsed_new = await parse_syserror_lines(text, parse_ctx);
+    // Old file's tail first, then the new file, in file order.
+    const rows = [...parsed_prev.rows, ...parsed_new.rows];
+    const issues = [[PREV_FILE_NAME, parsed_prev], [file_name, parsed_new]];
+    for (const [from, p] of issues) {
+      for (const u of p.unmatched) {
+        await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error", System.det,
+          { job_id: System.job_id, system_id: System.sme, file: from, message: "NO MATCH FOUND", line_num: u.line_num, line_data: u.line }, null);
+      }
+      for (const d of p.dt_null) {
+        await System.addLogEvent(System.W, System.run_log, "ge_cv_sys_error", System.det,
+          { job_id: System.job_id, system_id: System.sme, file: from, line_num: d.line_num, match_group: d.groups, message: "datetime object null" }, null);
+      }
     }
 
     const mappedData = mapDataToSchema(rows, ge_cv_syserror_schema);
@@ -150,6 +195,7 @@ async function ge_cv_sys_error(System, capture_datetime) {
     await System.addLogEvent(System.E, System.run_log, "ge_cv_sys_error", System.cat, note, error);
   } finally {
     if (file) await file.close();
+    if (prev) await prev.close();
   }
 }
 

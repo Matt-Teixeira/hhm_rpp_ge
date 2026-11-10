@@ -34,6 +34,15 @@ Status (2026-11-09):
     labels) fixed (§9.5).
   - K1 (no CV clock table in v1): the recommendation stands unless the
     user objects (§9.4).
+- CV-1 (007), CV-2 and CV-3 are **committed and pushed** (34319e8,
+  bc96621, 9f8d592). Nothing is applied on prod.
+- **CV-1b sign-off, 2026-11-09 21:13 UTC check:** `verify_cv1b` passes on
+  both systems. There has been no rotation yet (SME02412 at seq 3038,
+  SME08640 at 188), and no `prev tail` event in the prod run logs.
+- **CV-4 groundwork (§10): done, read-only.**
+  - 5 rules were replayed over all history: 12 findings, 1 open.
+  - Decisions F1–F6 **AGREED 2026-11-10** (the recommendation in each).
+  - CV-4 build next, as new files under `insight/cv/findings/`.
 
 The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
@@ -246,7 +255,7 @@ and 15,049 on 2026-10-20.
 | **CV-1 Schema** — 007 drafted 2026-11-09 (§7); Codex review next; apply after the CT Phase 5 close-out | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
 | **CV-2 Extract** — mapping agreed 2026-11-09 (§6.4); built and reviewed 2026-11-09 (§8); prod backfill after 007 + C1 + C2 | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** — built and reviewed 2026-11-09 (§9); prod after CV-2's apply | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
-| **CV-4 Findings** | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
+| **CV-4 Findings** — groundwork 2026-11-09 (§10); F1–F6 agreed 2026-11-10 | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 |
 | **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
 
@@ -542,9 +551,16 @@ Truth is the device's complete lines.
   >    communication resets and failures, board failures (SMA / MCB /
   >    stepping board) and "Operating System Fail". Was there a service
   >    visit or a part replaced around then?
-  > 2. A lateral table potentiometer warning (error 1050710) appears on
-  >    about 60 days since May. Is that sensor known to be faulty, or
-  >    due for replacement?
+  > 2. A lateral table potentiometer warning (error 1050710) was logged
+  >    on every working day from 2026-05-01 to 05-27 (30–350 a day), then
+  >    only occasionally. Was the sensor repaired or replaced around
+  >    2026-05-28? (§10.1)
+  >
+  > A question on both SME02412 and SME08640 (added 2026-11-10, F3):
+  > 3. Their dose-export logger reports "Association rejected"
+  >    (MC_ASSOCIATION_REJECTED) about 4 times a day on nearly every day
+  >    since May. Is a dose-export destination configured on these
+  >    systems, and are their dose reports being rejected?
 - **Optional confirmation of G4 / G5.** The prod run logs of 2026-07-10
   23:48, 2026-07-11 06:18 and 2026-09-18 19:18 UTC (if still kept) should
   each hold a `NO MATCH FOUND` fragment line. For example:
@@ -1187,3 +1203,173 @@ run skipped the codes.
   `\x01`), checked on the local DB. Tests: `derive.test.js` 9, with a
   non-ASCII test added.
 - GE's debug text is ASCII today, so no current label changes.
+
+## 10. CV-4 groundwork: findings (2026-11-09, read-only)
+
+**Evidence:**
+- All 96,289 rows of `log.ge_cv_syserror` (pulled read-only 2026-11-09
+  21:14 UTC, max id 472883), run through the CV-2 rules in memory: 140,294
+  facts, 11,902 relays ignored, nothing skipped. Nothing was written.
+- Device days 2026-04-30 → 11-09: SME02412 159 data days, SME08640 176.
+- Each candidate rule was replayed day by day with CT's own open/resolve
+  fold (`insight/findings/state.js` `step`, loaded read-only), so the
+  replay behaves exactly as CT's: a 14-evaluated-day quiet period,
+  severity never falls, at most one open finding per key.
+- Scripts and logs: `~/cv_d3b_evidence/cv4/` (`pull.js` → `daily.js` →
+  `sim.js`), outside the repos.
+
+### 10.1 What the series show
+
+**Daily `cv.error`:**
+- SME08640 is quiet: median 34 a day, p95 70, max 393 (08-28).
+- SME02412 has a median of 35 a day, but p95 is 2,620 and the max is
+  16,181. Its storm days fall into four kinds:
+
+  | Kind | Days | What dominates |
+  |---|---|---|
+  | Detector com storm | 05-19, 06-19, 06-30, 07-10/11, 09-04, 09-22, 09-29, 10-20/21 | 1200014 "Detector com error" (~77%) + 1200019 detector offset (~22%) |
+  | Positioner episode | 09-11 → 09-21 | 1050171 positioner board reset debug steps, PIB COM resets, 600104 collimator CAN, 600105 positioner link, 1000025 Arcnet, anticollision errors |
+  | Lateral table potentiometer | 05-01 → 05-27, every data day | 1050710 (30–354 a day) with table-lateral anticollision errors |
+  | Table longitudinal | 10-15/16 | 1050301 anticollision table_long + 1050182 longitudinal pot/encoder mismatch |
+
+  One SME08640 day is an image-chain burst: 2800006 plus "Last Image Id
+  received twice" (810012, 4810012, 1610012) on 08-28.
+
+**Named metrics, per system:**
+
+| Metric | SME02412 | SME08640 | Reading |
+|---|---|---|---|
+| `cv.detector_com_error` | 27 days; 10 days ≥ 50 (up to 12,568) | 4 days, 6 rows | Episodic storms on SME02412 only |
+| `cv.anticollision_error` | 46 days; bursts ≥ 50 on 05-01, 05-22..27, 09-12..18, 10-15 | 157 of 176 days, max 22 | SME08640 chronic low level; SME02412 bursts follow its table and positioner faults |
+| `cv.table_encoder_failure` | May every day (lateral), 09-14..21, 10-15/16 (longitudinal); otherwise singles | 32 days, max 3 a day | The "persistent" 1050710 warning (§6.4 M4) is the May run; it stops after 05-27 |
+| `cv.pib_com_loss` | 7 days, all 09-11..18 | none | Never outside the episode |
+| `cv.positioner_collision` | 154 of 159 days, median ~13 | 170 of 176 days, median ~9 | Everyday use, not a fault |
+| `cv.dose_export_rejected` | 137 of 159 days, ~4 a day | 161 of 176 days, ~4 a day | Chronic on both; the same text every time, "Association rejected" (MC_ASSOCIATION_REJECTED) |
+| `cv.emergency_backout` | 85 days | 129 days | Everyday use |
+| `cv.worklist_query_failed` | 104 days | 96 days | Chronic low level (1–9 a day) |
+
+The log has no success records, so a rejection or failure count can't be
+turned into a rate.
+
+### 10.2 Proposed rules (replayed)
+
+Windows are device days (7 d = D−6..D). A baseline is the median of the
+data days in D−28..D−1 and needs ≥ 7 of them. Quiet period: 14 evaluated
+days, as in CT. Keys use the `cv_` prefix (the catalog's key check
+allows `^[a-z][a-z0-9_]*$`, so not `cv.`).
+
+| # | Finding key | Rule | Severity | Replay (as of 11-09) |
+|---|---|---|---|---|
+| 1 | `cv_error_storm` | A storm day is a day whose **residual** `cv.error` (all codes, minus the rows that rules 2–5 count, minus 1200019) is ≥ 300 and ≥ 10× the baseline. Trips with a storm day in the last 7 days | high with ≥ 3 storm days in 28, else medium | SME02412 09-11 → 10-14 (high, the positioner episode); SME08640 08-28 → 09-17 (medium, image-chain burst) |
+| 2 | `cv_detector_com_errors` | ≥ 50 detector com errors on a day in the last 7 days | high with ≥ 3 such days in 28, else medium | SME02412: 05-19 → 06-11 (medium), 06-19 → 08-01 (high), 09-04 → **open** (high, last storm 10-21) |
+| 3 | `cv_anticollision_burst` | ≥ 50 anticollision errors on a day and ≥ 5× the baseline, in the last 7 days | medium | SME02412: 05-01 → 06-19, 09-12 → 10-12, 10-15 → 11-06. SME08640 never (max 22) |
+| 4 | `cv_table_encoder_fault` | ≥ 5 table encoder / potentiometer failures on ≥ 2 days in the last 7 | high with ≥ 10 such days in 28, else medium | SME02412: 05-04 → 06-18 (high, lateral), 09-15 → 10-12, 10-16 → 11-06 (longitudinal). SME08640 never |
+| 5 | `cv_pib_com_loss` | ≥ 3 PIB COM resets / fails in the last 7 days | high on ≥ 3 days in 7, else medium | SME02412 09-11 → 10-12 (high) |
+
+**Total:** 12 findings, 1 open (detector com, SME02412). Everything is
+on SME02412 apart from one SME08640 storm.
+
+**Sensitivity:** the list is the same for a detector threshold of 20,
+50 or 100 a day, and for a storm factor of 5 or 10. A storm floor of
+200 adds SME02412 06-22 (lift collisions and image-chain codes, no
+fault); a floor of 500 drops SME08640 08-28. 300 sits between the two.
+
+**Why the storm counts the residual:** with every code counted, the
+storm finding repeats the detector finding on every detector storm
+(`sim_all.log`: 2 long storm findings that cover the same days as rule
+2). The residual is what no other CV finding explains. In this data that
+is the positioner episode, which surfaces the board-reset debug,
+collimator CAN and Arcnet failures. The residual is exact from
+`ge_cv_daily`, because each counted row has one `cv.error` fact and at
+most one named fact.
+
+**One episode, several findings:** 2026-09-11 → 18 opens `cv_error_storm`,
+`cv_pib_com_loss`, `cv_anticollision_burst` and `cv_table_encoder_fault`.
+Each is a different subsystem's evidence of the same event. Linking them
+is a viewer concern (CV-6), not a rule change.
+
+### 10.3 Not findings in v1 (data only, shown in the viewer)
+
+- `cv.positioner_collision` and `cv.emergency_backout`: on nearly every
+  day on both systems. A spike rule would give 1–2 single days of
+  unclear meaning.
+- `cv.worklist_query_failed`: chronic low level on both systems.
+- `cv.dose_export_rejected`: chronic, rejected on nearly every day on
+  both systems since the data starts. A rule would open on day 3 and
+  never resolve. This is the same situation as CT's
+  `compliance.dose_display_disabled`, which stays data only until field
+  service confirms (CT §12 item 8). A third question was added to the
+  §5.5 D4 note (F3): is a dose-export destination configured on these systems, and is
+  every export being rejected?
+- The §6.3 candidates (M3).
+
+### 10.4 Design (follows CT §14.2 and §14.7)
+
+- **Files:** all new, under `insight/cv/findings/`, loaded by nothing in
+  the CT run.
+  - `rules.js`: the registry of pure `evaluate(ctx, D)` rules, plus the
+    catalog rows.
+  - `context.js` and `load.js`: dense day arrays from `ge_cv_daily`. The
+    day start is the device's local midnight, from the facts
+    (`host_datetime − time of day of host_local`); no clock table (K1).
+  - `run.js`: rehearse / apply / replay.
+  - `verify_sql.js`: independent SQL from `ge_cv_daily`, with the
+    residual computed in SQL.
+- **The fold is CT's:** `replay_system(ctx, cv_rules)` from
+  `insight/findings/state.js`, loaded unchanged. The CV wrapper sets
+  `source = 'ge_cv'` on its rows, so no shared code changes. Every CT
+  read, write and delete already filters `source = 'ge_ct'`.
+- **Catalog:** CV syncs only its own `cv_*` rows. CT's catalog sync
+  leaves keys it doesn't know in place (it only logs them), so CV rows
+  survive CT runs. CT's "catalog = registry" check is C1's.
+- **`customer_visible = false`** for every CV finding in v1. Its
+  evidence is GE service text (codes and counts only, no debug text), and
+  nothing has been confirmed by field service.
+- **CLI:** `insight/cv/cli.js findings --rehearse | --apply [--replay]`
+  and `verify-findings`, with the same rehearsal as CT: idempotency pass,
+  incremental vs replay, verify inside the transaction.
+
+### 10.5 C3: the findings view
+
+Every consumer of `api.ge_ct_findings_v` filters `source = 'ge_ct'`
+itself:
+- the CT viewer (`reports/sme_reports/ct/data.js`) and its verifier;
+- `api.ge_ct_systems_v` (004);
+- the CT findings run and verifier.
+
+No other consumer exists under `~/hep3`.
+
+### 10.6 Decisions (AGREED 2026-11-10: the recommendation in each)
+
+- **F1 Rules:** adopt rules 1–5 with the §10.2 thresholds. Recommended.
+- **F2 Storm counting:** count the residual, not every code. Recommended
+  (§10.2).
+- **F3 Dose export:** data only in v1, plus a third question in the D4
+  field-service note. Recommended. The alternative is a low `compliance`
+  finding left permanently open on both systems.
+- **F4 Data only:** collisions, emergency backout and worklist failures
+  stay viewer metrics. Recommended.
+- **F5 C3:** migration 008, which ships with CV-4's writer:
+  - `api.ge_ct_findings_v` gets `WHERE f.source = 'ge_ct'`. Every
+    consumer already filters, so nothing changes for them;
+  - a new `api.ge_cv_findings_v` (`source = 'ge_cv'`, catalog labels).
+
+  Recommended.
+- **F6 Shared code:** none for CV-4. It reuses `state.js` unchanged and
+  sets `source` in its own wrapper. Recommended over making `state.js`
+  take a source parameter, which would touch CT code.
+
+### 10.7 Proposed CV-4 exit criteria
+
+- On prod, the replay opens:
+  - the SME02412 detector com findings (three episodes);
+  - the 2026-09-11 positioner episode (storm, PIB, anticollision, table);
+  - the May lateral table potentiometer finding.
+
+  Any change from §10.2 is explained by new data.
+- Every medium/high finding is explained by its codes and series.
+- `verify-findings` (`ge_cv`) equals independent SQL at each system's
+  as-of day.
+- Replay and repeat runs change nothing.
+- CT findings, catalog checks and the CT viewer are unchanged.
+- Order: after CV-2/CV-3 are applied on prod (§8.4), and after 008.

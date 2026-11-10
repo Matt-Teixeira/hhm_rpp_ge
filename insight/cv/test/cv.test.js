@@ -194,7 +194,7 @@ test("cli flags", () => {
   assert.throws(() => args(["backfill", "--apply", "--batches", "1"]), /only for --rehearse/);
   assert.throws(() => args(["verify", "--to-id", "5"]), /takes/);
   assert.throws(() => args(["dry-run", "--to-id"]), /integer/);
-  assert.throws(() => args(["findings"]), /usage/);
+  assert.throws(() => args(["report"]), /usage/);
 });
 
 test("isolation: nothing outside insight/cv loads it (the GE CT run is unchanged)", () => {

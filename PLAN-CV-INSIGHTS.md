@@ -42,7 +42,14 @@ Status (2026-11-09):
 - **CV-4 groundwork (§10): done, read-only.**
   - 5 rules were replayed over all history: 12 findings, 1 open.
   - Decisions F1–F6 **AGREED 2026-11-10** (the recommendation in each).
-  - CV-4 build next, as new files under `insight/cv/findings/`.
+- **CV-4 findings (§10.8): built 2026-11-10, uncommitted.**
+  - New files under `insight/cv/findings/`, plus migration 008 (the
+    `ge_ct` filter on the CT findings view).
+  - Local rehearsal clean: 12 findings equal the independent SQL;
+    repeat and incremental runs give 0 changes and 0 drift; CT rows are
+    untouched.
+  - Codex review closed: one P2 (fail closed when derive state is
+    missing or facts and daily disagree), fixed (§10.9).
 
 The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
@@ -255,7 +262,7 @@ and 15,049 on 2026-10-20.
 | **CV-1 Schema** — 007 drafted 2026-11-09 (§7); Codex review next; apply after the CT Phase 5 close-out | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
 | **CV-2 Extract** — mapping agreed 2026-11-09 (§6.4); built and reviewed 2026-11-09 (§8); prod backfill after 007 + C1 + C2 | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** — built and reviewed 2026-11-09 (§9); prod after CV-2's apply | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
-| **CV-4 Findings** — groundwork 2026-11-09 (§10); F1–F6 agreed 2026-11-10 | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
+| **CV-4 Findings** — groundwork 2026-11-09 (§10); F1–F6 agreed 2026-11-10; built and reviewed 2026-11-10 (§10.8, §10.9) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 |
 | **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
 
@@ -1162,8 +1169,8 @@ CT keeps a clock table (`insight.system_clock`) for this.
 - `first_at` / `last_at` and the views' `last_seen` are device times, so
   they inherit the offset. The viewer (CV-6) should say so.
 - If a later finding needs real time (for example, linking errors to
-  our collection runs, as the D4 storm analysis did), migration 008 adds
-  `insight.ge_cv_clock`, built from `capture_datetime` against the
+  our collection runs, as the D4 storm analysis did), a later migration
+  adds `insight.ge_cv_clock`, built from `capture_datetime` against the
   device time of the newest row in each capture.
 
 ### 9.5 Codex review CV3-DERIVE (2026-11-09): P2 and P3, fixed
@@ -1339,6 +1346,9 @@ itself:
 
 No other consumer exists under `~/hep3`.
 
+`api.ge_cv_findings_v` (`source = 'ge_cv'`, with catalog labels) already
+exists: 007 created it. So 008 only adds the `ge_ct` filter (§10.8).
+
 ### 10.6 Decisions (AGREED 2026-11-10: the recommendation in each)
 
 - **F1 Rules:** adopt rules 1–5 with the §10.2 thresholds. Recommended.
@@ -1350,11 +1360,10 @@ No other consumer exists under `~/hep3`.
 - **F4 Data only:** collisions, emergency backout and worklist failures
   stay viewer metrics. Recommended.
 - **F5 C3:** migration 008, which ships with CV-4's writer:
-  - `api.ge_ct_findings_v` gets `WHERE f.source = 'ge_ct'`. Every
-    consumer already filters, so nothing changes for them;
-  - a new `api.ge_cv_findings_v` (`source = 'ge_cv'`, catalog labels).
-
-  Recommended.
+  `api.ge_ct_findings_v` gets `WHERE f.source = 'ge_ct'`. Every consumer
+  already filters, so nothing changes for them. Recommended.
+  - *Correction 2026-11-10:* `api.ge_cv_findings_v` was listed here as
+    new, but 007 already creates it, so 008 doesn't.
 - **F6 Shared code:** none for CV-4. It reuses `state.js` unchanged and
   sets `source` in its own wrapper. Recommended over making `state.js`
   take a source parameter, which would touch CT code.
@@ -1373,3 +1382,135 @@ No other consumer exists under `~/hep3`.
 - Replay and repeat runs change nothing.
 - CT findings, catalog checks and the CT viewer are unchanged.
 - Order: after CV-2/CV-3 are applied on prod (§8.4), and after 008.
+
+### 10.8 CV-4 build (2026-11-10, uncommitted)
+
+**Files (all new, apart from the CV CLI):**
+- `insight/cv/findings/`:
+  - `context.js`: pure. It builds per-system dense day series of
+    `cv.error`, the four named metrics and 1200019, and the residual. Its
+    context has the same shape as CT's, so CT's fold runs on it.
+  - `rules.js`: the 5 rules of §10.2, the CV catalog rows, and
+    validation (`cv_` prefix, windowed only, internal).
+  - `load.js`: data days from `ge_cv_facts` (midnight and last instants)
+    and daily cells from `ge_cv_daily`.
+  - `run.js`: rehearse / apply / replay. It reuses CT's pure pieces:
+    the fold `state.replay_system`, plus `reconcile`, `totals` and the
+    upsert from `findings/run.js`. `as_cv_rows` relabels the fold's rows
+    to `ge_cv` and refuses a non-`cv_` key.
+  - `verify_sql.js`: independent SQL. It uses `RANGE` windows over data
+    days, `percentile_cont` baselines and CT's island method, with the
+    thresholds written out.
+  - `verify.js`: the `ge_cv` rows equal the SQL, field by field (CT's
+    `compare_findings`); the `cv_*` catalog equals the registry; plus
+    invariants.
+- `insight/cv/cli.js`: `findings --rehearse | --apply [--replay]
+  [--system S]` and `verify-findings` (read-only).
+- `insight/cv/tools/build_findings_fixtures.js` and
+  `__fixtures__/findings/`: 2 systems, 337 data days, 3,995 cells (codes,
+  dims and counts only), with the SQL's 12 findings as of 2026-11-10.
+- `migrations/008_ct_findings_view_source.sql` and its down migration,
+  plus `migrations/test/m008.test.js`. They drop and re-create
+  `api.ge_ct_findings_v` with 005's columns plus
+  `WHERE f.source = 'ge_ct'`; the down restores 005 exactly. The runner
+  counts `CREATE OR REPLACE` as a create, hence drop and re-create.
+  Read-only check on prod (2026-11-10): the view has no grants, no
+  dependants and no default privileges, and prod is at version 6 with
+  114 `ge_ct` findings.
+
+**Interlocks in `findings` (`preflight`):**
+- runs only as the limited `insight_writer`;
+- schema ≥ 7 to rehearse, ≥ 8 to `--apply` (C3);
+- refuses while CV derive has pending days or owed code labels;
+- `--apply` needs C1 (`CV_AWARE` on the three CT verifiers).
+  - **C1 detail found here:** CT's `findings/verify.js` "catalog =
+    registry" check must also ignore `cv_*` rows of `finding_catalog`,
+    as well as the `cv.*` metric rows.
+
+**Tests:**
+- `insight/cv/test/findings.test.js`: 17. They cover the registry, the
+  SQL thresholds equal to the registry's, residual and baseline, the
+  boundaries of every rule, CT's fold (resolve on the 14th evaluated
+  day), as-of purity, the preflight refusals and the CLI. The real-data
+  fixture equals the independent SQL, and the 12 named cases hold.
+- `cv.test.js`: 15. Its `cli flags` check now uses an unknown command,
+  because `findings` exists.
+- `m008.test.js`: 2. Every other suite still passes: CV derive 9; CT
+  derive 14, derived 12, findings 31, load 3, rules 16, scrub 3, stage
+  24; parsers 9 + 9 + 4 + 2 + 4 + 13; `sqlscan` 20.
+
+**Local rehearsal (throwaway PostgreSQL 14, socket only):**
+- Data: prod rows through id 472938, which is device day 2026-11-10
+  (140,352 facts after extract and derive).
+- 008 through the real runner: dry run clean; roundtrip in-scope
+  +0 −0 ~1, and the down restores all 303 objects; applied.
+- Interlocks refused: apply without C1, a run while derive is pending,
+  and a run as a superuser.
+- `findings --rehearse --replay`:
+  - 12 findings, 1 open;
+  - pass 2: 0 changes;
+  - a default run after the replay: 0 changes, 0 drift;
+  - incremental from 2026-10-13, then weekly: identical to the replay,
+    0 drift;
+  - CT rows and CT catalog unchanged (2 synthetic `ge_ct` findings
+    seeded locally);
+  - `verify-findings` PASS (12 = 12, catalog 5 = 5, invariants ok);
+  - nothing persisted.
+- Apply `--replay` (C1 emulated in the harness only), then:
+  - `verify-findings` from a read-only session PASS;
+  - a default re-run and a replay re-run each changed 0;
+  - `api.ge_ct_findings_v` shows only `ge_ct`, `api.ge_cv_findings_v`
+    only `ge_cv`;
+  - `api.ge_cv_system_summary_v` counts 1 open (high) on SME02412.
+- Harnesses: `~/cv_d3b_evidence/cv4/local_*.js`.
+
+**Prod order for CV-4**, after §8.4 (007 → C2 → CV-2 apply → CV-3
+derive), each step after the previous one:
+1. The user applies 008 (status → up dry run → roundtrip → up --apply;
+   expect in-scope +0 −0 ~1).
+2. C1 is deployed (needed by CV-2 anyway).
+3. `node insight/cv/cli.js findings --rehearse --replay`; expect `ok`,
+   and the §10.7 list.
+4. `findings --apply --replay`, then `verify-findings`.
+
+Runs after that (CV-5 stage) use the default mode. The CV-5 hook is not
+part of CV-4.
+
+### 10.9 Codex review CV4-FINDINGS (2026-11-10): one P2, fixed
+
+**P2: a missing initial derive could pass.**
+- The problem: with no `ge_cv_derive` job state, the preflight saw no
+  pending days and passed. The system list and the verifier read only
+  `ge_cv_daily`. So a rehearsal or verify could report success while
+  evaluating a system that has facts but no daily rows; apply would
+  write the catalog and job state and produce no findings.
+- **The fix, fail closed in two places:**
+  - **Preflight** now needs a successful derive on record (`ge_cv_derive`
+    `last_run_status = 'ok'`). It also refuses when the device days with
+    facts and the days in `ge_cv_daily` differ, either way (it names
+    each system with its count and range of days).
+  - **`verify-findings`** has the same inventory check as its first
+    check.
+  - The system list is now facts ∪ daily.
+- **Checked:**
+  - 4 new preflight cases in `findings.test.js`; it still has 17 tests,
+    and every suite passes.
+  - Locally:
+    - no derive state: refused;
+    - SME08640 made facts-only: refused ("facts_only: 177 days
+      (2026-04-30..2026-11-10)"), and the read-only verify FAILs the
+      inventory and finds 1 extra finding;
+    - after `derive --apply --full`, everything passes again;
+    - the full §10.8 harness is unchanged (`local_p2.log`,
+      `local_cv4_r2.log`).
+
+**Also confirmed by the review:**
+- the JS and SQL windows, baselines, islands and `observed` agree;
+- the residual is exact while each counted row has one `cv.error` and at
+  most one named fact;
+- every CV statement is limited to source and key;
+- 008 is safe.
+
+**Kept as a note for later rule versions:** a future named metric must
+keep "one `cv.error` + at most one named fact per row", or the residual
+must change with it.

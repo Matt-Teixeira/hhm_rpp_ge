@@ -28,6 +28,21 @@
 //       code labels. Run verify-derive afterwards.
 //   node insight/cv/cli.js verify-derive
 //       READ-ONLY. The CV-3 exit check (verify_derive.js).
+//   node insight/cv/cli.js findings --rehearse [--replay] [--system S]
+//       As insight_writer, ONE transaction, rolled back (findings/run.js):
+//       findings as of today (pass 1), the same again (idempotency), after
+//       --replay a default pass, incremental consistency (replay as of
+//       today-28, then default runs a week apart), verify-findings on the
+//       uncommitted rows; prints the findings. Writes nothing.
+//   node insight/cv/cli.js findings --apply [--replay] [--system S]
+//       As insight_writer: the cv_* catalog, then one transaction per
+//       system; job_state 'ge_cv_findings' on fleet-wide runs. --replay
+//       rebuilds the history. Refused until migration 008 (plan §10.5 C3)
+//       and C1 are done, and while derive has pending days. Run
+//       verify-findings after.
+//   node insight/cv/cli.js verify-findings
+//       READ-ONLY. The CV-4 exit check (findings/verify.js) at each system's
+//       recorded as-of date.
 // Nothing in the GE CT run loads this file.
 const crypto = require("crypto");
 const { validate } = require("./rules");
@@ -37,9 +52,13 @@ const { run_extract, read_job, unreviewed } = require("./load");
 const { verify_cv_facts, compare } = require("./verify");
 const { run_derive } = require("./derive");
 const { verify_cv_derive } = require("./verify_derive");
+const { run_findings, JOB: FINDINGS_JOB } = require("./findings/run");
+const { run_verify: run_verify_findings } = require("./findings/verify");
+
+const utc_today = () => new Date().toISOString().slice(0, 10);
 
 function args(argv) {
-  const a = { cmd: argv[0], from_id: null, to_id: null, rehearse: false, apply: false, batches: null, full: false };
+  const a = { cmd: argv[0], from_id: null, to_id: null, rehearse: false, apply: false, batches: null, full: false, replay: false, system: null };
   const int = (i) => {
     const v = argv[i + 1];
     if (v === undefined || !/^\d+$/.test(v)) throw new Error(`${argv[i]} needs a non-negative integer`);
@@ -52,10 +71,23 @@ function args(argv) {
     else if (argv[i] === "--rehearse") a.rehearse = true;
     else if (argv[i] === "--apply") a.apply = true;
     else if (argv[i] === "--full") a.full = true;
+    else if (argv[i] === "--replay") a.replay = true;
+    else if (argv[i] === "--system") {
+      const v = argv[++i];
+      if (v === undefined || !/^[A-Z0-9_]+$/.test(v)) throw new Error("--system needs a system id");
+      a.system = v;
+    }
     else throw new Error(`unknown argument ${argv[i]}`);
   }
-  if (!["dry-run", "backfill", "verify", "derive", "verify-derive"].includes(a.cmd)) {
-    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive | findings --rehearse|--apply [--replay] [--system S] | verify-findings");
+  }
+  if ((a.replay || a.system) && a.cmd !== "findings") throw new Error("--replay and --system are only for findings");
+  if (a.cmd === "findings" || a.cmd === "verify-findings") {
+    if (a.from_id !== null || a.to_id !== null || a.batches !== null || a.full) throw new Error(`${a.cmd} takes only --rehearse/--apply, --replay, --system`);
+    if (a.cmd === "verify-findings" && (a.rehearse || a.apply)) throw new Error("verify-findings takes no flags");
+    if (a.cmd === "findings" && a.rehearse === a.apply) throw new Error("findings needs exactly one of --rehearse / --apply");
+    return a;
   }
   if (a.full && !(a.cmd === "derive" && a.apply)) throw new Error("--full is only for derive --apply");
   if (a.cmd === "derive") {
@@ -122,6 +154,18 @@ async function verify_derive(db) {
   return db.tx((t) => verify_cv_derive(t));
 }
 
+// READ-ONLY: the CV-4 exit check, each system at its recorded as-of date.
+async function verify_findings(db, { log = () => {} } = {}) {
+  await assert_read_only(db);
+  return db.tx(async (t) => {
+    const job = await t.oneOrNone("SELECT last_run_status, last_run_finished_at, last_run_stats FROM insight.job_state WHERE job_name = $1", [FINDINGS_JOB]);
+    const stats = (job && job.last_run_stats) || {};
+    const today = stats.today || utc_today();
+    return { job: job && { status: job.last_run_status, finished_at: job.last_run_finished_at }, today,
+      as_of_by_system: stats.as_of_by_system || {}, ...(await run_verify_findings(t, { today, as_of_by_system: stats.as_of_by_system || {}, log })) };
+  });
+}
+
 // READ-ONLY: the exit check over the watermark range.
 async function verify(db) {
   await assert_read_only(db);
@@ -135,16 +179,29 @@ function print(o) { console.log(JSON.stringify(o, null, 2)); }
 async function main() {
   const a = args(process.argv.slice(2));
   const { connect } = require("../db");
-  if (a.cmd === "dry-run" || a.cmd === "verify" || a.cmd === "verify-derive") {
+  if (a.cmd === "dry-run" || a.cmd === "verify" || a.cmd === "verify-derive" || a.cmd === "verify-findings") {
     const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_cv" });
     try {
-      const r = a.cmd === "dry-run" ? await dry_run(db, a) : a.cmd === "verify" ? await verify(db) : await verify_derive(db);
-      print(r);
+      const r = a.cmd === "dry-run" ? await dry_run(db, a) : a.cmd === "verify" ? await verify(db)
+        : a.cmd === "verify-derive" ? await verify_derive(db) : await verify_findings(db, { log: (s) => console.log(s) });
+      if (a.cmd === "verify-findings") console.log(`verify-findings (read-only): ${r.ok ? "PASS" : "FAIL"}; as of ${r.today}; per-system as-of ${JSON.stringify(r.as_of_by_system)}`);
+      else print(r);
       if (!r.ok) process.exitCode = 1;
     } finally { db.$pool.end(); }
     return;
   }
   const db = connect("writer", { statementTimeoutMs: 900000, applicationName: "insight_cv" });
+  if (a.cmd === "findings") {
+    try {
+      const r = await run_findings(db, { mode: a.apply ? "apply" : "rehearse", replay: a.replay, systems: a.system ? [a.system] : null,
+        today: utc_today(), run_id: crypto.randomUUID(), log: (s) => console.log(s) });
+      const { rows, ...rest } = r;
+      print(rest);
+      if (rows) for (const x of rows) console.log(`  ${x.system_id} ${x.finding_key.padEnd(24)} ${x.severity.padEnd(6)} ${x.status.padEnd(8)} opened ${x.evidence.opened_day} last trip ${x.evidence.last_trip_day} ${x.status === "resolved" ? `resolved ${x.evidence.resolved_day}` : `data through ${x.data_through}`} trips ${x.evidence.trip_days}`);
+      if (r.skipped || (r.rolled_back && !r.ok)) process.exitCode = 1;
+    } finally { db.$pool.end(); }
+    return;
+  }
   if (a.cmd === "derive") {
     try {
       const { pgp } = require("../db");
@@ -168,4 +225,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(`FAILED: ${e.message}`); process.exitCode = 2; });
 
-module.exports = { args, dry_run, verify, verify_derive };
+module.exports = { args, dry_run, verify, verify_derive, verify_findings };

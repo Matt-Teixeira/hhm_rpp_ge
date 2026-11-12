@@ -18,9 +18,12 @@ oldest first and its early bullets are superseded):**
   suite passes, and the local rehearsal is OK (§12.6). Both Codex
   reviews are closed (§12.7: a P3 and a note, both addressed). **Step 3
   (the `index.js` hook) is built** (§12.8): ingest is identical with the
-  switch off, and `GE_CT` is unchanged. All three Codex
-  reviews are closed. Next: the commit (the user's OK), the user's prod
-  rehearsal, the push, and the switch-on. Then CV-6, the viewer (as CT §16.4).
+  switch off, and `GE_CT` is unchanged. **CV-5 is
+  LIVE on prod since 2026-11-12 20:18 UTC** (1379d3b,
+  `INSIGHT_CV_ENABLED=true`). The prod rehearsal passed, and the first
+  live run was clean (§12.9). The CV tables now update every 30
+  minutes. **7-day monitoring until 2026-11-19 20:18 UTC**, then the
+  close-out against §12.4. Then CV-6. Then CV-6, the viewer (as CT §16.4).
 - **Waiting on others:**
   - The CV-1b sign-off waits for the first `sysError` rotation.
   - The §5.5 D4 field-service note has 5 questions; the user sends it.
@@ -368,7 +371,7 @@ and 15,049 on 2026-10-20.
 | **CV-2 Extract** ✅ backfill applied 2026-11-12, 142,004 facts (§8) | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** ✅ applied 2026-11-12 (§9) | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** ✅ 008 + replay applied 2026-11-12, 13 findings (§10) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
-| **CV-5 Prod** — agreed 2026-11-12, building (§12) | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 (§12.4) |
+| **CV-5 Prod** — LIVE 2026-11-12 20:18 UTC, monitoring until 11-19 (§12) | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 (§12.4) |
 | **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
 
 Checkpoints for the user's go-ahead: the answers to §3; before each
@@ -2150,3 +2153,75 @@ ingest unchanged, `GE_CT` and `GE_MRI` unchanged.
 4. Push when the user says.
 5. The user pulls with the switch unset, then sets
    `INSIGHT_CV_ENABLED=true`.
+
+### 12.9 Deploy (2026-11-12)
+
+- **Committed 1379d3b** (steps 1–3, plan, reviews) and **pushed**
+  dev/staging/prod (cab58d9..1379d3b, 19:18:51 UTC) at the user's word.
+  The user pulled on prod; `INSIGHT_CV_ENABLED` is not set.
+- **Prod stage rehearsal, run by the user** (`/home/prod/hhm_rpp_ge`,
+  ~19:20 UTC, 19.1 s): **overall: OK.**
+  - Pending range: 474162..474254, 93 rows.
+  - Run 1 (92 rows): 5.5 s. Run 2 (the last run's 1 row): 3.4 s. Run 3
+    (no rows): 1.1 s. All ok, with the watermarks equal after each.
+  - On prod, the code-label rebuild is the main cost (derive 2.3–4.2 s;
+    it was 1.1–1.8 s locally). Still seconds per run.
+  - `verify` 17 / 17 cells; `verify-derive` ok; `verify-findings` PASS
+    (13 = 13, catalog 5).
+  - Derive touched = full rebuild; findings default = replay (13 vs 13,
+    0 changes).
+  - CT rows unchanged; 0 drift.
+  - The watermarks after the rollback were 474161 / 0 / 0 (unchanged).
+- **Before the pull (baseline from the run logs):**
+  - `GE_CV` 17:48–19:18: 79–80 events, 6 functions, 0 ERROR, 10 WARN
+    (the pre-existing "file not present"), no insight events, about 1 s.
+  - `GE_CT`: 0 ERROR, 4 `run_ct_insight` events.
+- **First runs on 1379d3b, switch unset (19:48 UTC), read-only from the
+  run logs:**
+  - **`GE_CV`:** 80 events, the same 6 functions, 0 ERROR, the same 10
+    WARN, no `run_cv_insight` event, 1.4 s. It ingested 4 rows. Identical
+    to the baseline.
+  - **`GE_CT`:** 0 ERROR; the CT stage was ok (11.4 s, watermarks equal).
+    The function counts match the earlier runs apart from one INFO
+    `extract_tube_usage` call, a pre-existing event seen in many earlier
+    runs (it fires when a CT file carries tube data).
+  - **Ingest is unaffected with the switch off** (§12.4).
+- **Next:** the user sets `INSIGHT_CV_ENABLED=true` in the prod `.env`.
+  The first live run catches up the rows since 474161. Then 7 days of
+  monitoring.
+- **Switched on:** the user set `INSIGHT_CV_ENABLED=true` in the prod
+  `.env` (~20:06 UTC).
+- **First live run, `GE_CV` 20:18 UTC, clean:**
+  - 5.3 s in total: ingest 1.2 s (5 rows), then the stage 4.1 s.
+  - **extract:** 474161 → 474263, 102 rows, 134 facts, 22 relays, no
+    unreviewed codes, `behind_ids` 0.
+  - **derive:** 2 systems, 2 days, 2.6 s, codes 205.
+  - **findings:** 13 (2 open), 0 drift.
+  - **Summary:** ok, with the watermarks equal at 474263 = the source max.
+  - Ingest: 0 errors and the same 10 WARN; the stage started after the
+    last ingest event.
+  - No `insight_cv` session left.
+- **Read-only checks after the run:** `verify` ok (to 474263, 142,138
+  facts, 17 cells); `verify-derive` ok; `verify-findings` PASS.
+- **CT:** the 20:18 `GE_CT` run had 0 errors; its stage was ok (13.7 s,
+  watermarks equal at 18608490).
+- **Monitoring tool:** `~/cv_d3b_evidence/cv5/monitor.js [since]`
+  (read-only) checks:
+  - each `GE_CV` run's stage (ok, watermarks equal, rows, drift, a
+    backlog, warnings, errors) and its ingest (errors; the 10-WARN
+    baseline);
+  - each `GE_CT` stage summary;
+  - the CV job state against the source max, and leftover sessions.
+
+  Once a day, run it together with the three CV verifiers (and the CT
+  ones).
+- **The 7-day window runs from 2026-11-12 20:18 to 2026-11-19 20:18 UTC**
+  (§12.4).
+- **Day 0 check (2026-11-12 ~20:25 UTC), run by the user from both
+  accounts:**
+  - `monitor.js`: 1 `GE_CV` run, clean; `GE_CT` clean; the watermarks
+    are 474263 ×3 = the source max.
+  - `verify`: 17 cells, 0 diffs. Every row is accounted for (12,330
+    relays + 85,339 counted = 97,669); 205 codes, none unreviewed.
+  - `verify-derive`: 0 diffs in all four checks; 5,378 daily rows.
+  - `verify-findings`: PASS (13 = 13, 2 open).

@@ -65,10 +65,17 @@ Status (2026-11-12):
 - **C1 (§11): committed on `dev` 2026-11-12** after the close-out, merged
   onto the close-out commit. The only conflict was `derive/verify.js`
   `module.exports`, merged by hand. All 11 insight test suites (CT and
-  CV) pass. The scratch worktree is removed. **Next: the user's CT stage
-  rehearsal (§11.5 step 3), then the push.** The first attempt from a
-  non-interactive shell stopped at the "type the database name" prompt;
-  nothing ran. Build history:
+  CV) pass. The scratch worktree is removed. With C1, the read-only CT
+  `verify`, `verify-derive` and `verify-findings` all pass on prod.
+  **The user's CT stage rehearsal on prod passed** (2026-11-12, rolled
+  back after 362 s, watermark 18605118):
+  - every check is `overall: OK`, with 0 drift;
+  - touched equals the full rebuild for all 34 systems;
+  - default findings equal the replay (115 findings);
+  - the watermarks are unchanged after the rollback.
+
+  Pushed to dev/staging/prod; **next: the user pulls on prod, then §8.4.**
+  Build history:
   - The three CT verifiers count only CT catalog rows and export
     `CV_AWARE`.
   - Tests pass. The local rehearsal shows: the originals fail with CV
@@ -1646,9 +1653,9 @@ Recommendation: leave the log-only counts as they are.
 2. The commit on `dev`, after asking. The worktree is removed only once
    the change is on `dev`. **Done 2026-11-12.**
 3. The CT stage rehearsal, which the user runs on prod:
-   `node insight/cli.js stage --rehearse`.
+   `node insight/cli.js stage --rehearse`. **Passed 2026-11-12** (status).
 4. The push, only when the user says so:
-   `git push origin dev dev:staging dev:prod`. The user pulls on prod.
+   `git push origin dev dev:staging dev:prod`. The user pulls on prod. **Pushed 2026-11-12.**
 5. Then §8.4: 007 (`node migrations/run.js up --to 7`; a plain `up`
    would also apply 008) → backfill rehearse/apply + verify → derive +
    verify-derive. Then §10.8: 008 → findings `--rehearse --replay` →

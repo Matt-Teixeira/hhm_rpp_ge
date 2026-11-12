@@ -1,6 +1,26 @@
 # GE CV Insights — plan
 
-Status (2026-11-12):
+**Current state (2026-11-12; read this first, the history below is
+oldest first and its early bullets are superseded):**
+- **Live on prod:** CV-0, CV-1 (007), CV-2, CV-3, CV-4 (008). Prod
+  schema is at 8. All code is committed and pushed (dev = staging = prod
+  at a64a9a2 or later).
+- **The CV tables are a one-time load** as of 2026-11-12 15:26 UTC, with
+  the `ge_cv_extract` watermark at 474161. Nothing updates them until
+  CV-5 adds the stage.
+- **Findings:** 13 in total, 2 open: SME02412 `cv_detector_com_errors`
+  (high) and SME08640 `cv_error_storm` (medium, from 2026-11-11).
+- **Next: CV-5.** The stage runs after `ge_cv_parsers` (the `GE_CV` run
+  of `index.js`) behind a kill switch, then a rehearsal, deploy and 7
+  days of monitoring. Exit criteria as CT §15.4. Then CV-6, the viewer
+  (as CT §16.4).
+- **Waiting on others:**
+  - The CV-1b sign-off waits for the first `sysError` rotation.
+  - The §5.5 D4 field-service note has 5 questions; the user sends it.
+- **K1:** no CV clock table in v1. SME02412's device clock runs about
+  108–118 min ahead.
+
+Status history (2026-11-06 → 2026-11-12):
 - **CV-0 (decide): AGREED** 2026-11-06 (the §2 design and the
   recommended answer to every §3 question).
 - **CV-1b (ingest integrity): done apart from its sign-off.** All fixes

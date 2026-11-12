@@ -15,12 +15,22 @@ const { MAX_OFFSET_H } = require("./daily");
 
 // §13.1 / §13.3 acceptance (as of 2026-11-04): reset day is the UTC date of
 // the reset reading, as in the §13.1 table.
-const EXPECTED_REPLACEMENTS = [
+const REPLACEMENTS_13_1 = [
   ["SME15218", "2026-05-28", "confirmed"], ["SME15218", "2026-09-24", "confirmed"],
   ["SME16618", "2026-06-04", "confirmed"], ["SME21864", "2026-07-15", "confirmed"],
   ["SME21873", "2025-08-14", "confirmed"], ["SME21873", "2025-09-02", "counter_only"],
   ["SME21873", "2025-12-08", "confirmed"], ["SME21873", "2026-01-28", "confirmed"],
 ];
+// New replacements seen live after §13.1, each reviewed before it is added.
+// SME21870 2026-11-07 (Phase 5 close-out, 2026-11-12): counter 56,442,759.5 ->
+// 0 mA·s at 20:46 UTC, 7 calibrations from 19:14 UTC, 4 boots that day, tube
+// source verified; the new tube's counter rises with normal scanning from 11-09.
+const REPLACEMENTS_REVIEWED = [
+  ["SME21870", "2026-11-07", "confirmed"],
+];
+// Same order as the facts query (system_id, then reset time).
+const EXPECTED_REPLACEMENTS = [...REPLACEMENTS_13_1, ...REPLACEMENTS_REVIEWED]
+  .sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
 // Sorted by system_id (compared as a list). SME20594 added 2026-11-04 (Phase 5
 // monitoring, reviewed): every capture 2026-10-05..10-31 had lag +13..+35 min;
 // every capture from 2026-11-01 (US DST end) has lag -17..-46 min, a ~60 min
@@ -155,7 +165,7 @@ async function check_tube(db) {
   // §13.1 acceptance
   const got = facts.map((f) => [f.system_id, f.host_datetime.toISOString().slice(0, 10), f.value_text]);
   const same = JSON.stringify(got) === JSON.stringify(EXPECTED_REPLACEMENTS);
-  lines.push(`§13.1 table: ${same ? "exact match" : "MISMATCH"} (${got.filter((g) => g[2] === "confirmed").length} confirmed, ${got.filter((g) => g[2] === "counter_only").length} counter_only)`);
+  lines.push(`expected table (§13.1 + ${REPLACEMENTS_REVIEWED.length} reviewed): ${same ? "exact match" : "MISMATCH"} (${got.filter((g) => g[2] === "confirmed").length} confirmed, ${got.filter((g) => g[2] === "counter_only").length} counter_only)`);
   if (!same) { ok = false; lines.push(`  got ${JSON.stringify(got)}`); }
   for (const f of facts) {
     lines.push(`  ${f.system_id} reset ${f.host_datetime.toISOString().slice(0, 16)}Z  ${f.value_text.padEnd(12)} install ${f.attrs.install_date}  cal ${String(f.attrs.calibrations_in_window).padStart(2)}  old ${f.attrs.old_mas} mA·s  source ${f.attrs.tube_source}`);
@@ -289,4 +299,4 @@ async function run_verify(db, log = console.log) {
   return { ok: results.every((r) => r.ok), results };
 }
 
-module.exports = { run_verify, EXPECTED_REPLACEMENTS, EXPECTED_CLOCK_AHEAD, RESTART_LOOP, DAILY_DIFF_SQL, EXAMS_DIFF_SQL };
+module.exports = { run_verify, EXPECTED_REPLACEMENTS, REPLACEMENTS_13_1, REPLACEMENTS_REVIEWED, EXPECTED_CLOCK_AHEAD, RESTART_LOOP, DAILY_DIFF_SQL, EXAMS_DIFF_SQL };

@@ -233,7 +233,7 @@ test("F2: derived-fact changed days include the OLD day of an updated fact; inse
 });
 
 test("verify-derive acceptance lists match the derived rules on the §13.1 fixtures", () => {
-  const { EXPECTED_REPLACEMENTS, EXPECTED_CLOCK_AHEAD } = require("../derive/verify");
+  const { EXPECTED_REPLACEMENTS, REPLACEMENTS_13_1, REPLACEMENTS_REVIEWED, EXPECTED_CLOCK_AHEAD } = require("../derive/verify");
   const d = require("../rules/ge_ct_derived");
   const tube = JSON.parse(fs.readFileSync(path.join(FIX, "tube.json"), "utf8"));
   const got = [];
@@ -242,7 +242,11 @@ test("verify-derive acceptance lists match the derived rules on the §13.1 fixtu
       got.push([sys, new Date(f.host_datetime).toISOString().slice(0, 10), f.value_text]);
     }
   }
-  assert.deepStrictEqual(got, EXPECTED_REPLACEMENTS);
+  assert.deepStrictEqual(got, REPLACEMENTS_13_1);
+  // SME21870 added 2026-11-12 after review (live replacement, see verify.js)
+  assert.deepStrictEqual(REPLACEMENTS_REVIEWED, [["SME21870", "2026-11-07", "confirmed"]]);
+  assert.deepStrictEqual(EXPECTED_REPLACEMENTS.length, REPLACEMENTS_13_1.length + REPLACEMENTS_REVIEWED.length);
+  assert.deepStrictEqual(EXPECTED_REPLACEMENTS.map((r) => r[0]).slice(3, 5), ["SME21864", "SME21870"]);
   // SME20594 added 2026-11-04 after review (DST-end clock step, see verify.js)
   assert.deepStrictEqual(EXPECTED_CLOCK_AHEAD, ["SME11229", "SME16618", "SME20594", "SME21873", "SME21929"]);
 });

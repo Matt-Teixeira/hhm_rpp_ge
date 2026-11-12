@@ -10,7 +10,7 @@ then, an internal HTML viewer reads the same contract.
 Out of scope for v1: MRI and CV. The design keeps them in mind (shared
 schema, rule registry per source), but nothing is built for them yet.
 
-## Status (2026-11-06)
+## Status (2026-11-12)
 
 - **Phase 0 done.** Decisions in §9.
 - **Phase 1 done: applied to prod 2026-11-03 19:44:38 UTC** by the user
@@ -181,7 +181,46 @@ schema, rule registry per source), but nothing is built for them yet.
     field-service confirmation is Phase 7.
   - Two Codex reviews, 6 findings, all fixed (§14.7).
   - Commits on `dev` (not pushed): `4d8a345`, `3420fcf`, `63377f7`.
-- **Phase 5 built and deployed; in its monitoring window (§15).**
+- **Phase 5 DONE (closed out 2026-11-12 13:11 UTC).** All §15.4 exit
+  criteria met, checked read-only against prod:
+  - **Runs:** 371 GE_CT runs from 2026-11-04 19:48 to 2026-11-12 12:48
+    UTC (prod run logs). There are no gaps over 35 min and no ERROR
+    events. Every stage summary is `ok` with all three watermarks equal,
+    and the watermarks never go backwards (last 18603339).
+  - **Stage time per run:** p50 4.1 s, p95 16.0 s, max 29.3 s (the first
+    catch-up run). The daily all-systems pass ran on each of the 8 UTC
+    days (00:18), taking 12.9–14.2 s, with 0 drift.
+  - **Drift:** 0 in every default run since the fix deploy (2026-11-05
+    13:00 UTC). The only stage WARNs in the window are the 4 pre-fix
+    SME01430 `abort_rate_high|2026-09-25` drift events (06:18, 06:48,
+    10:18 and 10:48 UTC on 11-05).
+  - **Verifiers at the end** (13:03–13:11 UTC, watermark 18603339):
+    - `verify`: 624 cells equal, catalog 39.
+    - `verify-findings`: 115 findings, missing / extra / differ 0, ALL
+      PASS.
+    - `verify-derive`: ALL PASS after one reviewed new tube replacement
+      (below).
+  - **Ingest unaffected:** `log.ge_ct_gesys` follows the same daily
+    pattern before and after 11-04 (weekdays 7.5k–11.4k rows from 25–27
+    systems; weekends 1.4k–2.4k). `scan_seconds` rows from
+    `extract_tube_usage` keep arriving (13–27 on weekdays).
+    `alert.offline_hhm_conn` is updated for all 27 systems seen in the
+    last day. The ~200 ingest WARNs per run predate insight.
+  - **Reviewed at close-out, a new tube replacement:** SME21870 on
+    2026-11-07, `confirmed`. Evidence:
+    - the counter goes from 56,442,759.5 to 0 mA·s at 20:46 UTC;
+    - 7 calibrations from 19:14 UTC and 4 boots that day;
+    - the tube source is verified;
+    - the new segment rises with normal scanning from 11-09;
+    - the old tube's total is in line with the other replaced tubes
+      (52.8M, 57.3M).
+
+    The `tube_replaced` finding (info) is open. Fix:
+    `insight/derive/verify.js` now holds the §13.1 list plus a
+    `REPLACEMENTS_REVIEWED` list (SME21870 is its first entry); the test
+    still checks the fixtures against §13.1 alone.
+  - The Phase 5 build history follows.
+- **Phase 5 build history (§15).**
   - Built: the insight stage (`45c2ab2`, review PHASE5-STAGE F1-F2) and
     the `index.js` hook (`9c098f2`, review PHASE5-HOOK F1-F2). The first
     live stage run was 2026-11-04 19:48 UTC.
@@ -196,10 +235,8 @@ schema, rule registry per source), but nothing is built for them yet.
   - **Drift fix (`b09674e`, review PHASE5-DRIFT: no findings):** resolved
     findings follow the replay inside the 7-day window. Deployed
     2026-11-05 13:00 UTC, which restarted the 0-drift window.
-  - **Remaining:** the §15.4 exit criteria. The 7 clean days end
-    2026-11-11 19:48 UTC; the 0-drift window ends 2026-11-12 13:00 UTC.
-    Until then nothing changes the pipeline (`insight/` stage code,
-    `index.js`).
+  - The §15.4 windows ended 2026-11-11 19:48 UTC (7 clean days) and
+    2026-11-12 13:00 UTC (0 drift); see the close-out above.
 - **Phase 6 DONE (2026-11-06).** The internal viewer, "GE CT Insights —
   Internal" (§16). All §16.4 exit criteria met:
   - **Migration 006** (`api.ge_ct_days_v`, `api.ge_ct_capabilities_v`,
@@ -246,6 +283,8 @@ schema, rule registry per source), but nothing is built for them yet.
     - the PSU gauges' 2147483647 placeholder (the page shows PSU event
       counts only);
     - SME20594's DST-end clock step (above).
+    - SME21870's tube replacement on 2026-11-07 (Phase 5 close-out): ask
+      field service to confirm the swap date.
   - **Codex reviews:** PHASE6-006 (two rounds, no findings), DATA-MODEL,
     VERIFY and PAGE (F1–F2 each, all fixed).
   - **Commits:**

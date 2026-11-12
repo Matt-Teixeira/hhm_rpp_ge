@@ -23,10 +23,13 @@
 //             days (must reproduce the full rebuild), verify on the
 //             uncommitted rows.
 //   apply   : the pending scope (or --full), codes, then the job's
-//             last_run_* fields (the pending map is kept).
+//             last_run_* fields (the pending map is kept) and, on success,
+//             watermark_id = the ge_cv_extract watermark this run covered
+//             (CV-5, plan §12.2 item 4: read under the lock, so every row up
+//             to it had its days recorded and now derived).
 //
 // Nothing in the GE CT run loads this file.
-const { LOCK_KEY, DERIVE_JOB, MIN_SCHEMA_VERSION } = require("./load");
+const { LOCK_KEY, DERIVE_JOB, JOB: EXTRACT_JOB, MIN_SCHEMA_VERSION } = require("./load");
 
 const LABEL_VERSION = 1;
 const LABEL_MAX = 200;
@@ -196,14 +199,43 @@ async function derive_system_tx(conn, system_id, { full }) {
   });
 }
 
-async function write_last_run(c, { run_id, started_at, status, stats }) {
+// watermark_id: set only on success (null keeps the old one).
+async function write_last_run(c, { run_id, started_at, status, stats, watermark_id = null }) {
   await c.none(
     `INSERT INTO insight.job_state (job_name, last_run_stats) VALUES ($1, '{}'::jsonb) ON CONFLICT (job_name) DO NOTHING;
      UPDATE insight.job_state SET last_run_id = $2, last_run_started_at = $3, last_run_finished_at = now(), last_run_status = $4,
-            last_run_stats = coalesce(last_run_stats, '{}'::jsonb) || jsonb_build_object('last', $5::jsonb), updated_at = now()
+            last_run_stats = coalesce(last_run_stats, '{}'::jsonb) || jsonb_build_object('last', $5::jsonb),
+            watermark_id = coalesce($6::bigint, watermark_id), updated_at = now()
      WHERE job_name = $1`,
-    [DERIVE_JOB, run_id, started_at, status, JSON.stringify(stats)]
+    [DERIVE_JOB, run_id, started_at, status, JSON.stringify(stats), watermark_id]
   );
+}
+
+// ------------------------------------------------- lock-free core (CV-5)
+// The caller holds LOCK_KEY: run_derive below (the CLI) or the CV stage
+// (stage.js, plan §12.2). No lock and no preflight here.
+//
+// The pending days (or every system with full), one transaction per system,
+// then the code labels if owed, then the job's last run. The extract
+// watermark is read first: the extract can't run meanwhile (same lock), so
+// once every pending system is derived, derive covers it.
+async function derive_step(conn, pgp, { full = false, run_id = null, started_at = new Date(), rebuild = rebuild_codes }) {
+  const ex = await conn.oneOrNone("SELECT watermark_id FROM insight.job_state WHERE job_name = $1", [EXTRACT_JOB]);
+  const through = ex ? Number(ex.watermark_id) : null;
+  const pending = await read_pending(conn);
+  const scope = full ? (await conn.any(SYSTEMS_SQL)).map((r) => r.system_id) : Object.keys(pending).sort();
+  const daily = [];
+  try {
+    for (const s of scope) daily.push(await derive_system_tx(conn, s, { full }));
+    const owed = scope.length > 0 || (await codes_owed(conn));
+    const codes = owed ? await rebuild_codes_tx(conn, pgp, rebuild) : { skipped: "nothing pending" };
+    const stats = { full, systems: scope.length, daily, codes };
+    await conn.tx((t) => write_last_run(t, { run_id, started_at, status: "ok", stats, watermark_id: through }));
+    return { stats, watermark: through, pending_after: await read_pending(conn) };
+  } catch (e) {
+    await conn.tx((t) => write_last_run(t, { run_id, started_at, status: "error", stats: { full, daily, error: e.message } })).catch(() => {});
+    throw e;
+  }
 }
 
 async function run_derive(db, pgp, { mode, full = false, run_id = null, verify = null, log = () => {}, rebuild = rebuild_codes }) {
@@ -250,20 +282,8 @@ async function run_derive(db, pgp, { mode, full = false, run_id = null, verify =
       }
 
       // apply
-      const pending = await read_pending(conn);
-      const scope = full ? systems : Object.keys(pending).sort();
-      const daily = [];
-      try {
-        for (const s of scope) daily.push(await derive_system_tx(conn, s, { full }));
-        const owed = scope.length > 0 || (await codes_owed(conn));
-        const codes = owed ? await rebuild_codes_tx(conn, pgp, rebuild) : { skipped: "nothing pending" };
-        const stats = { full, systems: scope.length, daily, codes };
-        await conn.tx((t) => write_last_run(t, { run_id, started_at, status: "ok", stats }));
-        return { stats, preflight: pre, pending_after: await read_pending(conn) };
-      } catch (e) {
-        await conn.tx((t) => write_last_run(t, { run_id, started_at, status: "error", stats: { full, daily, error: e.message } })).catch(() => {});
-        throw e;
-      }
+      const r = await derive_step(conn, pgp, { full, run_id, started_at, rebuild });
+      return { stats: r.stats, preflight: pre, pending_after: r.pending_after };
     } finally {
       await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [LOCK_KEY]);
     }
@@ -271,6 +291,6 @@ async function run_derive(db, pgp, { mode, full = false, run_id = null, verify =
 }
 
 module.exports = {
-  run_derive, derive_daily, rebuild_codes, build_codes, template, readable, ascii, mode, read_pending, codes_owed,
-  DAILY_FULL, DAILY_DAYS, CODES_ROWS_SQL, FINGERPRINT_SQL, LABEL_VERSION, LABEL_MAX, TOUCHED_CHECK_DAYS,
+  run_derive, derive_step, write_last_run, derive_daily, rebuild_codes, build_codes, template, readable, ascii, mode, read_pending, codes_owed,
+  DAILY_FULL, DAILY_DAYS, CODES_ROWS_SQL, FINGERPRINT_SQL, SYSTEMS_SQL, LABEL_VERSION, LABEL_MAX, TOUCHED_CHECK_DAYS,
 };

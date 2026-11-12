@@ -10,10 +10,17 @@ oldest first and its early bullets are superseded):**
   CV-5 adds the stage.
 - **Findings:** 13 in total, 2 open: SME02412 `cv_detector_com_errors`
   (high) and SME08640 `cv_error_storm` (medium, from 2026-11-11).
-- **Next: CV-5.** The stage runs after `ge_cv_parsers` (the `GE_CV` run
-  of `index.js`) behind a kill switch, then a rehearsal, deploy and 7
-  days of monitoring. Exit criteria as CT §15.4. Then CV-6, the viewer
-  (as CT §16.4).
+- **Now: CV-5 (§12), proposed 2026-11-12.** Evidence is in (read-only):
+  `GE_CV` runs at :18/:48 UTC, ingest 1.5 s p50; 178 of 707 runs bring
+  rows (max 555); an incremental stage should add 2–3 s. The user
+  AGREED the design and the recommendation in each of Q1–Q7 (2026-11-12).
+  **Steps 1–2 built** (cores, stage, rehearsal; uncommitted). Every
+  suite passes, and the local rehearsal is OK (§12.6). Both Codex
+  reviews are closed (§12.7: a P3 and a note, both addressed). **Step 3
+  (the `index.js` hook) is built** (§12.8): ingest is identical with the
+  switch off, and `GE_CT` is unchanged. All three Codex
+  reviews are closed. Next: the commit (the user's OK), the user's prod
+  rehearsal, the push, and the switch-on. Then CV-6, the viewer (as CT §16.4).
 - **Waiting on others:**
   - The CV-1b sign-off waits for the first `sysError` rotation.
   - The §5.5 D4 field-service note has 5 questions; the user sends it.
@@ -361,7 +368,7 @@ and 15,049 on 2026-10-20.
 | **CV-2 Extract** ✅ backfill applied 2026-11-12, 142,004 facts (§8) | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
 | **CV-3 Derive** ✅ applied 2026-11-12 (§9) | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** ✅ 008 + replay applied 2026-11-12, 13 findings (§10) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
-| **CV-5 Prod** | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 |
+| **CV-5 Prod** — agreed 2026-11-12, building (§12) | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 (§12.4) |
 | **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
 
 Checkpoints for the user's go-ahead: the answers to §3; before each
@@ -1762,3 +1769,384 @@ Recommendation: leave the log-only counts as they are.
   prefix test drops exactly the `cv_` keys and keeps `cva`, `cvx_unknown`,
   `cv` and the CT keys. It is used consistently in the CV queries, and
   `left()` avoids depending on PG 11's `starts_with()`.
+
+## 12. CV-5: the stage (AGREED 2026-11-12: the recommendation in each of Q1–Q7)
+
+CV-5 keeps the CV tables current: `run_cv_insight` runs extract → derive
+(touched days) → findings after the `GE_CV` ingest, behind its own kill
+switch, and never fails the run. It follows CT §15. Everything below was
+measured read-only on 2026-11-12 (scripts in `~/cv_d3b_evidence/cv5/`).
+
+### 12.1 Evidence
+
+**Run cadence and ingest** (prod run logs, 2026-10-29 → 2026-11-12 17:18
+UTC, 707 `GE_CV` runs):
+- `GE_CV` runs every 30 min at **:18 and :48 UTC**, the same minutes as
+  `GE_CT` (two separate processes, started together).
+- The ingest takes **1.5 s (p50), 3.3 s (p90), 4.9 s (max)**. `GE_CT` takes
+  27 s (p50), 73 s (max), plus its stage (4.2 s p50, 29 s max).
+- 0 ERROR events. About 20 WARN per run, all pre-existing "file not
+  present" for the configured CV systems that send no `sysError.log`.
+
+**Rows per run** (`log.ge_cv_syserror`, by capture):
+- Only SME02412 and SME08640 send rows (513 and 1,745 in the 14 days).
+- **Most runs bring nothing:** 178 of 707 runs had rows. Of those, 5
+  (p50), 16 (p90), 456 (p99), **555 (max)**.
+- 30–180 rows on a normal day; **1,163 on 2026-11-12** (the SME08640
+  burst at 04:18–05:48 UTC: runs of 456 and 555 rows).
+- The `ge_cv_extract` watermark is 474161 (15:18 UTC capture). 62 rows
+  were waiting at 17:18 UTC (ids to 474223); they accumulate until CV-5
+  is live.
+
+**Incremental cost** (the read side of each step, timed read-only on
+prod; the writes are tens of rows and are measured by the rehearsal):
+
+| Step | Measured |
+|---|---|
+| extract: read + classify the 62 pending rows | 52 ms (74 facts; touched 1 device day per system) |
+| extract: late re-read select | 25 ms (2 rows: RTA relays, which give no facts, so they are re-read every run; at most 1,089 relays in any 2 h window) |
+| derive: daily select, 2 days per system | 22–25 ms per system |
+| derive: code labels (full rebuild: 85,259 `cv.error` rows read, 203 codes built) | 0.7 s read + 0.6 s build: **the largest cost** |
+| findings: inventory check (preflight) | 53 ms |
+| findings: load + fold, SME02412 / SME08640 | 0.28 s / 0.04 s |
+
+So a run with new rows should add **about 2–3 s** to `GE_CV`; a run with
+none, under 1 s (extract finds nothing, derive has nothing pending,
+findings re-evaluates two systems). The code-label rebuild grows with
+`cv.error` facts (~100 a day), so it stays around a second for years.
+
+**Daily checks by hand** (read-only CLI on prod, all pass):
+`verify` 2.4 s, `verify-derive` 3.8 s, `verify-findings` 1.1 s.
+
+**What exists:**
+- `run_extract` (`cv/load.js`): apply = catalog sync, the late-commit
+  re-read (2 h, already built in CV-2), then batches of 50k from the
+  watermark, each one transaction with its touched days.
+- `run_derive` (`cv/derive.js`): apply = the pending days, one
+  transaction per system, then the code labels (with the durable
+  `codes_pending` marker).
+- `run_findings` (`cv/findings/run.js`): the default mode is the stage
+  path (systems with data in the last 7 device days; resolved history
+  kept; drift reported).
+- Each takes and releases the CV advisory lock (`insight_ge_cv`) itself,
+  on its own connection from `db.task`.
+
+**What doesn't exist:** the lock-free step functions, the stage
+(`run_cv_insight`), a stage rehearsal, a kill switch, the `index.js` hook.
+The CV CLI has **no typed confirmation prompt** (CT's `cli.js` asks for
+the database name, and `APPLY` for writes).
+
+**Other facts that shape the design:**
+- **CT and CV never wait on each other.** Different advisory locks and
+  tables. Shared tables are touched only on disjoint rows:
+  `insight.job_state` (`ge_ct_*` vs `ge_cv_*`), `insight.findings`
+  (source), `finding_catalog` (`cv_` keys), `metric_catalog` (`cv.*`).
+  C1 already makes the CT verifiers ignore the CV rows.
+- **Job state differs from CT's:** CT's three jobs share an id watermark
+  (`ge_ct_extract` = `ge_ct_derive` = `ge_ct_findings` after each run).
+  For CV only `ge_cv_extract` has one; derive works from its pending map
+  and findings from the date (their `watermark_id` is 0).
+- The isolation test (`cv.test.js`) forbids `require(…cv/…)` in the
+  root `index.js` and in CT's `insight/` files. The hook needs a narrow
+  exception for the root `index.js`.
+
+### 12.2 Design (agreed)
+
+1. **`insight/cv/index.js` `run_cv_insight(run_log, addLogEvent)`**
+   (new file), called from `on_boot()` after the system loop, for
+   `GE_CV` only, inside its own try/catch, as the CT hook.
+   - **Off unless `INSIGHT_CV_ENABLED=true`** (its own switch, Q1). Off,
+     it returns at once: no module loaded, no connection, nothing logged.
+   - Never rejects. Its own pool as `insight_writer`, closed at the end.
+     The same bounds as CT: connect 10 s, statement 120 s, a client-side
+     query backstop, and a **whole-stage deadline of 5 min** that kills
+     the connection (the open transaction rolls back; the next run
+     catches up).
+   - **One CV advisory lock for the whole stage.** If it is held (a
+     manual `cv/cli.js` run), the stage logs and skips.
+   - Preflight: the writer role, schema ≥ 8, SELECT on
+     `log.ge_cv_syserror`, C1 (`CV_AWARE`); otherwise log a WARN and
+     skip.
+   - A copy of CT's wrapper, not a shared one (Q2): CT's
+     `insight/index.js` and `insight/stage.js` are not changed.
+2. **`insight/cv/stage.js`** (new): the steps, each catching up from its
+   own state; a step runs only if the one before it succeeded; each
+   step's counts and ms go to `run_log`:
+   1. **extract:** catalog sync, late re-read, then **at most one 50k
+      batch** (Q4). Normal runs are one batch; a backlog catches up over
+      several runs.
+   2. **derive:** the pending days, one transaction per system, then the
+      code labels if owed. Nothing pending → nothing done.
+   3. **findings:** default mode, **all systems, every run** (Q3); the
+      fleet job state and per-system as-of dates as the CLI writes them.
+3. **Lock-free cores** in the existing CV files: `extract_step`
+   (`cv/load.js`), `derive_step` (`cv/derive.js`), `findings_step`
+   (`cv/findings/run.js`), each the body of today's apply path without
+   the lock. `run_extract`, `run_derive` and `run_findings` keep their
+   behaviour by calling them under the lock. Tests prove the CLI output
+   is unchanged.
+4. **Watermarks as CT's (Q5):** after a successful derive, `ge_cv_derive`
+   `watermark_id` = the extract watermark it covered (read under the
+   lock); after a fleet-wide findings run, `ge_cv_findings`
+   `watermark_id` = the derive watermark. Then "all three watermarks
+   equal at the end of each run" is a check, as for CT. No migration
+   (the column exists). The CLI's derive and findings applies write them
+   too.
+5. **Run log events** (`func` = `run_cv_insight`): one per step (INFO, or
+   WARN with the reason: late re-read inserted facts, rule errors,
+   unreviewed codes, findings drift), then a summary with `ok`, ms,
+   watermarks, `watermarks_equal`, `behind_ids`.
+6. **`cv/cli.js stage --rehearse`** (the evidence for "seconds, not
+   minutes"): ONE transaction, rolled back, under the lock, on the
+   current pending range, as CT's:
+   - run 1, catch-up: the pending range before the last `GE_CV` run;
+   - run 2, typical: the last run's rows;
+   - run 3, no new rows (what most runs are);
+   - then on the uncommitted data: `verify`, `verify-derive`,
+     `verify-findings`; derive touched = full rebuild (fingerprint);
+     findings default = replay (fingerprint); CT rows, CT catalog and CT
+     job state unchanged (fingerprints);
+   - ROLLBACK; the watermarks are unchanged afterwards.
+   - It asks for the database name before connecting, as CT's does
+     (Q6).
+7. **The `index.js` hook** (the only change outside `insight/cv/`):
+   ```js
+   if (shell_value[0] === "GE_CV") {
+     try { const { run_cv_insight } = require("./insight/cv");
+           await run_cv_insight(run_log, addLogEvent); }
+     catch (error) { /* addLogEvent(E, …), guarded, as the CT hook */ }
+   }
+   ```
+   The isolation test allows exactly this one `require` in the root
+   `index.js`, and still forbids any `cv/` require in CT's `insight/`
+   files.
+8. **Deploy (as CT §15.2 item 5):** dev → staging → prod; the user pulls
+   on `vm-debian`. Deploy with `INSIGHT_CV_ENABLED` unset and confirm the
+   `GE_CV` ingest and the `GE_CT` run are unchanged. Then the user adds
+   `INSIGHT_CV_ENABLED=true` to `/home/prod/hhm_rpp_ge/.env` (the writer
+   credentials are already there). The first live run catches up the
+   rows since 474161 in one batch (Q7).
+9. **Monitoring for 7 days:** the run-log events per run (a read-only
+   summary script over the prod run logs, as in §12.1); once a day the
+   read-only `verify`, `verify-derive`, `verify-findings`, and the CT
+   three (CT unaffected). New findings or resolutions are reviewed with
+   evidence, as in CV-4.
+
+### 12.3 Questions and answers (AGREED 2026-11-12: the recommendation in each)
+
+1. **Kill switch: a separate `INSIGHT_CV_ENABLED=true`, off by default.
+   Recommended.** Deploying the code then changes nothing, and CV can be
+   switched off without touching CT. Not chosen: reusing
+   `INSIGHT_ENABLED`, which is already `true` on prod, so CV would start
+   at the pull.
+2. **Wrapper: copy CT's into `insight/cv/index.js`. Recommended.** About
+   120 lines (deadline, kill, logging) duplicated, but CT's stage, which
+   just closed out, is not touched and needs no new rehearsal. Factor a
+   shared wrapper out when a third stage (MRI) arrives. Not chosen: a
+   shared helper now, which would change CT code and need the CT stage
+   rehearsal again.
+3. **Findings: every run, all systems, default mode. Recommended.** Two
+   systems, ~0.3 s; every run is then a drift check, and a date change
+   is never missed. An unchanged run writes no finding rows (updates
+   happen only when a column differs); it rewrites the job state. Not
+   chosen: CT's "touched systems + a daily all-systems pass", which
+   saves well under a second.
+4. **Per-run ceiling: at most one 50k batch per run. Recommended** (CT
+   Q5). The largest run seen is 555 rows.
+5. **Watermarks for derive and findings, as CT's. Recommended** (§12.2
+   item 4). It makes "all three equal after each run" checkable. It
+   touches the CLI's derive and findings applies (one statement each).
+   Not chosen: leave them at 0 and check "derive pending is empty"
+   instead.
+6. **A typed confirmation on `cv/cli.js stage --rehearse` (the database
+   name), as CT's. Recommended.** The existing CV commands stay as they
+   are. Optional, not recommended now: add the CT prompts (database name;
+   `APPLY` for writes) to the existing `backfill`, `derive` and
+   `findings` `--apply`; that changes commands you have already run.
+7. **First run: let the stage catch up the rows since 474161 (one
+   batch). Recommended.** No manual `backfill` / `derive` / `findings`
+   before enabling.
+
+### 12.4 Exit criteria (agreed, as CT §15.4)
+
+- The stage rehearsal (§12.2 item 6) passes on prod; a typical run adds
+  seconds to `GE_CV`, measured (expected 2–3 s; under 1 s with no rows).
+- 7 consecutive days of clean runs: every run's summary `ok`; the three
+  CV watermarks advance and are equal at the end of each run; derive has
+  nothing pending and no code labels owed; `behind_ids` = 0.
+- `verify`, `verify-derive` and `verify-findings` pass at the end. Any new
+  finding or resolution in the 7 days is reviewed with evidence.
+- Default findings runs report 0 drift.
+- Ingest is unaffected with `INSIGHT_CV_ENABLED` off and on:
+  `log.ge_cv_syserror` inserts, the Redis offsets and `.head` keys,
+  `gzip_n_save`, and the `verify_cv1b` check all unchanged.
+- CT is unaffected: the `GE_CT` runs and its stage stay clean, and the CT
+  `verify`, `verify-derive` and `verify-findings` pass.
+
+### 12.5 Build order (agreed)
+
+1. Lock-free cores `extract_step`, `derive_step`, `findings_step` in the
+   CV files; the derive / findings watermarks (Q5); tests that the CLI
+   is unchanged. Codex handoff `REVIEW-CV5-CORES-HANDOFF.md`.
+2. `insight/cv/stage.js`, `insight/cv/index.js` (switch, lock, deadline,
+   logging), `cv/cli.js stage --rehearse` with its prompt; tests (no DB,
+   as CT's `stage.test.js`). Local rehearsal on the throwaway PostgreSQL
+   (prod rows copied in, as in CV-2..CV-4). Codex handoff
+   `REVIEW-CV5-STAGE-HANDOFF.md`.
+3. **Checkpoint:** the `index.js` hook and the isolation-test exception;
+   a hook harness showing the `GE_CV` run is identical with the switch
+   unset, and the CT hook unchanged; every insight suite passes (CT and
+   CV). Codex handoff `REVIEW-CV5-HOOK-HANDOFF.md`.
+4. **Commit on `dev`** (I ask first). **The user runs
+   `node insight/cv/cli.js stage --rehearse` on prod** (rolled back;
+   avoid :18 / :48). I check the result and that the watermarks are
+   unchanged.
+5. **Push** when the user says; the user pulls on prod with the switch
+   unset; I confirm the next `GE_CV` and `GE_CT` runs are unchanged. The
+   user sets `INSIGHT_CV_ENABLED=true`. 7 days of monitoring, then the
+   close-out against §12.4.
+
+Checkpoints for the user's go-ahead: the answers to §12.3; after steps
+1–2 (tests, local rehearsal, reviews); before the `index.js` hook (step
+3); before each commit; the prod rehearsal; each deploy action.
+
+### 12.6 Build status: steps 1–2 done (2026-11-12, uncommitted)
+
+**Step 1, lock-free cores** (`REVIEW-CV5-CORES-HANDOFF.md`, awaiting
+Codex):
+- `cv/load.js` `apply_range` (the old apply body) and `extract_step` (the
+  stage's extract: from the watermark, one batch, `behind_ids`).
+- `cv/derive.js` `derive_step`: on success, the `ge_cv_derive`
+  watermark = the extract watermark read first.
+- `cv/findings/run.js` `findings_step`: on a successful fleet-wide run,
+  the `ge_cv_findings` watermark = the derive watermark.
+- The CLI paths call the same bodies under their lock.
+- **Old vs new CLI on a local clone:** identical apart from the two new
+  watermarks (0 → 474223). This covers return values, facts, daily rows,
+  codes, findings, catalogs and job stats.
+- **Two new codes** in the newest prod rows (SME02412, 2026-11-12),
+  reviewed into `codes_reviewed.js` as `cv.error` only:
+  - 4800007 "Empty FOV List" (2 rows);
+  - 4800008 "CORBA::NO_RESPONSE" (1 row).
+  - Details are in `PLAN-CV-INSIGHTS-CODES.md` §7.
+
+**Step 2, the stage** (`REVIEW-CV5-STAGE-HANDOFF.md`, awaiting Codex):
+- New: `insight/cv/stage.js`, `insight/cv/index.js` (`run_cv_insight`, a
+  copy of CT's wrapper with `INSIGHT_CV_ENABLED`), and
+  `cv/cli.js stage --rehearse` with the database-name prompt.
+- Not yet called by anything: the `index.js` hook is step 3.
+
+**Tests:** `insight/cv/test/stage.test.js` has 25. Every suite passes:
+- CV: 16 / 9 / 18 / 25.
+- CT: unchanged.
+- Migrations and parsers: unchanged.
+- **Mutation check:** each of 8 deliberate breaks made the stage suite
+  fail (a ninth, a no-op control, passed as it should). The breaks were:
+  derive watermark not written, findings watermark not written, the
+  switch read from CT's `INSIGHT_ENABLED`, the findings preflight
+  removed, no batch ceiling, watermark equality ignoring findings, stats
+  shared before COMMIT, and the extract starting from 0.
+
+**Local rehearsal** (throwaway PostgreSQL 14; prod rows to 474223; CV
+state as of 472938; `~/cv_d3b_evidence/cv5/`):
+
+| Scenario | Result |
+|---|---|
+| live: catch-up 1,223 rows / 62 rows / no rows | 2.9 s / 2.0 s / 0.65 s; all `ok`, watermarks equal after each |
+| live: content vs the CLI apply result | identical (142,080 facts, 5,369 daily, 13 findings, 2 open) |
+| live: read-only `verify`, `verify-derive`, `verify-findings` | pass |
+| lock held by another session | INFO skip, 7 ms |
+| switch off | no event, no connection |
+| killed at 400 / 900 / 1,600 ms | no session or lock left; the next run caught up, content identical |
+| real CLI `stage --rehearse` (prompt; wrong name aborts) | **overall: OK**, 13.2 s; CT rows unchanged; watermarks unchanged after the rollback |
+
+The local DB has one synthetic test row from an earlier session
+(id 472077, seq 9999). It is in every clone, so the comparisons are not
+affected.
+
+**Next:**
+- The user runs Codex on both handoffs.
+- **Checkpoint, step 3:** the `index.js` hook, the isolation-test
+  exception and a hook harness.
+
+### 12.7 Codex reviews CV5-CORES and CV5-STAGE (2026-11-12): one P3 and one note, both addressed
+
+**CV5-CORES, P3: "the findings apply no longer logs its aggregate summary
+and drift details."**
+- Checked against HEAD: the claimed regression did not happen. HEAD's
+  apply path never logged an aggregate line; `pass()` is used only by the
+  rehearsal. The CLI still prints the totals from the returned stats
+  (evaluated, stale systems, drift count).
+- Drift *details* were never shown on a manual apply, which is worth
+  having. `findings_step` now logs up to 5 drift lines per system, as the
+  rehearsal does. They appear only when there is drift, so normal output
+  is unchanged. A new test covers it.
+- Confirmed by the review: the extract split is sound, and a derive or
+  findings watermark can fall behind but never get ahead (caught errors
+  keep the old value; an interruption leaves it behind).
+
+**CV5-STAGE: no findings.** The wrapper is a faithful copy of CT's. The
+per-run findings job-state write is bounded, and there is no cross-stage
+lock cycle. **One note:** the rehearsal's CT check runs in READ COMMITTED,
+so a CT commit during the rehearsal (a delayed or manual CT run) would
+show as "CT changed".
+- **Fixed:** the rehearsal is now one REPEATABLE READ transaction (a
+  snapshot). It writes only CV rows, which only holders of the CV lock
+  write, so it can't hit a serialization failure.
+- **Proven locally** (`rehearse_race.js`, `rehearse_race.log`): with a
+  CT findings commit injected after each of the 3 runs:
+  - REPEATABLE READ: `ok`, CT unchanged;
+  - the old READ COMMITTED (a scratch copy): `ok false`, "CT changed in
+    findings";
+  - every other check passes in both.
+- The real CLI rehearsal is still **overall: OK** (`stage_rehearse_r2.log`).
+
+**After the fixes:**
+- Every suite passes (CV stage 27).
+- The CLI comparison is unchanged from round 1. The one exception is
+  that 4800007 and 4800008 no longer show as unreviewed, which comes from
+  the §12.6 code review.
+- The reviews are closed. Next: the step 3 checkpoint.
+
+### 12.8 Step 3: the `index.js` hook (built 2026-11-12, uncommitted)
+
+**The hook:** 16 lines in `on_boot()`, directly after the CT hook, the same
+shape. `if (shell_value[0] === "GE_CV")`, `require("./insight/cv")`,
+`run_cv_insight(run_log, addLogEvent)`, and a guarded catch that logs an
+ERROR. It runs after the system loop and before the run log is written.
+
+**Isolation tests** (`cv.test.js`, 16 → 17):
+- The old pattern missed `require("./insight/cv")`.
+- Now, CT's `insight/` files may not require `cv` in any form. The root
+  `index.js` may contain exactly one such require, the hook, inside the
+  `GE_CV` branch. The CT block is checked to be unchanged.
+- **Mutation check:** 4 breaks, each caught.
+
+**Hook harness** (DB-free, `~/cv_d3b_evidence/cv5/hook_compare.log`,
+HEAD's `index.js` vs the new one; `./insight/cv` is stubbed whenever its
+switch is on):
+- **Switch off** (unset, `false`, `TRUE`, with CT's switch on): the
+  `GE_CV` ingest and the run-log events are identical. Only
+  `insight/cv/index.js` is loaded.
+- **Switch on:** the stage starts after every system is ingested and
+  before the log is written. A throwing stage, a failed require or a
+  throwing logger never loses the log.
+- **`GE_CT` and `GE_MRI`:** identical to HEAD.
+
+Every suite passes. Handoff: `REVIEW-CV5-HOOK-HANDOFF.md`.
+
+**Codex review CV5-HOOK (2026-11-12): no findings**
+(`REVIEW-CV5-HOOK-CODEX.md`, the report as relayed by the user). With the
+switch off, only the light wrapper loads and no connection opens. With
+it on, the hook runs after ingest and before `writeLogEvents`. Its catch
+keeps the log write. The reviewer re-ran the harness (from a copy):
+ingest unchanged, `GE_CT` and `GE_MRI` unchanged.
+
+**Next (§12.5 step 4):**
+1. ~~The Codex hook review~~ (closed).
+2. Commit on `dev` (ask first).
+3. The user runs `node insight/cv/cli.js stage --rehearse` on prod
+   (rolled back; avoid :18/:48).
+4. Push when the user says.
+5. The user pulls with the switch unset, then sets
+   `INSIGHT_CV_ENABLED=true`.

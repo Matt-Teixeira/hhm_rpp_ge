@@ -43,8 +43,17 @@
 //   node insight/cv/cli.js verify-findings
 //       READ-ONLY. The CV-4 exit check (findings/verify.js) at each system's
 //       recorded as-of date.
+//   node insight/cv/cli.js stage --rehearse
+//       As insight_writer, ONE transaction, rolled back (stage.js, plan
+//       §12.2 item 6): the CV-5 stage as GE_CV would run it on the pending
+//       range (catch-up, the last run's rows, a run with no rows), then
+//       verify, verify-derive, verify-findings on the uncommitted data,
+//       derive touched = full rebuild, findings default = replay, CT rows
+//       unchanged; the watermarks are read again after the rollback. Asks
+//       for the database name first (§12.3 Q6). Writes nothing.
 // Nothing in the GE CT run loads this file.
 const crypto = require("crypto");
+const readline = require("readline");
 const { validate } = require("./rules");
 const { stream } = require("./extract");
 const { RECONCILE_SQL, COVERAGE_SQL, REPEATS_SQL } = require("./reconcile_sql");
@@ -79,8 +88,13 @@ function args(argv) {
     }
     else throw new Error(`unknown argument ${argv[i]}`);
   }
-  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings"].includes(a.cmd)) {
-    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive | findings --rehearse|--apply [--replay] [--system S] | verify-findings");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings", "stage"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive | findings --rehearse|--apply [--replay] [--system S] | verify-findings | stage --rehearse");
+  }
+  if (a.cmd === "stage") {
+    // the live stage runs only from index.js (GE_CV); the CLI only rehearses it
+    if (!a.rehearse || a.apply || a.from_id !== null || a.to_id !== null || a.batches !== null || a.full || a.replay || a.system) throw new Error("stage takes only --rehearse");
+    return a;
   }
   if ((a.replay || a.system) && a.cmd !== "findings") throw new Error("--replay and --system are only for findings");
   if (a.cmd === "findings" || a.cmd === "verify-findings") {
@@ -176,6 +190,23 @@ async function verify(db) {
 
 function print(o) { console.log(JSON.stringify(o, null, 2)); }
 
+// The database name, typed, before the stage rehearsal (as CT's cli.js).
+async function confirm(db) {
+  const t = await db.one("SELECT current_database() AS db, current_user AS usr");
+  console.log(`target: database=${t.db} host=${process.env.PG_HOST} user=${t.usr} — STAGE REHEARSAL (one transaction, rolled back)`);
+  const rl = readline.createInterface({ input: process.stdin, terminal: false });
+  const it = rl[Symbol.asyncIterator]();
+  try {
+    process.stdout.write("Type the database name to continue: ");
+    const { value, done } = await it.next();
+    if (done) throw new Error("no input: aborted");
+    if (!process.stdin.isTTY) console.log(value);
+    if (value.trim() !== t.db) throw new Error("database name mismatch: aborted");
+  } finally {
+    rl.close();
+  }
+}
+
 async function main() {
   const a = args(process.argv.slice(2));
   const { connect } = require("../db");
@@ -191,6 +222,21 @@ async function main() {
     return;
   }
   const db = connect("writer", { statementTimeoutMs: 900000, applicationName: "insight_cv" });
+  if (a.cmd === "stage") {
+    try {
+      await confirm(db);
+      const { rehearse_stage } = require("./stage");
+      const t0 = Date.now();
+      const r = await rehearse_stage(db, { log: (s) => console.log(s) });
+      if (r.skipped) { console.log(`skipped: ${r.skipped}`); process.exitCode = 1; return; }
+      const { runs, ...rest } = r;
+      print({ ok: r.ok, rolled_back: r.rolled_back, watermarks_unchanged_after_rollback: r.watermarks_unchanged_after_rollback, checks: rest.checks,
+        runs: runs.map((x) => ({ label: x.label, ok: x.ok, ms: x.ms, warnings: x.warnings })), total_ms: Date.now() - t0 });
+      console.log(`stage rehearsal: ${r.ok ? "overall: OK" : "overall: FAILED"} (rolled back)`);
+      if (!r.ok) process.exitCode = 1;
+    } finally { db.$pool.end(); }
+    return;
+  }
   if (a.cmd === "findings") {
     try {
       const r = await run_findings(db, { mode: a.apply ? "apply" : "rehearse", replay: a.replay, systems: a.system ? [a.system] : null,

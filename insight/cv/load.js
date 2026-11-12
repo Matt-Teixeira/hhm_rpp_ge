@@ -257,34 +257,7 @@ async function run_extract(db, { mode, from_id = null, to_id = null, max_batches
       }
 
       // apply
-      await conn.tx((t) => t.none(catalog_statement(rules)));
-      stats.late = await reread_late(conn, { job });
-      let watermark = start;
-      let watermark_capture = job ? job.watermark_capture_datetime : null;
-      let n = 0;
-      const STOP = new Error("batch limit");
-      try {
-        await stream(conn, { from_id: start, to_id: end, on_batch: async (b) => {
-          // counts and watermark stay local until COMMIT succeeded (as CT review PHASE5-STAGE F1)
-          const next = JSON.parse(JSON.stringify(stats));
-          const r = await conn.tx(async (t) => {
-            const out = await process_batch(t, b, next);
-            await write_job(t, { watermark_id: b.last_id, watermark_capture_datetime: out.last_capture, run_id, started_at, status: "ok", stats: next });
-            return out;
-          });
-          Object.assign(stats, next);
-          watermark = b.last_id;
-          watermark_capture = r.last_capture;
-          log(`  batch ${stats.batches}: watermark ${watermark}, ${stats.rows} rows, ${stats.facts} facts`);
-          if (max_batches && ++n >= max_batches) throw STOP;
-        } });
-      } catch (e) {
-        if (e !== STOP) {
-          stats.error = e.message;
-          await conn.tx((t) => write_job(t, { watermark_id: watermark, watermark_capture_datetime: watermark_capture, run_id, started_at, status: "error", stats })).catch(() => {});
-          throw e;
-        }
-      }
+      const { watermark } = await apply_range(conn, { job, start, end, max_batches, run_id, started_at, stats, log });
       return { watermark, stats, preflight: pre, end };
     } finally {
       await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [LOCK_KEY]);
@@ -292,7 +265,62 @@ async function run_extract(db, { mode, from_id = null, to_id = null, max_batches
   });
 }
 
+// ------------------------------------------------- lock-free cores (CV-5)
+// The caller holds LOCK_KEY: run_extract above (the CLI) or the CV stage
+// (stage.js, plan §12.2). Neither takes the lock nor runs a preflight.
+
+// The apply path: catalog sync, the late-commit re-read, then batches from
+// start to end (at most max_batches), each one transaction with its
+// watermark and touched days. stats is filled in place.
+async function apply_range(conn, { job, start, end, max_batches = null, run_id, started_at, stats, log = () => {} }) {
+  await conn.tx((t) => t.none(catalog_statement(rules)));
+  stats.late = await reread_late(conn, { job });
+  let watermark = start;
+  let watermark_capture = job ? job.watermark_capture_datetime : null;
+  let n = 0;
+  const STOP = new Error("batch limit");
+  try {
+    await stream(conn, { from_id: start, to_id: end, on_batch: async (b) => {
+      // counts and watermark stay local until COMMIT succeeded (as CT review PHASE5-STAGE F1)
+      const next = JSON.parse(JSON.stringify(stats));
+      const r = await conn.tx(async (t) => {
+        const out = await process_batch(t, b, next);
+        await write_job(t, { watermark_id: b.last_id, watermark_capture_datetime: out.last_capture, run_id, started_at, status: "ok", stats: next });
+        return out;
+      });
+      Object.assign(stats, next);
+      watermark = b.last_id;
+      watermark_capture = r.last_capture;
+      log(`  batch ${stats.batches}: watermark ${watermark}, ${stats.rows} rows, ${stats.facts} facts`);
+      if (max_batches && ++n >= max_batches) throw STOP;
+    } });
+  } catch (e) {
+    if (e !== STOP) {
+      stats.error = e.message;
+      await conn.tx((t) => write_job(t, { watermark_id: watermark, watermark_capture_datetime: watermark_capture, run_id, started_at, status: "error", stats })).catch(() => {});
+      throw e;
+    }
+  }
+  return { watermark, watermark_capture };
+}
+
+// The stage's extract (plan §12.2 item 2.1): from the watermark, at most
+// max_batches (default 1, §12.3 Q4) up to to_id (default: the current max
+// id). Needs an existing watermark (the backfill made it).
+async function extract_step(conn, { run_id, started_at = new Date(), max_batches = 1, to_id = null, log = () => {} }) {
+  const invalid = validate();
+  if (invalid.length) throw new Error(`invalid CV rule registry, nothing written: ${invalid.join("; ")}`);
+  const job = await read_job(conn);
+  if (!job) throw new Error("no ge_cv_extract watermark: run `cv/cli.js backfill --apply` first");
+  const from = Number(job.watermark_id);
+  const max_id = Number((await conn.one("SELECT coalesce(max(id), 0) AS m FROM log.ge_cv_syserror")).m);
+  const end = to_id ?? max_id;
+  const stats = new_stats("stage");
+  const { watermark } = await apply_range(conn, { job, start: from, end, max_batches, run_id, started_at, stats, log });
+  return { from, watermark, end, behind_ids: Math.max(0, max_id - watermark), stats };
+}
+
 module.exports = {
-  run_extract, reread_late, dedupe_facts, upsert_statements, merge_pending, source_key, preflight, ct_verifiers_not_cv_aware,
+  run_extract, apply_range, extract_step, reread_late, write_job, dedupe_facts, upsert_statements, merge_pending, source_key, preflight, ct_verifiers_not_cv_aware,
   read_job, unreviewed, JOB, DERIVE_JOB, LOCK_KEY, CHUNK, FACT_CS, LATE_SQL, LATE_WINDOW_S, PENDING_FULL_DAYS, MIN_SCHEMA_VERSION,
 };

@@ -25,7 +25,9 @@
 //             -7, today: must end identical to pass 1, with no drift);
 //             verify-findings on the uncommitted rows; ROLLBACK.
 //   apply   : CV catalog sync, one transaction per system, then
-//             insight.job_state 'ge_cv_findings' (fleet-wide runs only).
+//             insight.job_state 'ge_cv_findings' (fleet-wide runs only;
+//             on success watermark_id = the ge_cv_derive watermark the run
+//             covered, CV-5 plan §12.2 item 4).
 //
 // Interlocks:
 //   - derive must be caught up: a successful derive run on record, no
@@ -148,15 +150,16 @@ async function read_as_of(t) {
 }
 
 // Kept across runs: the per-system as-of map (record_as_of merges into it).
+// watermark_id: set only when given (a successful fleet-wide run).
 const WRITE_JOB_SQL = `INSERT INTO insight.job_state (job_name, watermark_id, last_run_id, last_run_started_at, last_run_finished_at, last_run_status, last_run_stats, updated_at)
-     VALUES ($1, 0, $2, $3, now(), $4, $5::jsonb, now())
-     ON CONFLICT (job_name) DO UPDATE SET last_run_id = EXCLUDED.last_run_id,
+     VALUES ($1, coalesce($6::bigint, 0), $2, $3, now(), $4, $5::jsonb, now())
+     ON CONFLICT (job_name) DO UPDATE SET watermark_id = coalesce($6::bigint, job_state.watermark_id), last_run_id = EXCLUDED.last_run_id,
        last_run_started_at = EXCLUDED.last_run_started_at, last_run_finished_at = now(), last_run_status = EXCLUDED.last_run_status,
        last_run_stats = (EXCLUDED.last_run_stats - 'as_of_by_system')
          || jsonb_build_object('as_of_by_system', coalesce(job_state.last_run_stats -> 'as_of_by_system', '{}'::jsonb)),
        updated_at = now()`;
-async function write_job(t, { run_id, started_at, status, stats }) {
-  await t.none(WRITE_JOB_SQL, [JOB, run_id, started_at, status, JSON.stringify(stats)]);
+async function write_job(t, { run_id, started_at, status, stats, watermark_id = null }) {
+  await t.none(WRITE_JOB_SQL, [JOB, run_id, started_at, status, JSON.stringify(stats), watermark_id]);
 }
 
 // One system: compute, then reconcile its ge_cv rows. Returns counts and the rows.
@@ -256,29 +259,49 @@ async function run_findings(db, { mode, replay = false, systems = null, today, r
       }
 
       // apply
-      await conn.tx((t) => sync_catalog(t));
-      const results = [];
-      try {
-        for (const s of list) {
-          const r = await conn.tx((t) => findings_system(t, s, { today, replay }));
-          results.push(r);
-          if (r.evaluated) log(`  ${s}: ${r.rows.length} findings; +${r.inserted} ~${r.updated} -${r.deleted}${r.drift.length ? `; drift ${r.drift.length}` : ""} (committed)`);
-        }
-        const stats = { ...totals(results), today, replay, systems_selected: systems ? systems.length : "all" };
-        if (!systems) await conn.tx((t) => write_job(t, { run_id, started_at, status: "ok", stats }));
-        return { stats, after: await conn.one(COUNTS_SQL), rows: results.flatMap((x) => x.rows) };
-      } catch (e) {
-        const stats = { ...totals(results), today, replay, error: e.message, failed_after: results.map((r) => r.system_id) };
-        if (!systems) await conn.tx((t) => write_job(t, { run_id, started_at, status: "error", stats })).catch(() => {});
-        throw e;
-      }
+      const r = await findings_step(conn, { replay, systems, list, today, run_id, started_at, log });
+      return { stats: r.stats, after: r.after, rows: r.rows };
     } finally {
       await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [LOCK_KEY]);
     }
   });
 }
 
+// ------------------------------------------------- lock-free core (CV-5)
+// The caller holds LOCK_KEY and has run preflight(conn, { mode: "apply" }):
+// run_findings above (the CLI) or the CV stage (stage.js, plan §12.2).
+//
+// The cv_* catalog, one transaction per system, then (fleet-wide runs
+// only) the job state. The derive watermark is read first: derive can't run
+// meanwhile (same lock), and preflight has checked it is caught up.
+// systems: the selection (null = all); list: the systems to run (default:
+// the selection, or all).
+async function findings_step(conn, { replay = false, systems = null, list = null, today, run_id = null, started_at = new Date(), log = () => {} }) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new Error(`bad today ${today}`);
+  const d = await conn.oneOrNone("SELECT watermark_id FROM insight.job_state WHERE job_name = $1", [DERIVE_JOB]);
+  const through = d ? Number(d.watermark_id) : null;
+  const run_list = list || systems || (await all_systems(conn));
+  await conn.tx((t) => sync_catalog(t));
+  const results = [];
+  try {
+    for (const s of run_list) {
+      const r = await conn.tx((t) => findings_system(t, s, { today, replay }));
+      results.push(r);
+      if (r.evaluated) log(`  ${s}: ${r.rows.length} findings; +${r.inserted} ~${r.updated} -${r.deleted}${r.drift.length ? `; drift ${r.drift.length}` : ""} (committed)`);
+      for (const d of r.drift.slice(0, 5)) log(`    drift: ${d}`); // review CV5-CORES P3
+    }
+    const stats = { ...totals(results), today, replay, systems_selected: systems ? systems.length : "all" };
+    if (!systems) await conn.tx((t) => write_job(t, { run_id, started_at, status: "ok", stats, watermark_id: through }));
+    return { stats, watermark: systems ? null : through, after: await conn.one(COUNTS_SQL), rows: results.flatMap((x) => x.rows),
+      drift_detail: results.flatMap((x) => x.drift).slice(0, 10) };
+  } catch (e) {
+    const stats = { ...totals(results), today, replay, error: e.message, failed_after: results.map((r) => r.system_id) };
+    if (!systems) await conn.tx((t) => write_job(t, { run_id, started_at, status: "error", stats })).catch(() => {});
+    throw e;
+  }
+}
+
 module.exports = {
-  run_findings, findings_system, preflight, sync_catalog, all_systems, read_as_of, as_cv_rows,
-  JOB, COUNTS_SQL, FINGERPRINT_SQL, OTHERS_SQL, MIN_SCHEMA_VERSION, MIN_SCHEMA_VERSION_APPLY, STALE_DAYS,
+  run_findings, findings_step, write_job, findings_system, preflight, sync_catalog, all_systems, read_as_of, as_cv_rows,
+  JOB, WRITE_JOB_SQL, COUNTS_SQL, FINGERPRINT_SQL, OTHERS_SQL, MIN_SCHEMA_VERSION, MIN_SCHEMA_VERSION_APPLY, STALE_DAYS,
 };

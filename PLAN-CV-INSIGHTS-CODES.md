@@ -291,3 +291,18 @@ These codes appear only as RTA relays (no original row), so they produce no fact
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1050141 | — | — | 0 | 0 | 0 | — | — | 1 | *(no readable text)* | — |
 
+
+## 7. Codes added after the inventory
+
+Reviewed and added to `insight/cv/codes_reviewed.js`; each is counted in
+`cv.error` only. Rows as of 2026-11-12 18:00 UTC (prod, read-only).
+
+| Code | Sub | Cat | Rows 02412 | Rows 08640 | First (device) | Last (device) | Debug text | Source file | Added |
+|---|---|---|---|---|---|---|---|---|---|
+| 4800007 | DL | WR | 2 | 0 | 2026-11-12 10:21:45 | 2026-11-12 10:21:45 | Empty FOV List error @ UserProtocolController.cxx 933 | LoggerImpl.h | 2026-11-12 (CV-5) |
+| 4800008 | DL | AR | 1 | 0 | 2026-11-12 10:22:16 | 2026-11-12 10:22:16 | CORBA::Exception: CORBA::NO_RESPONSE error @ UserProtocolController.cxx 694 | LoggerImpl.h | 2026-11-12 (CV-5) |
+
+Both came in one minute on SME02412, between lift-collision and
+collision-sensor messages (ids 474190–474197). They are the same family
+as 4800010 / 4800011 (DL, `LoggerImpl.h`): software messages from the DL
+host, with no hardware fault named. Not a named metric; watch only.

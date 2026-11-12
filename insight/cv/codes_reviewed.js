@@ -4,6 +4,10 @@
 // systems up to 2026-11-09 14:03 UTC. Each one is counted in cv.error (and
 // in a named metric where rules.js says so) or is relay-only (1050141).
 //
+// Added 2026-11-12 (CV-5 local rehearsal, PLAN-CV-INSIGHTS-CODES.md §7):
+// 4800007 and 4800008, two DL user-protocol messages first seen on SME02412
+// on 2026-11-12, counted in cv.error only (as 4800010 / 4800011).
+//
 // The coverage check (cli.js dry-run / verify) lists any code NOT in this
 // set: a new code is still counted in cv.error, but should be reviewed for a
 // named metric before it is added here. Nothing in the GE CT run loads this.
@@ -28,7 +32,7 @@ const REVIEWED_CODES = new Set([
   3000015, 3010001, 3200008, 3200024, 3200025, 3400027, 3400037, 3602001, 3602005, 3602010,
   3602012, 3602016, 3602019, 3602036, 3602045, 3602047, 3602051, 3602068, 3602083, 3602086,
   3602087, 3610001, 3800105, 3800319, 3800331, 3800333, 3800602, 3800604, 4200061, 4200067,
-  4200071, 4202002, 4202004, 4202007, 4210022, 4210025, 4210026, 4800010, 4800011, 4810012,
+  4200071, 4202002, 4202004, 4202007, 4210022, 4210025, 4210026, 4800007, 4800008, 4800010, 4800011, 4810012,
   5000009, 5000011, 5000020, 5000047,
 ]);
 module.exports = { REVIEWED_ON, REVIEWED_CODES };

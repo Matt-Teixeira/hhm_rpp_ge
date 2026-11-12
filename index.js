@@ -105,6 +105,22 @@ async function on_boot() {
       }
     }
 
+    // GE CV insight stage (PLAN-CV-INSIGHTS.md §12): runs after every
+    // system's ingest has finished; off unless INSIGHT_CV_ENABLED=true; logs
+    // to run_log and never fails the run.
+    if (shell_value[0] === "GE_CV") {
+      try {
+        const { run_cv_insight } = require("./insight/cv");
+        await run_cv_insight(run_log, addLogEvent);
+      } catch (error) {
+        try {
+          await addLogEvent(E, run_log, "run_cv_insight", cat, null, error);
+        } catch (_) {
+          // the run log below must still be written
+        }
+      }
+    }
+
     // await dbInsertLogEvents(pgp, run_log);
     console.log(run_log.log_events);
     await writeLogEvents(run_log);

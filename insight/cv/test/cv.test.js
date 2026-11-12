@@ -31,7 +31,8 @@ test("registry: valid, cv.* only, disjoint code lists, every named code reviewed
   assert.ok(cat.every((c) => c.metric_key.startsWith("cv.") && c.customer_visible === false && c.value_kind === "event"));
   assert.strictEqual(cat.find((c) => c.metric_key === "cv.dose_export_rejected").category, "compliance");
   for (const n of named) for (const c of n.codes) assert.ok(REVIEWED_CODES.has(c), `${n.key} code ${c} not reviewed`);
-  assert.strictEqual(REVIEWED_CODES.size, 204);
+  assert.strictEqual(REVIEWED_CODES.size, 206); // 204 from the 2026-11-09 inventory + 4800007, 4800008 (2026-11-12)
+  for (const c of [4800007, 4800008]) assert.ok(!named.some((n) => n.codes.includes(c)), `${c} is cv.error only`);
   assert.deepStrictEqual(ignore.map((i) => i.key), ["rta_relay"]);
 });
 
@@ -219,12 +220,32 @@ test("cli flags", () => {
   assert.throws(() => args(["report"]), /usage/);
 });
 
-test("isolation: nothing outside insight/cv loads it (the GE CT run is unchanged)", () => {
-  const files = [path.join(INSIGHT, "..", "index.js")];
+// A require of insight/cv in any form: "./cv", "../cv/x", "./insight/cv".
+const CV_REQUIRE = /require\(\s*["'`][^"'`]*\bcv(\/[^"'`]*)?["'`]\s*\)/g;
+
+test("isolation: nothing in CT's insight/ loads insight/cv (the GE CT run is unchanged)", () => {
+  const files = [];
   const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);
     if (e.isDirectory()) { if (p !== path.join(INSIGHT, "cv") && e.name !== "node_modules") walk(p); } else if (e.name.endsWith(".js")) files.push(p);
   } };
   walk(INSIGHT);
-  for (const f of files) assert.doesNotMatch(fs.readFileSync(f, "utf8"), /require\([^)]*\bcv\//, path.relative(INSIGHT, f));
+  assert.ok(files.length > 20, "walked CT's insight/ files");
+  for (const f of files) assert.deepStrictEqual(fs.readFileSync(f, "utf8").match(CV_REQUIRE), null, path.relative(INSIGHT, f));
+  // the pattern itself
+  for (const ok of ['require("./cv")', "require('../cv/load')", 'require("./insight/cv")', 'require( "./insight/cv/stage" )']) assert.ok(ok.match(CV_REQUIRE), ok);
+  for (const no of ['require("./cvx")', 'require("./derive/cvs")', 'require("./scv")']) assert.strictEqual(no.match(CV_REQUIRE), null, no);
+});
+
+test("isolation: the root index.js loads insight/cv exactly once, the CV-5 hook inside the GE_CV branch (plan §12.2 item 7)", () => {
+  const src = fs.readFileSync(path.join(INSIGHT, "..", "index.js"), "utf8");
+  assert.deepStrictEqual(src.match(CV_REQUIRE), ['require("./insight/cv")']);
+  const branch = src.slice(src.indexOf('if (shell_value[0] === "GE_CV") {'));
+  assert.ok(src.includes('if (shell_value[0] === "GE_CV") {'), "a GE_CV branch");
+  assert.ok(branch.indexOf('require("./insight/cv")') > 0 && branch.indexOf('require("./insight/cv")') < branch.indexOf("\n    }\n"), "the require is inside the GE_CV branch");
+  // the CT branch is unchanged and loads only ./insight
+  const ct_from = src.indexOf('if (shell_value[0] === "GE_CT") {');
+  const ct = src.slice(ct_from, src.indexOf("\n    }\n", ct_from)); // the CT block only
+  assert.match(ct, /const \{ run_ct_insight \} = require\("\.\/insight"\);/);
+  assert.doesNotMatch(ct, /insight\/cv|run_cv_insight|INSIGHT_CV/);
 });

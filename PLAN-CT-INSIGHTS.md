@@ -220,6 +220,13 @@ schema, rule registry per source), but nothing is built for them yet.
     `REPLACEMENTS_REVIEWED` list (SME21870 is its first entry); the test
     still checks the fixtures against §13.1 alone.
   - The Phase 5 build history follows.
+- **GE CV now shares the `insight` tables (2026-11-12, `PLAN-CV-INSIGHTS.md`).**
+  - The CT verifiers count only CT rows (C1, `de32296`).
+  - Migration 008 added `WHERE source = 'ge_ct'` to
+    `api.ge_ct_findings_v`; it still shows the 115 CT findings.
+  - `insight.metric_catalog` now also holds 9 `cv.*` rows, and
+    `insight.findings` 13 `ge_cv` rows.
+  - Nothing else in CT changed.
 - **Phase 5 build history (§15).**
   - Built: the insight stage (`45c2ab2`, review PHASE5-STAGE F1-F2) and
     the `index.js` hook (`9c098f2`, review PHASE5-HOOK F1-F2). The first

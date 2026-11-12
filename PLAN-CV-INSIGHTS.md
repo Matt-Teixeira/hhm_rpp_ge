@@ -74,8 +74,48 @@ Status (2026-11-12):
   - default findings equal the replay (115 findings);
   - the watermarks are unchanged after the rollback.
 
-  Pushed to dev/staging/prod; **next: the user pulls on prod, then §8.4.**
-  Build history:
+  Pushed to dev/staging/prod (28c973d). The user pulled on prod. Build
+  history follows the rollout entry below.
+- **CV-1 to CV-4 ROLLED OUT ON PROD, 2026-11-12** (the user ran each step
+  from `/home/prod/hhm_rpp_ge` at 28c973d; I checked each one read-only):
+  - **007** (15:23:35 UTC): dry run, roundtrip (007 + 008 up and down,
+    catalog identical) and apply all clean. 12 objects, in-scope
+    `+16 -0 ~0`, protected objects unchanged.
+  - **CV-2 backfill:** the rehearsal equals the dry run. The apply
+    (15:26 UTC) holds 142,004 facts from 97,567 rows (12,308 relays +
+    85,259 counted, 0 unstorable): SME02412 129,605, SME08640 12,399.
+    `ge_cv_extract` = 474161. `verify` ok: 17 / 17 cells, catalog 9.
+  - **CV-3 derive:** the rehearsal had both passes identical and touched
+    = full. The apply wrote 5,348 daily rows and 203 codes (13
+    unlabeled). `verify-derive` ok, with 0 differences in all four
+    checks.
+  - **008** (`WHERE source = 'ge_ct'` on `api.ge_ct_findings_v`): dry
+    run and apply clean, in-scope `+0 -0 ~1`. The CT findings view still
+    shows 115 rows, none of them CV.
+  - **CV-4 findings `--replay`:**
+    - The rehearsal passed every check: pass 2, default and incremental
+      runs all with 0 changes and 0 drift; CT untouched.
+    - The apply wrote 13 findings, 2 open; `verify-findings` PASS.
+    - Since §10.7 (12 findings, 1 open) there is one new finding:
+      SME08640 `cv_error_storm` (medium), open from 2026-11-11. That
+      day had 767 errors against ~35 a day: 644 collimator collision
+      and 91 lift collision. It is a real burst, and is question 4 in
+      the §5.5 D4 note.
+    - SME02412 `cv_detector_com_errors` (high) stays open: its last trip
+      was 10-27.
+  - **Views:** `api.ge_cv_findings_v` 13, `ge_cv_daily_v` 5,348,
+    `ge_cv_capabilities_v` 17, `ge_cv_codes_v` 203. In
+    `ge_cv_system_summary_v`, SME02412's `last_seen` is about 1.5 h in
+    the future. That is its device clock (K1: now ~108–118 min ahead,
+    at the top of the 11-09 range), not a pipeline fault, and is
+    question 5 in the D4 note.
+  - **CT with CV rows present:** the CT `verify`, `verify-derive` and
+    `verify-findings` all pass (catalog 39 and 13; CV rows ignored). The
+    15:48 UTC CT stage run was ok: 0 errors, 0 drift, watermarks equal at
+    18605661, and the 13 `ge_cv` findings were untouched.
+  - **Next: CV-5** (the stage after `ge_cv_parsers`, behind a kill
+    switch). Until then the CV tables do not update: the extract
+    watermark stays at 474161 and new `sysError` rows wait.
   - The three CT verifiers count only CT catalog rows and export
     `CV_AWARE`.
   - Tests pass. The local rehearsal shows: the originals fail with CV
@@ -297,10 +337,10 @@ and 15,049 on 2026-10-20.
 |---|---|---|
 | **CV-0 Decide** ✅ 2026-11-06 | This plan; the user's answers to §3 | Agreed |
 | **CV-1b Ingest integrity** — investigated 2026-11-06 (§5); D1–D6 agreed; all fixes deployed 2026-11-06/09 (parser D1+D5, collector D3a+D5), 361-record backfill (D6) applied 2026-11-09; sign-off after the first rotation (§5.5) | Sequence / rotation / ordering investigation of `sysError` ingestion (read-only); a parser fix if records are lost (reviewed, rehearsed, deployed by the user) | Cause of every sequence gap class explained; no record loss going forward, shown on raw file snapshots |
-| **CV-1 Schema** — 007 drafted 2026-11-09 (§7); Codex review next; apply after the CT Phase 5 close-out | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
-| **CV-2 Extract** — mapping agreed 2026-11-09 (§6.4); built and reviewed 2026-11-09 (§8); prod backfill after 007 + C1 + C2 | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
-| **CV-3 Derive** — built and reviewed 2026-11-09 (§9); prod after CV-2's apply | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
-| **CV-4 Findings** — groundwork 2026-11-09 (§10); F1–F6 agreed 2026-11-10; built and reviewed 2026-11-10 (§10.8, §10.9) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
+| **CV-1 Schema** ✅ applied 2026-11-12 15:23 UTC (§7) | Migration 007: CV tables and `api.ge_cv_*` views; runner pre-checks, dry run, roundtrip; the user applies it | Applied; catalog unchanged outside the new objects |
+| **CV-2 Extract** ✅ backfill applied 2026-11-12, 142,004 facts (§8) | CV rule registry, extract and backfill from `log.ge_cv_syserror` (read) into `insight.ge_cv_facts` | Per system and metric, counts exactly equal independent SQL; every code covered by a rule or the reviewed ignore list |
+| **CV-3 Derive** ✅ applied 2026-11-12 (§9) | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
+| **CV-4 Findings** ✅ 008 + replay applied 2026-11-12, 13 findings (§10) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 |
 | **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
 
@@ -606,6 +646,15 @@ Truth is the device's complete lines.
   >    (MC_ASSOCIATION_REJECTED) about 4 times a day on nearly every day
   >    since May. Is a dose-export destination configured on these
   >    systems, and are their dose reports being rejected?
+  >
+  > Added 2026-11-12, at the CV-4 apply:
+  > 4. On 2026-11-11 (08:13–22:33 device time), SME08640 logged 767
+  >    errors against its usual ~35 a day: 644 "COLLIMATOR COLLISION"
+  >    and 91 "LIFT COLLISION". Was there a collision, a sensor fault or
+  >    a service visit that day?
+  > 5. The device clocks run ahead of real time: SME02412 by about
+  >    1h50–2h (34–114 min on 11-09), and SME08640 by up to ~25 min.
+  >    Can the clocks be set (or synced to NTP)?
 - **Optional confirmation of G4 / G5.** The prod run logs of 2026-07-10
   23:48, 2026-07-11 06:18 and 2026-09-18 19:18 UTC (if still kept) should
   each hold a `NO MATCH FOUND` fragment line. For example:

@@ -1,6 +1,6 @@
 # GE CV Insights — plan
 
-Status (2026-11-09):
+Status (2026-11-12):
 - **CV-0 (decide): AGREED** 2026-11-06 (the §2 design and the
   recommended answer to every §3 question).
 - **CV-1b (ingest integrity): done apart from its sign-off.** All fixes
@@ -50,6 +50,37 @@ Status (2026-11-09):
     untouched.
   - Codex review closed: one P2 (fail closed when derive state is
     missing or facts and daily disagree), fixed (§10.9).
+- CV-4 and 008 are **committed and pushed** (5ec391e). Nothing CV is
+  applied on prod. A read-only check on 2026-11-11 found prod at schema
+  6 and C2 done (`insight_writer` has SELECT on `log.ge_cv_syserror`).
+- **CV-1b sign-off, 2026-11-11 13:10 UTC check:** `verify_cv1b` passes on
+  both systems. There has been no rotation yet (SME02412 at seq 3095,
+  SME08640 at 247), and no `prev tail` event in the prod run logs.
+- **GE CT Phase 5 closed out 2026-11-12 13:11 UTC** (all §15.4 criteria
+  met; `PLAN-CT-INSIGHTS.md` status). The CT/`index.js` freeze is over.
+- **CV-1b sign-off, 2026-11-12 14:40 UTC check:** `verify_cv1b` passes on
+  both systems, missing 0 and duplicated 0. SME08640 logged 1,172 rows in
+  two days. There is still no rotation (SME02412 ~3132, SME08640 ~1362
+  lines) and no `prev tail` event.
+- **C1 (§11): committed on `dev` 2026-11-12** after the close-out, merged
+  onto the close-out commit. The only conflict was `derive/verify.js`
+  `module.exports`, merged by hand. All 11 insight test suites (CT and
+  CV) pass. The scratch worktree is removed. **Next: the user's CT stage
+  rehearsal (§11.5 step 3), then the push.** The first attempt from a
+  non-interactive shell stopped at the "type the database name" prompt;
+  nothing ran. Build history:
+  - The three CT verifiers count only CT catalog rows and export
+    `CV_AWARE`.
+  - Tests pass. The local rehearsal shows: the originals fail with CV
+    rows present, C1 passes, a wrong CT row is still caught, results
+    are unchanged with no CV rows, and the real `--apply` interlock
+    opens.
+  - Codex review closed: one P2 (the `cv\_%` escape depended on
+    `standard_conforming_strings`), fixed with a prefix test in CT and in
+    the CV findings statements (§11.6). The round 2 re-review found no
+    new issues. C1 is ready to commit after the close-out.
+  - After the close-out: review → fix → commit on `dev` → the user's
+    CT stage rehearsal → push. §8.4 and §10.8 follow.
 
 The
 user chose to start GE CV after GE CT Phase 6, with CT Phase 7
@@ -1514,3 +1545,144 @@ part of CV-4.
 **Kept as a note for later rule versions:** a future named metric must
 keep "one `cv.error` + at most one named fact per row", or the residual
 must change with it.
+
+## 11. C1: the CT verifiers scoped to CT catalog rows (built 2026-11-11, uncommitted)
+
+**Where:** a scratch git worktree on branch `c1-cv-aware` (from `dev` at
+5ec391e), outside the repo directory. The main checkout and prod are
+unchanged. The GE CT Phase 5 monitoring rule covers shared `insight/`
+code until 2026-11-12 13:00 UTC.
+
+### 11.1 The change (CT code, three files, catalog statements only)
+
+- **`insight/verify_facts.js`:** the catalog count (`CATALOG_SQL`) adds
+  `WHERE metric_key NOT LIKE 'cv.%'`.
+- **`insight/derive/verify.js` `check_invariants`:**
+  - the catalog subselect (`INVARIANTS_SQL`) adds the same filter;
+  - `check_invariants` is exported for the test.
+- **`insight/findings/verify.js` "catalog = registry":** `CATALOG_SQL`
+  adds `WHERE left(finding_key, 3) <> 'cv_'`. This is a plain prefix test
+  with no backslash escape (§11.6; the first draft used
+  `NOT LIKE 'cv\_%'`).
+- **Each module exports `CV_AWARE = true`**, with a comment pointing
+  here (§7.4 C1). This opens GE CV's `--apply` interlock (backfill and
+  findings).
+- **Unchanged:** every other check, expected value and message. The
+  derived-key counts already matched by key, so CV rows never reached
+  them. No CT key starts with `cv`.
+
+### 11.2 Tests
+
+- **New `insight/test/cv_scope.test.js` (7).** Its fake DB applies the
+  `NOT LIKE` patterns found in each verifier's own SQL, with
+  PostgreSQL's LIKE rules. It covers:
+  - pass with and without CV rows;
+  - fail on a missing or extra CT row, or a changed CT label;
+  - fail on `cvx.*` / `cvx_*`, which an unescaped `cv_%` would hide;
+  - the SQL text.
+
+  It loads nothing from `insight/cv/`, because CV's isolation test
+  forbids that.
+- **`insight/cv/test/cv.test.js` 15 → 16:**
+  - the C1 interlock test now expects `[]` from the real modules;
+  - a new test checks that every real CV registry row has the excluded
+    prefix and that no CT row does.
+- **`insight/cv/test/findings.test.js` (17):** the preflight `--apply`
+  case now passes the interlock.
+- **Every suite passes:**
+  - CT: cv_scope 7; derive 14, derived 12, findings 31, load 3, rules 16,
+    scrub 3, stage 24 (one skip: `F2 connect()` needs `PG_SSL_PATH`;
+    the worktree has no `.env`).
+  - CV: cv 16, derive 9, findings 17.
+  - Parsers: 9 + 9 + 4 + 2 + 4 + 13.
+  - Migrations: m008 2, sqlscan 20.
+- **Mutation check:** an unescaped findings filter, or any one filter
+  removed, fails a behaviour test.
+
+### 11.3 Local rehearsal (throwaway PostgreSQL 14, one transaction, rolled back)
+
+Harness `~/cv_d3b_evidence/c1/c1_local.js`, log `c1_local.log`. It
+compares the original modules (unchanged checkout) with the worktree's;
+`insight/db.js` is stubbed for both. The CT catalogs were seeded with
+CT's own statements: 39 metric and 13 finding rows, next to 9 `cv.*` and
+5 `cv_*`.
+
+| Case | Original | C1 |
+|---|---|---|
+| CV rows present: `verify_facts` | FAIL (48 vs 39) | PASS (39 = 39) |
+| CV rows present: derive invariants | FAIL (48 vs 39) | PASS |
+| CV rows present: findings catalog | FAIL (18 vs 13, differ cv_…) | PASS (13 = 13) |
+| CT metric row missing / extra `cvx.not_cv` | – | both metric checks FAIL |
+| CT finding label changed / extra `cvx_unknown` / extra `cva` | – | findings catalog FAILS |
+| No CV rows (correct, and with a missing row) | identical to C1 | identical to original |
+| `ct_verifiers_not_cv_aware()` | all 3 | `[]` |
+| real CV `backfill` / `findings` preflight `--apply` | refused (C1) | passes |
+
+`log.ge_ct_gesys` does not exist locally, so only `verify_facts`'s
+reconcile query was answered with `[]` (there are no CT facts either).
+
+### 11.4 Other CT code checked (nothing else breaks; not changed)
+
+These only affect log lines; none gates anything:
+- `findings/run.js` `sync_catalog`: upserts only and never deletes. Its
+  "not in the registry" line will list the `cv_*` keys.
+- `findings/run.js` `COUNTS_SQL`: totals include `ge_cv` rows (rehearsal
+  `before`/`after` lines).
+- The extract rehearsal's `catalog_rows`.
+- The stage's "fresh read" finding count.
+
+Also safe:
+- The per-system findings delete is keyed by a stored `ge_ct` row.
+- Derive reads CT tables only.
+- The CT viewer (`reports/sme_reports/ct`) reads `api.*` views filtered
+  to `ge_ct`.
+
+Recommendation: leave the log-only counts as they are.
+
+### 11.5 Next (each step after the previous one; the user decides)
+
+1. The Codex review is closed (§11.6): the round 2 re-review found no
+   new issues.
+2. The commit on `dev`, after asking. The worktree is removed only once
+   the change is on `dev`. **Done 2026-11-12.**
+3. The CT stage rehearsal, which the user runs on prod:
+   `node insight/cli.js stage --rehearse`.
+4. The push, only when the user says so:
+   `git push origin dev dev:staging dev:prod`. The user pulls on prod.
+5. Then §8.4: 007 (`node migrations/run.js up --to 7`; a plain `up`
+   would also apply 008) → backfill rehearse/apply + verify → derive +
+   verify-derive. Then §10.8: 008 → findings `--rehearse --replay` →
+   `--apply --replay` → verify-findings.
+
+### 11.6 Codex review CV-C1 (2026-11-11): one P2, fixed
+
+**P2: the findings filter depended on `standard_conforming_strings`.**
+- The problem: with the setting `off`, PostgreSQL drops the backslash
+  from `'cv\_%'`. The pattern then becomes `cv_%`, which also matches
+  CT-looking keys such as `cva`, so such a row could escape the exact
+  catalog check.
+- On prod the setting is `on (default)`, with no overrides (read-only
+  probe, 2026-11-11). So this was not a live problem there.
+- **The fix:** a plain prefix test, `left(finding_key, 3) <> 'cv_'` (or
+  `= 'cv_'`), with no backslash in any SQL literal. It is applied in:
+  - the CT findings verifier;
+  - the same five statements in the committed CV findings code:
+    `cv/findings/run.js` `OTHERS_SQL`, `COUNTS_SQL` and the
+    `sync_catalog` extra-key query; `cv/findings/verify.js`
+    `FOREIGN_SQL` and `CATALOG_SQL`.
+- The metric filters `NOT LIKE 'cv.%'` stay: they hold no backslash.
+- **Checked:**
+  - **Tests:** `cv_scope.test.js` applies the prefix form; all three CT
+    statements are free of backslashes; new CV findings test (18). Every
+    suite passes.
+  - **Mutation:** a short prefix, a return to `LIKE 'cv\_%'`, or no
+    filter each fail a test.
+  - **Local case D, under `on` and `off`:** C1 passes with CV rows and
+    catches an extra `cva` under both settings. The first draft's filter
+    hides `cva` under `off`, which confirms the review. The CV counts,
+    catalog and foreign-key statements give 5 / 5 / 0 under both settings.
+    Log: `~/cv_d3b_evidence/c1/c1_local_r2.log`.
+- **Re-review (round 2, `REVIEW-CV-C1-CODEX.md`): no new findings.** The
+  prefix test drops exactly the `cv_` keys and keeps `cva`, `cvx_unknown`,
+  `cv` and the CT keys. It is used consistently in the CV queries, and
+  `left()` avoids depending on PG 11's `starts_with()`.

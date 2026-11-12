@@ -203,8 +203,20 @@ test("preflight refusals: limited user, schema version (008 for --apply), derive
     /disagree.*SME08640 facts_only: 2 days \(2026-11-09\.\.2026-11-10\)/);
   await assert.rejects(preflight(fake({ inv: [{ system_id: "SME02412", day: "2026-11-10", kind: "daily_only" }] }), { mode: "rehearse" }), /SME02412 daily_only: 1 days/);
   assert.deepStrictEqual(await preflight(fake({ v: 7 }), { mode: "rehearse" }), { user: "insight_writer", schema_version: 7 });
-  // C1 is not done in this checkout (no CT verifier exports CV_AWARE yet)
-  await assert.rejects(preflight(fake(), { mode: "apply" }), /C1/);
+  // C1 is done in this checkout (every CT verifier exports CV_AWARE), so --apply passes the interlock;
+  // the refusal itself is covered by cv.test.js "C1 interlock"
+  assert.deepStrictEqual(await preflight(fake(), { mode: "apply" }), { user: "insight_writer", schema_version: 8 });
+});
+
+test("cv_ key filters are plain prefix tests, with no backslash escape (review CV-C1 P2)", () => {
+  // LIKE 'cv\_%' depends on standard_conforming_strings; left(finding_key, 3) does not
+  for (const f of ["run.js", "verify.js", "verify_sql.js", "load.js"]) {
+    const src = fs.readFileSync(path.join(__dirname, "..", "findings", f), "utf8");
+    assert.doesNotMatch(src, /LIKE '[^']*\\/, `${f}: LIKE with a backslash`);
+  }
+  const run = require("../findings/run");
+  assert.match(run.OTHERS_SQL, /left\(finding_key, 3\) <> 'cv_'/);
+  assert.match(run.COUNTS_SQL, /left\(finding_key, 3\) = 'cv_'/);
 });
 
 test("loader SQL reads only CV tables and the rule series", () => {

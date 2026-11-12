@@ -48,7 +48,7 @@ const STORED_SQL = `
          rule_version, last_evaluated, resolved_at, to_char(data_through, 'YYYY-MM-DD') AS data_through_text
   FROM insight.findings WHERE source = 'ge_cv'`;
 // CV findings keys that are not ge_cv (a CV key written by something else)
-const FOREIGN_SQL = `SELECT system_id, finding_key, source FROM insight.findings WHERE finding_key LIKE 'cv\\_%' AND source <> 'ge_cv'`;
+const FOREIGN_SQL = `SELECT system_id, finding_key, source FROM insight.findings WHERE left(finding_key, 3) = 'cv_' AND source <> 'ge_cv'`;
 // Inventory (review CV4-FINDINGS P2): every device day with CV facts has
 // daily rows and vice versa. Findings read data days from the facts (JS)
 // and from ge_cv_daily (the SQL, the system list), so a facts-only system
@@ -67,7 +67,7 @@ const inventory_lines = (rows) => {
 };
 const LAST_DAY_SQL = `SELECT system_id, to_char(max(local_day), 'YYYY-MM-DD') AS d FROM insight.ge_cv_daily WHERE local_day <= $1::date GROUP BY 1`;
 const CATALOG_SQL = `SELECT finding_key, label, description, category, default_severity, rule_version, customer_visible
-  FROM insight.finding_catalog WHERE finding_key LIKE 'cv\\_%'`;
+  FROM insight.finding_catalog WHERE left(finding_key, 3) = 'cv_'`;
 
 // today: the as-of date of the run that wrote the findings; as_of_by_system:
 // the date each system was last evaluated at (job_state), which wins.

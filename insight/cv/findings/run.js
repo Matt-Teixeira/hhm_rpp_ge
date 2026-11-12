@@ -77,10 +77,10 @@ const FINGERPRINT_SQL = `SELECT count(*)::int AS n, md5(coalesce(string_agg(x::t
 // Everything that is not CV: must be the same before and after a CV run.
 const OTHERS_SQL = `SELECT
   (SELECT md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM (SELECT * FROM insight.findings WHERE source <> 'ge_cv') x) AS findings,
-  (SELECT md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM (SELECT * FROM insight.finding_catalog WHERE finding_key NOT LIKE 'cv\\_%') x) AS catalog`;
+  (SELECT md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM (SELECT * FROM insight.finding_catalog WHERE left(finding_key, 3) <> 'cv_') x) AS catalog`;
 const COUNTS_SQL = `SELECT (SELECT count(*) FROM insight.findings WHERE source = 'ge_cv')::int AS findings,
   (SELECT count(*) FROM insight.findings WHERE source = 'ge_cv' AND status = 'open')::int AS open,
-  (SELECT count(*) FROM insight.finding_catalog WHERE finding_key LIKE 'cv\\_%')::int AS catalog`;
+  (SELECT count(*) FROM insight.finding_catalog WHERE left(finding_key, 3) = 'cv_')::int AS catalog`;
 const STORED_SQL = `SELECT finding_key, opened_at, source, status, severity, window_start, window_end, observed, baseline, evidence,
   rule_version, last_evaluated, resolved_at, to_char(data_through, 'YYYY-MM-DD') AS data_through
   FROM insight.findings WHERE system_id = $1 AND source = 'ge_cv'`;
@@ -122,7 +122,7 @@ async function preflight(t, { mode }) {
 
 async function sync_catalog(t) {
   const n = (await t.result(pgp.helpers.insert(cv_catalog_rows(), CATALOG_CS) + CATALOG_SUFFIX)).rowCount;
-  const extra = (await t.any("SELECT finding_key FROM insight.finding_catalog WHERE finding_key LIKE 'cv\\_%' AND finding_key <> ALL($1)",
+  const extra = (await t.any("SELECT finding_key FROM insight.finding_catalog WHERE left(finding_key, 3) = 'cv_' AND finding_key <> ALL($1)",
     [cv_finding_rules.map((r) => r.key)])).map((r) => r.finding_key);
   return { changed: n, extra };
 }

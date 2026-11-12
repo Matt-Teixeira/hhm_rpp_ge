@@ -169,8 +169,30 @@ test("an invalid registry is refused before any connection or catalog write (rev
 test("C1 interlock: --apply needs every CT verifier to declare CV_AWARE", () => {
   assert.deepStrictEqual(ct_verifiers_not_cv_aware(() => ({ CV_AWARE: true })), []);
   assert.strictEqual(ct_verifiers_not_cv_aware(() => ({})).length, 3);
-  // today (before the C1 change) the real CT modules are not CV-aware, so --apply is refused
-  assert.strictEqual(ct_verifiers_not_cv_aware().length, 3);
+  // after the C1 change the real CT modules are CV-aware, so --apply is allowed; any one missing is named
+  assert.deepStrictEqual(ct_verifiers_not_cv_aware(), []);
+  assert.deepStrictEqual(ct_verifiers_not_cv_aware((m) => (m === "../derive/verify" ? {} : { CV_AWARE: true })), ["../derive/verify"]);
+  assert.strictEqual(ct_verifiers_not_cv_aware(() => ({ CV_AWARE: "yes" })).length, 3, "only the boolean true counts");
+});
+
+test("C1: every CV catalog row is one the CT verifiers' filters leave out (and no CT row is)", () => {
+  const { CATALOG_SQL: FACTS_CATALOG_SQL } = require("../../verify_facts");
+  const { INVARIANTS_SQL } = require("../../derive/verify");
+  const { CATALOG_SQL: FINDINGS_CATALOG_SQL } = require("../../findings/verify");
+  const { cv_catalog_rows: cv_finding_rows } = require("../findings/rules");
+  const { catalog_rows: ct_finding_rows } = require("../../findings/rules");
+  const { catalog_rows: ct_metric_rows } = require("../../rules/engine");
+  // the filters as SQL receives them: LIKE 'cv.%' ('.' is literal) and a plain prefix test for cv_;
+  // no backslash, so nothing depends on standard_conforming_strings (review CV-C1 P2)
+  for (const s of [FACTS_CATALOG_SQL, INVARIANTS_SQL]) assert.match(s, /metric_key NOT LIKE 'cv\.%'/);
+  assert.ok(FINDINGS_CATALOG_SQL.includes("left(finding_key, 3) <> 'cv_'"));
+  for (const s of [FACTS_CATALOG_SQL, INVARIANTS_SQL, FINDINGS_CATALOG_SQL]) assert.ok(!s.includes("\\"));
+  const metric_cv = (k) => k.startsWith("cv.");
+  const finding_cv = (k) => k.startsWith("cv_");
+  assert.ok(cv_catalog_rows().every((r) => metric_cv(r.metric_key)));
+  assert.ok(cv_finding_rows().every((r) => finding_cv(r.finding_key)));
+  const ct_metric = [...ct_metric_rows(require("../../rules/ge_ct").rules), ...ct_metric_rows(require("../../rules/ge_ct_derived").derived_rules)];
+  assert.ok(!ct_metric.some((r) => metric_cv(r.metric_key)) && !ct_finding_rows().some((r) => finding_cv(r.finding_key)));
 });
 
 test("independent SQL covers exactly the registry, pins every named code, and excludes relays", () => {

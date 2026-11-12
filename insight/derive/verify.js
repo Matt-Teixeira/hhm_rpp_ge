@@ -270,12 +270,16 @@ async function check_clock(db) {
   return { name: "clock flags", ok, lines };
 }
 
-async function check_invariants(db) {
-  const r = await db.one(`SELECT
+// C1 (PLAN-CV-INSIGHTS.md §7.4): the catalog invariant counts CT rows only (GE CV's cv.* rows share the table).
+const CV_AWARE = true;
+const INVARIANTS_SQL = `SELECT
       (SELECT count(*) FROM insight.ge_ct_facts f
         WHERE abs(extract(epoch FROM f.host_datetime - (f.host_local AT TIME ZONE 'UTC'))) > $1 * 3600)::int AS offset_breaks,
-      (SELECT count(*) FROM insight.metric_catalog)::int AS catalog,
-      (SELECT count(*) FROM insight.metric_catalog WHERE metric_key = ANY($2))::int AS derived_in_catalog`, [MAX_OFFSET_H, DERIVED_KEYS]);
+      (SELECT count(*) FROM insight.metric_catalog WHERE metric_key NOT LIKE 'cv.%')::int AS catalog,
+      (SELECT count(*) FROM insight.metric_catalog WHERE metric_key = ANY($2))::int AS derived_in_catalog`;
+
+async function check_invariants(db) {
+  const r = await db.one(INVARIANTS_SQL, [MAX_OFFSET_H, DERIVED_KEYS]);
   const expectCat = rules.length + derived_rules.length;
   const ok = r.offset_breaks === 0 && r.catalog === expectCat && r.derived_in_catalog === derived_rules.length;
   return { name: "invariants", ok, lines: [
@@ -299,4 +303,5 @@ async function run_verify(db, log = console.log) {
   return { ok: results.every((r) => r.ok), results };
 }
 
-module.exports = { run_verify, EXPECTED_REPLACEMENTS, REPLACEMENTS_13_1, REPLACEMENTS_REVIEWED, EXPECTED_CLOCK_AHEAD, RESTART_LOOP, DAILY_DIFF_SQL, EXAMS_DIFF_SQL };
+module.exports = { run_verify, check_invariants, EXPECTED_REPLACEMENTS, REPLACEMENTS_13_1, REPLACEMENTS_REVIEWED, EXPECTED_CLOCK_AHEAD,
+  RESTART_LOOP, DAILY_DIFF_SQL, EXAMS_DIFF_SQL, INVARIANTS_SQL, CV_AWARE };

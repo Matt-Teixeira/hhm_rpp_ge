@@ -41,7 +41,8 @@ const CHUNK = 5000;
 const PENDING_FULL_DAYS = 31; // more pending days than this -> "full" rebuild of the system
 const PARTITION_WARN_MONTHS = 18; // plan §6.6: a migration adds months before 2028-06
 // Late commits (as CT §15.2 item 3): rows at or below the watermark,
-// captured within this of the watermark's capture time, whose record has no facts yet.
+// captured within this of the watermark's capture time, that no fact
+// carries as its source row (review MRI2-EXTRACT P2-1).
 const LATE_WINDOW_S = 2 * 3600;
 const CT_VERIFIERS = ["../verify_facts", "../derive/verify", "../findings/verify"];
 
@@ -232,14 +233,17 @@ const LATE_SQL = `
   FROM log.ge_mri_gesys g
   WHERE g.id <= $1 AND g.capture_datetime >= $2::timestamptz - make_interval(secs => $3)
     AND NOT EXISTS (SELECT 1 FROM insight.ge_mri_facts f
-                    WHERE f.system_id = g.system_id AND f.epoch = g.epoch AND f.record_number_concurrent = g.record_number_concurrent
-                      AND f.metric_key = 'mri.error' AND f.host_local = ${host_local_sql("g")})
+                    WHERE f.source_id = g.id AND f.source_capture_datetime = g.capture_datetime AND f.metric_key = 'mri.error')
   ORDER BY g.id`;
 
-// Late-commit re-read: rows below the watermark whose record has no facts
-// yet (unstorable rows are re-read too and give none). One transaction.
+// Late-commit re-read: rows below the watermark, in the window, that are
+// not the source row of any fact: new records committed late, and copies of
+// stored records (re-sent or conflicting). All go through the conflict
+// check (review MRI2-EXTRACT P2-1): a different record on a stored key
+// refuses the run; an identical copy is a known duplicate and writes
+// nothing. Unstorable rows are re-read too and give none. One transaction.
 async function reread_late(conn, { job }) {
-  const out = { rows: 0, facts: 0, inserted: 0, systems: [] };
+  const out = { rows: 0, records: 0, duplicates: 0, facts: 0, inserted: 0, systems: [] };
   if (!job || !job.watermark_capture_datetime) return { ...out, skipped: "no watermark capture time" };
   const rows = await conn.any(LATE_SQL, [job.watermark_id, job.watermark_capture_datetime, LATE_WINDOW_S]);
   out.rows = rows.length;
@@ -247,16 +251,38 @@ async function reread_late(conn, { job }) {
   const built = build_facts(rows);
   if (built.errors.length) throw new Error(`rule errors in late re-read: ${JSON.stringify(built.errors.slice(0, 3))}`);
   const { unique } = dedupe_facts(built.facts);
-  out.facts = unique.length;
-  if (!unique.length) return out;
   const r = await conn.tx(async (t) => {
-    const { conflicts } = await check_conflicts(t, built);
-    if (conflicts.length) throw new Error(`natural-key conflict in late re-read (plan §6.6): ${JSON.stringify(conflicts.slice(0, 5))}`);
-    return upsert_and_record(t, unique);
+    const { conflicts, known } = await check_conflicts(t, built);
+    if (conflicts.length) throw new Error(`natural-key conflict in late re-read (plan §6.6: one key, two different records), nothing written: ${JSON.stringify(conflicts.slice(0, 5))}`);
+    return { known, ...(unique.length ? await upsert_and_record(t, unique) : { upserted: 0, touched: [] }) };
   });
+  out.records = built.records.length - r.known;
+  out.duplicates = built.duplicates + r.known;
+  out.facts = unique.length;
   out.inserted = r.upserted;
   out.systems = [...new Set(r.touched.map((x) => x.system_id))].sort();
   return out;
+}
+
+// A replay covers every source row: from id 0, every batch, to the current end.
+const is_full_replay = ({ from_id, to_id, max_batches }) => from_id === 0 && to_id === null && !max_batches;
+
+// Facts below their metric's registry version, after a complete replay:
+// the rule no longer produces them. Deleted, and their days recorded for
+// derive. Facts of a metric the registry no longer has are left (and
+// verify reports them).
+const PRUNE_SQL = `
+  WITH v(metric_key, version) AS (SELECT * FROM unnest($1::text[], $2::int[])),
+  del AS (
+    DELETE FROM insight.ge_mri_facts f USING v
+    WHERE f.metric_key = v.metric_key AND f.rule_version < v.version
+    RETURNING f.system_id, f.host_local)
+  SELECT system_id, to_char(host_local, 'YYYY-MM-DD') AS day, count(*)::int AS n FROM del GROUP BY 1, 2 ORDER BY 1, 2`;
+
+async function prune_stale(t, registry = rules) {
+  const touched = await t.any(PRUNE_SQL, [registry.map((r) => r.key), registry.map((r) => r.version)]);
+  await record_derive_pending(t, touched);
+  return { deleted: touched.reduce((n, r) => n + r.n, 0), systems: [...new Set(touched.map((x) => x.system_id))].sort() };
 }
 
 // mode "rehearse": everything in ONE transaction, rolled back; verify runs
@@ -311,6 +337,12 @@ async function run_extract(db, { mode, from_id = null, to_id = null, max_batches
       }
 
       const { watermark } = await apply_range(conn, { job, start, end, max_batches, run_id, started_at, stats, log });
+      // A complete replay re-wrote every current fact at its registry
+      // version; what is still older is no longer produced (review MRI2-EXTRACT P2-2).
+      if (is_full_replay({ from_id, to_id, max_batches })) {
+        stats.pruned = await conn.tx((t) => prune_stale(t));
+        log(`replay complete: ${stats.pruned.deleted} stale facts deleted`);
+      }
       return { watermark, stats, preflight: pre, end };
     } finally {
       await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [LOCK_KEY]);
@@ -324,12 +356,13 @@ async function run_extract(db, { mode, from_id = null, to_id = null, max_batches
 // stats is filled in place. MRI-5's stage will call this as CV's does.
 async function apply_range(conn, { job, start, end, max_batches = null, run_id, started_at, stats, log = () => {} }) {
   await conn.tx((t) => t.none(catalog_statement(rules)));
-  stats.late = await reread_late(conn, { job });
   let watermark = start;
   let watermark_capture = job ? job.watermark_capture_datetime : null;
   let n = 0;
   const STOP = new Error("batch limit");
   try {
+    // inside the try, so a late conflict records status "error" (review MRI2-EXTRACT P2-1)
+    stats.late = await reread_late(conn, { job });
     await stream(conn, { from_id: start, to_id: end, on_batch: async (b) => {
       // counts and watermark stay local until COMMIT succeeded
       const next = JSON.parse(JSON.stringify(stats));
@@ -355,7 +388,7 @@ async function apply_range(conn, { job, start, end, max_batches = null, run_id, 
 }
 
 module.exports = {
-  run_extract, apply_range, reread_late, write_job, read_job, preflight, check_conflicts, dedupe_facts, upsert_statements, merge_pending,
+  run_extract, apply_range, reread_late, prune_stale, is_full_replay, PRUNE_SQL, write_job, read_job, preflight, check_conflicts, dedupe_facts, upsert_statements, merge_pending,
   ct_verifiers_not_mri_aware, unreviewed, fact_key, JOB, DERIVE_JOB, LOCK_KEY, CHUNK, FACT_CS, UPSERT_SUFFIX, LATE_SQL, EXISTING_SQL,
   LATE_WINDOW_S, PENDING_FULL_DAYS, MIN_SCHEMA_VERSION, PARTITION_WARN_MONTHS,
 };

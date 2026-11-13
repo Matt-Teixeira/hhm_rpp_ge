@@ -12,9 +12,10 @@ const {
 const { build_facts, host_local_of, identity, skip_reason, BATCH_SQL, ROW_COLUMNS, PARTITION_FROM, PARTITION_TO } = require("../extract");
 const {
   dedupe_facts, upsert_statements, merge_pending, unreviewed, ct_verifiers_not_mri_aware, LATE_SQL, EXISTING_SQL, CHUNK, PENDING_FULL_DAYS, MIN_SCHEMA_VERSION,
+  apply_range, is_full_replay, PRUNE_SQL,
 } = require("../load");
 const { COND, STORABLE, RECONCILE_SQL, COVERAGE_SQL, CONFLICTS_SQL, IDENTITY_SQL } = require("../reconcile_sql");
-const { compare } = require("../verify");
+const { compare, stale_versions } = require("../verify");
 const { REVIEWED_CODES } = require("../codes_reviewed");
 const { args, confirm } = require("../cli");
 const { masker } = require("../tools/build_fixtures");
@@ -229,7 +230,9 @@ test("load SQL: natural-key upsert gated on rule version, source kept, SQL NULL 
   // the conflict lookup and the late re-read use the facts' unique index columns and the source primary key
   assert.match(EXISTING_SQL, /f\.host_local = k\.host_local AND f\.metric_key = 'mri\.error'/);
   assert.match(EXISTING_SQL, /g\.id = f\.source_id AND g\.capture_datetime = f\.source_capture_datetime/);
-  assert.match(LATE_SQL, /f\.host_local = \(timestamp '1970-01-01 00:00:00' \+ g\.epoch \* interval '1 second'\)/);
+  // the late re-read takes rows that are no fact's source row, so copies of stored records reach the conflict check (review MRI2-EXTRACT P2-1)
+  assert.match(LATE_SQL, /f\.source_id = g\.id AND f\.source_capture_datetime = g\.capture_datetime AND f\.metric_key = 'mri\.error'/);
+  assert.doesNotMatch(LATE_SQL, /f\.record_number_concurrent = g\.record_number_concurrent/);
   assert.strictEqual(MIN_SCHEMA_VERSION, 9);
 });
 
@@ -347,3 +350,54 @@ test("isolation: insight/mri reads shared modules but never CV's", () => {
   walk(MRI);
   for (const f of files) assert.doesNotMatch(fs.readFileSync(f, "utf8"), /require\(\s*["'`][^"'`]*\bcv(\/[^"'`]*)?["'`]\s*\)/, path.relative(MRI, f));
 });
+
+test("review MRI2-EXTRACT P2-1: a late copy with different content refuses the run and records status error", async () => {
+  const base = { system_id: "SME1", epoch: 1794565394, record_number_concurrent: 0, type: "h\tscn", host_datetime: new Date("2026-11-13T15:23:14Z"), capture_datetime: new Date("2026-11-13T16:00:00Z") };
+  const stored = { ...base, id: "10", message_number: 2218714, message: "New Exam Started" };
+  const late = { ...base, id: "9", message_number: 2218714, message: "New Exam Started (other)" };
+  const crypto = require("crypto");
+  const md5 = (r) => crypto.createHash("md5").update([r.message_number, r.type, r.message].join("\u001f")).digest("hex");
+  const jobs = [];
+  const calls = [];
+  const conn = {
+    tx: async (f) => f(conn),
+    none: async (sql, p) => { if (/insight\.job_state/.test(sql)) jobs.push(p); else calls.push("none"); },
+    one: async () => ({}),
+    any: async (sql) => {
+      if (sql === LATE_SQL) return [late];
+      if (sql === EXISTING_SQL) return [{ system_id: "SME1", epoch: base.epoch, record_number_concurrent: 0, source_id: "10", ident: md5(stored) }];
+      calls.push(sql.slice(0, 40));
+      return [];
+    },
+  };
+  const job = { watermark_id: "20", watermark_capture_datetime: new Date("2026-11-13T16:30:00Z") };
+  const stats = { batches: 0 };
+  await assert.rejects(apply_range(conn, { job, start: 20, end: 20, run_id: "r", started_at: new Date(), stats }),
+    /natural-key conflict in late re-read .*"ids":\["10","9"\]/);
+  assert.strictEqual(jobs.length, 1, "the error was recorded");
+  assert.strictEqual(jobs[0][5], "error");
+  assert.strictEqual(jobs[0][1], 20, "the watermark is unchanged");
+  assert.ok(!calls.some((c) => /insert into "insight"\."ge_mri_facts"/i.test(c)), "no facts written");
+  // an identical late copy is a known duplicate: nothing to refuse
+  const same = { ...late, message: stored.message };
+  conn.any = async (sql) => (sql === LATE_SQL ? [same] : sql === EXISTING_SQL ? [{ system_id: "SME1", epoch: base.epoch, record_number_concurrent: 0, source_id: "10", ident: md5(stored) }] : []);
+  const ok_stats = { batches: 0 };
+  await apply_range(conn, { job, start: 20, end: 20, run_id: "r", started_at: new Date(), stats: ok_stats });
+  assert.deepStrictEqual([ok_stats.late.records, ok_stats.late.duplicates, ok_stats.late.inserted], [0, 1, 0]);
+});
+
+test("review MRI2-EXTRACT P2-2: verify fails on facts not at the registry version; a complete replay prunes them", () => {
+  const v = (metric_key, rule_version, n = 5) => ({ metric_key, rule_version, n });
+  assert.deepStrictEqual(stale_versions([v("mri.error", 1), v("mri.system_up", 1)]), []);
+  const bumped = rules.map((r) => (r.key === "mri.system_up" ? { ...r, version: 2 } : r));
+  assert.deepStrictEqual(stale_versions([v("mri.error", 1), v("mri.system_up", 1, 3), v("mri.system_up", 2, 7)], bumped),
+    [{ metric_key: "mri.system_up", rule_version: 1, registry: 2, n: 3 }]);
+  assert.deepStrictEqual(stale_versions([v("mri.gone", 1)]), [{ metric_key: "mri.gone", rule_version: 1, registry: null, n: 5 }]);
+  // only a complete replay (from id 0, every batch, to the current end) prunes
+  assert.strictEqual(is_full_replay({ from_id: 0, to_id: null, max_batches: null }), true);
+  for (const o of [{ from_id: null, to_id: null }, { from_id: 0, to_id: 100 }, { from_id: 0, to_id: null, max_batches: 2 }, { from_id: 5, to_id: null }]) {
+    assert.strictEqual(is_full_replay({ max_batches: null, ...o }), false, JSON.stringify(o));
+  }
+  assert.match(PRUNE_SQL, /DELETE FROM insight\.ge_mri_facts f USING v\s+WHERE f\.metric_key = v\.metric_key AND f\.rule_version < v\.version/);
+});
+

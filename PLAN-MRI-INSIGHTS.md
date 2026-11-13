@@ -14,8 +14,9 @@
   by the user after the CV-5 close-out (§6.5).
 - **MRI-2 (extract): BUILT 2026-11-13, uncommitted** (§7): new files in
   `insight/mri/`. Prod dry run (read-only) equal to the independent SQL on
-  every cell; write path rehearsed on the local DB. **Next: the Codex
-  review** (`REVIEW-MRI2-EXTRACT-HANDOFF.md`). First prod write only after
+  every cell; write path rehearsed on the local DB. Committed 2eb7ea0.
+  **Codex review 2026-11-13: two P2s, both fixed and re-rehearsed** (§7.6;
+  `REVIEW-MRI2-EXTRACT-CODEX.md`). First prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
   MRI-safe.** They exclude `cv.*` rather than select CT keys, so the first
@@ -812,8 +813,8 @@ the local socket (`db.js` needs SSL, which a socket doesn't offer).
 
 ### 7.4 Open points for the review
 
-- Facts are never deleted: a rule-version bump that stops giving a named
-  fact leaves the old fact (as CV). Not an issue at version 1.
+- ~~Facts are never deleted~~: fixed with review P2-2 (§7.6): a complete
+  replay prunes facts the registry no longer produces.
 - `stats.facts` counts facts sent, including no-op re-sends from earlier
   batches; `upserted` is what was written.
 - The stage entry (`extract_step`) comes with MRI-5; `apply_range` is the
@@ -831,3 +832,45 @@ node insight/mri/cli.js verify                  # read-only
 Then the CT and CV verifiers, which must still pass with `mri.*` rows in
 the catalog (that is what C1-MRI makes true).
 
+### 7.6 Codex review (2026-11-13): `REVIEW-MRI2-EXTRACT-CODEX.md`
+
+Codex confirmed the mapping fidelity (registry = §5.2, the independent SQL
+covers the same metric / code set), the dedupe, per-batch atomicity, the
+preflight, the rehearsal's catalog writes being rolled back, the fixture
+masking, and the shared imports' lack of side effects. Two P2s, both
+fixed:
+
+- **P2-1: late conflicting rows bypassed the conflict check.** The late
+  re-read took only rows whose natural key had no facts, so a late copy of
+  a stored key (identical or different) was never looked at.
+  **Fix:** `LATE_SQL` now takes rows in the window that are no fact's
+  source row (by the source primary key), and all of them go through
+  `check_conflicts`. A different record refuses the run; an identical copy
+  counts as a known duplicate and writes nothing. The re-read moved inside
+  `apply_range`'s error handling, so a late conflict records status
+  `error` (watermark unchanged).
+- **P2-2: verify could pass with stale facts after a version bump.**
+  **Fix:** `verify` fails on any fact not at its metric's registry version
+  (`rule_versions.stale`, with the fix "replay: `backfill --apply
+  --from-id 0`"). A complete replay (from id 0, every batch, to the
+  current end) ends by deleting facts still below their registry version,
+  that is, facts the rule no longer produces, and records their days for
+  derive.
+
+**Re-checked:** tests 23 of 23 (2 new: the late-conflict path through
+`apply_range` with status `error`, and stale versions / replay / prune).
+On the local DB with the real code:
+- a late conflicting copy below the watermark: refused, status `error`,
+  watermark unchanged; made identical: a known duplicate, 0 written,
+  verify PASS;
+- `mri.system_up` bumped to version 2 in memory (same output): verify
+  FAIL with 1,279 stale facts and the catalog mismatch; after a full
+  replay: 1,279 upserted, 0 pruned, verify PASS;
+- then `mri.door_sensor_fault` bumped to version 2 emitting nothing: the
+  full replay pruned all 1,332 old facts (9 systems) and recorded their
+  days for derive; 0 stale facts left. Verify's only differences were
+  door-sensor against the unchanged independent SQL, as intended: a real
+  rule change updates `reconcile_sql.js` in the same commit;
+- the local DB was then reset and re-applied at version 1 (§7.3 state).
+
+Logs: `~/cv_d3b_evidence/mri/mri2/13_*` … `18_*`.

@@ -7,6 +7,10 @@
 //   - coverage: every source row is unstorable, a counted record or a
 //     duplicate copy, and the mri.error facts equal the counted records;
 //   - no natural-key conflict (one key, two different records): a FAIL;
+//   - every fact at its metric's registry version (review MRI2-EXTRACT
+//     P2-2): after a version bump the normal run starts at the watermark,
+//     so older facts stay at the old version until a replay
+//     (`backfill --apply --from-id 0`); stale facts FAIL;
 //   - the mri.* catalog rows are exactly the registry (MRI keys only: CT's
 //     and CV's catalog rows are not looked at);
 //   - codes not in the reviewed list (a note, not a failure).
@@ -22,6 +26,13 @@ function compare(a, b) {
   const keys = new Set([...am.keys(), ...bm.keys()]);
   const diffs = [...keys].filter((k) => (am.get(k) || 0) !== (bm.get(k) || 0)).map((k) => ({ k, facts: am.get(k) || 0, sql: bm.get(k) || 0 }));
   return { cells: keys.size, diffs };
+}
+
+// Facts not at their metric's registry version (or of a metric not in the registry).
+function stale_versions(rows, registry = rules) {
+  const v = new Map(registry.map((r) => [r.key, r.version]));
+  return rows.filter((r) => v.get(r.metric_key) !== Number(r.rule_version))
+    .map((r) => ({ metric_key: r.metric_key, rule_version: Number(r.rule_version), registry: v.get(r.metric_key) ?? null, n: Number(r.n) }));
 }
 
 // The SQL side of every check over source ids 0..to (also used by the dry run).
@@ -46,6 +57,8 @@ async function verify_mri_facts(t, to) {
                             WHERE source_id <= $1 AND metric_key = 'mri.error' GROUP BY 1, 2`, [to]);
   const scans = await t.any(`SELECT system_id, CASE metric_key WHEN 'mri.scans_ok' THEN 'ok' ELSE 'failed' END AS key, sum(value_num)::bigint AS n
                              FROM insight.ge_mri_facts WHERE source_id <= $1 AND metric_key IN ('mri.scans_ok', 'mri.scans_failed') GROUP BY 1, 2`, [to]);
+  const versions = await t.any(`SELECT metric_key, rule_version, count(*)::int AS n FROM insight.ge_mri_facts
+                                WHERE source_id <= $1 GROUP BY 1, 2 ORDER BY 1, 2`, [to]);
   const want = await expected(t, to);
   const by_metric = compare(facts, want.metrics);
   const by_code = compare(dims, want.dims);
@@ -62,15 +75,17 @@ async function verify_mri_facts(t, to) {
   const want_cat = rules.map((r) => `${r.key}@${r.version}`).sort();
   const have_cat = cat.map((c) => `${c.metric_key}@${c.rule_version}`).sort();
   const catalog = { n: cat.length, expected: rules.length, ok: JSON.stringify(want_cat) === JSON.stringify(have_cat) };
+  const stale = stale_versions(versions);
+  const rule_versions = { stale, ok: !stale.length, ...(stale.length ? { fix: "replay: backfill --apply --from-id 0" } : {}) };
   const ok = !by_metric.diffs.length && !by_code.diffs.length && !scan_sums.diffs.length && coverage.mri_error_equals_counted
-    && !want.conflicts.length && catalog.ok;
+    && !want.conflicts.length && catalog.ok && rule_versions.ok;
   return {
     to, total,
     by_metric: { cells: by_metric.cells, diffs: by_metric.diffs },
     by_code: { cells: by_code.cells, diffs: by_code.diffs.slice(0, 20), n_diffs: by_code.diffs.length },
     scan_sums: { cells: scan_sums.cells, diffs: scan_sums.diffs },
-    coverage, conflicts: want.conflicts, catalog, ok,
+    coverage, conflicts: want.conflicts, catalog, rule_versions, ok,
   };
 }
 
-module.exports = { verify_mri_facts, compare, expected };
+module.exports = { verify_mri_facts, compare, expected, stale_versions };

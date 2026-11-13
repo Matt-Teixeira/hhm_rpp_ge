@@ -1,0 +1,162 @@
+[
+ {
+  "templates_seen": 89,
+  "message_number": 2247184,
+  "type": "HOST\tdiagCoord",
+  "message": "The IRF board clock or fiber cables were interrupted. \nTPS Reset required before scanning.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 54,
+  "message_number": 2270023,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF - Error bit(s) activated in Link Control Status Register (0x0030). \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0x0 \nLink Control Status Register: 0x131000000000->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 52,
+  "message_number": 2270028,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF - Error bit(s) activated in RRX Status Register 2 (0x00F8). \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0x0 \nRRX Status Register 2:   0x1000000000000000->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 37,
+  "message_number": 2270016,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF did not receive correct device ID from RRX module in \nscan room. RRX does not exist or is not connected to VRF. \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0 \nDevice ID: 2->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 37,
+  "message_number": 2270024,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF - Error bit(s) activated in Control Status Register (0x0000). \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0x0 \nControl Status Register: 0x150->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 34,
+  "message_number": 2267432,
+  "type": "HOST\tNSP",
+  "message": "The Reference Clock to the IRF3 or IXG is not present.->\n\r",
+  "coil": "Body 48 AA",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 34,
+  "message_number": 2267597,
+  "type": "HOST\tdiagCoord",
+  "message": "The RRX_1 module was not detected by IRF3.\nThe system can not scan without this module.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 23,
+  "message_number": 2267425,
+  "type": "HOST\tdiagCoord",
+  "message": "No Clock Signal to IRF3 board.\nThe IRF3 board did not detect a clock signal on the J8 fiber optic clock cable.\nThis condition will cause a TPS_reset failure.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 19,
+  "message_number": 2267412,
+  "type": "HOST\tdiagCoord",
+  "message": "Not enough RRX modules found.\nThe system did not find enough RRX modules for the number of channels\nconfigured.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2267637,
+  "type": "HOST\tNSP",
+  "message": "AGP detected a fault on the fiber links connected to IRF3 or IXG or ERF.\nThe link to this device dropped out: IXG J13 RRX-1->\n\r",
+  "coil": "Body 48 AA",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2270032,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF detected RRX status issue. Check the dual fiber optic cable connection from \nthe RRX to the VRF. Check power to RRX module. The VRF is located at ICN1(ICN2), \nif ADS(ADS1) reports this error.\nVRF ID: 0 \nVRF Register: 0x30 \nDescriptions:   0x0->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 12,
+  "message_number": 2270024,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF - Error bit(s) activated in Control Status Register (0x0000). \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0x0 \nControl Status Register: 0x600001fffff4150->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2270031,
+  "type": "HOST\tLxMxConsumer",
+  "message": "RRX to VRF fiber link ERROR. Check the dual fiber optic cable connection from \nthe RRX to the VRF. Check power to RRX module. The VRF is located at ICN1(ICN2), \nif ADS(ADS1) reports this error.\nVRF ID: 0 \nVRF Register: 0x30 \nDescriptions:   0x0->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2267637,
+  "type": "HOST\tNSP",
+  "message": "AGP detected a fault on the fiber links connected to IRF3 or IXG or ERF.\nThe link to this device dropped out: IRF3 J13 RRX-1->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2267637,
+  "type": "HOST\tNSP",
+  "message": "AGP detected a fault on the fiber links connected to IRF3 or IXG or ERF.\nThe link to this device dropped out: IRF3 J11 DTX-1->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2270023,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF - Error bit(s) activated in Link Control Status Register (0x0030). \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0x0 \nLink Control Status Register: 0x200200008b500->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2270031,
+  "type": "HOST\tLxMxConsumer",
+  "message": "RRX to VRF fiber link ERROR. Check the dual fiber optic cable connection from \nthe RRX to the VRF. Check power to RRX module. The VRF is located at ICN1(ICN2), \nif ADS(ADS1) reports this error.\nVRF ID: 0 \nVRF Register: 0x30 \nDescriptions:   0x8b500->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2267425,
+  "type": "HOST\tdiagCoord",
+  "message": "No Clock Signal to IRF3/IXG board.\nThe IRF3/IXG board did not detect a clock signal on the J8 fiber optic clock cable.\nThis condition will cause a TPS_reset failure.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2270023,
+  "type": "HOST\tLxMxConsumer",
+  "message": "VRF - Error bit(s) activated in Link Control Status Register (0x0030). \nThe VRF is located at ICN1(ICN2), if ADS(ADS1) \nreports this error.\nVRF ID: 0x0 \nLink Control Status Register: 0x200200004a400->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2270031,
+  "type": "HOST\tLxMxConsumer",
+  "message": "RRX to VRF fiber link ERROR. Check the dual fiber optic cable connection from \nthe RRX to the VRF. Check power to RRX module. The VRF is located at ICN1(ICN2), \nif ADS(ADS1) reports this error.\nVRF ID: 0 \nVRF Register: 0x30 \nDescriptions:   0x4a400->\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

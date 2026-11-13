@@ -1,0 +1,66 @@
+[
+ {
+  "templates_seen": 5019,
+  "message_number": 2266425,
+  "type": "HOST\tNSP",
+  "message": "Cabinet Monitor:A water flow failure was detected on the BRM cooling system.\nThe system goes to Emergency Stop State.\nPlease contact your Service Representative and check cooling system with them->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 3992,
+  "message_number": 2261733,
+  "type": "HOST\tNSP",
+  "message": "Heat Exchanger Cabinet (HEC) detected customer coolant temperature is out\nof specification (too high). \nPlease verify that the facility coolant temperature and flow is within\nspecification.\nThis alarm will not stop scanning->\n\r",
+  "coil": "TL Spine 36 3",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 745,
+  "message_number": 2261732,
+  "type": "HOST\tNSP",
+  "message": "Heat Exchanger Cabinet (HEC) detected the cryogen compressor flow rate\nis too high.\nThis alarm will not stop scanning->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 636,
+  "message_number": 2266402,
+  "type": "HOST\tNSP",
+  "message": "Cabinet Monitor:Leak Sensor1 detects sensor fault.\nPlease contact your Service Representative and check or replace it with them.->\n\r",
+  "coil": "HNS CTLBOT",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 537,
+  "message_number": 2268884,
+  "type": "HOST\tNSP",
+  "message": "RF coil airflow sensors measurement warning detected.\nMeasurement difference: 40 percent\nWarning Tolerance: 40 percent->\n\r",
+  "coil": "C Spine+Neck 24",
+  "psd": "frfse-xl"
+ },
+ {
+  "templates_seen": 337,
+  "message_number": 2261731,
+  "type": "HOST\tNSP",
+  "message": "Heat Exchanger Cabinet (HEC) detected the cryogen compressor flow rate\nis too low.\nThis alarm will not stop scanning->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 17,
+  "message_number": 2248604,
+  "type": "HOST\tNSP",
+  "message": "Gradient coil temperature high.\u0001\nProtective automatic shutdown likely if temperature continues\nto rise.\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 16,
+  "message_number": 2266420,
+  "type": "HOST\tNSP",
+  "message": "Cabinet Monitor:A water flow failure was detected on the cabinet cooling system.\nThe system goes to Emergency Stop State.\nPlease contact your Service Representative and check cooling system with them.->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ }
+]

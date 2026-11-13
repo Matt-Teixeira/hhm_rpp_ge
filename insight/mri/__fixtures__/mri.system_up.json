@@ -1,0 +1,82 @@
+[
+ {
+  "templates_seen": 241,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=DV25.1_R05_2131.a GAP=yes GradCoil=11 PowerMonType=4 .\\n. RFampType=21 broadBandXcvr=no cerdType=001 fieldStrength=15000 .\\n. govBody=fda2 gradientAmp=8921 maxB1RMShead=7.2 pacType=3 .\\n. specRFamp=no GCoilType=11 GContIrms=270 SRMode=120 ap=8 .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 236,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=HD23.0_V03_1614.b GAP=yes GradCoil=2 PowerMonType=4 .\\n. RFampType=10 broadBandXcvr=no cerdType=001 fieldStrength=15000 .\\n. govBody=fda2 gradientAmp=8916 maxB1RMShead=7.2 pacType=3 .\\n. specRFamp=no GCoilType=2 GContIrms=185 SRMode=120 ap=8 cine epli .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 175,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=12.0_M5B_0846.d GAP=yes GradCoil=2 PowerMonType=3\\nbroadBandXcvr=no cerdType=001 fieldStrength=15000 govBody=fda2\\nmaxB1RMShead=7.2 pacType=3 specRFamp=no GCoilType=2 GContIrms=185\\nap=8 cine epli fastgrass fse2 pcvi gtof sgd dwepi flairepi special\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 164,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=HD23.0_V02_1406.a GAP=yes GradCoil=2 PowerMonType=4 .\\n. RFampType=10 broadBandXcvr=no cerdType=001 fieldStrength=15000 .\\n. govBody=fda2 gradientAmp=8916 maxB1RMShead=7.2 pacType=3 .\\n. specRFamp=no GCoilType=2 GContIrms=185 SRMode=120 ap=8 cine epli .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 148,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=HDE15.0_M4_0943.c GAP=yes GradCoil=2 PowerMonType=3\\nbroadBandXcvr=no cerdType=001 fieldStrength=15000 govBody=fda2\\nmaxB1RMShead=7.2 pacType=3 specRFamp=no GCoilType=2 GContIrms=130\\nap=8 cine epli fastgrass fse2 pcvi proactive gtof vconf dwepi flairepi\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 104,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=SV25.0_R09_1928.b GAP=yes GradCoil=2 PowerMonType=4 .\\n. RFampType=13 broadBandXcvr=no cerdType=001 fieldStrength=15000 .\\n. govBody=fda2 gradientAmp=8919 maxB1RMShead=7.2 pacType=3 .\\n. specRFamp=no GCoilType=2 GContIrms=140 SRMode=100 ap=8 .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 83,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=DV26.0_R06_2132.a GAP=yes GradCoil=11 PowerMonType=4 .\\n. RFampType=32 broadBandXcvr=no cerdType=001 fieldStrength=30000 .\\n. govBody=fda2 gradientAmp=8921 maxB1RMShead=7.2 pacType=3 .\\n. specRFamp=no GCoilType=11 GContIrms=270 udi=0 ap=8 .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 65,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=SV25.1_R07_2127.a GAP=yes GradCoil=2 PowerMonType=4 .\\n. RFampType=201 broadBandXcvr=no cerdType=001 fieldStrength=15000 .\\n. govBody=iec gradientAmp=8919 maxB1RMShead=7.2 pacType=3 .\\n. specRFamp=no GCoilType=2 GContIrms=140 udi=0 ap=8 .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 48,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=HD16.0_V03_1638.a GAP=yes GradCoil=3 PowerMonType=1\\nbroadBandXcvr=no cerdType=001 fieldStrength=15000 govBody=fda2\\nmaxB1RMShead=7.2 pacType=3 specRFamp=no GCoilType=3 GContIrms=160\\nap=8 cine epli fastgrass fse2 pcvi gtof sgd dwepi flairepi special\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 15,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "System Up. sw=11.1_M4_0818.a GAP=yes GradCoil=2 PowerMonType=1\\nbroadBandXcvr=no cerdType=001 fieldStrength=15000 govBody=fda2\\nmaxB1RMShead=7.2 pacType=2 specRFamp=no ap=8 cine epli fastgrass fse2\\ngtof sgd dwepi flairepi special smartprep ssfse threeplane e3dtof\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

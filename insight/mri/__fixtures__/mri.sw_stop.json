@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 1120,
+  "message_number": 200002348,
+  "type": "HOST\thostMonitor",
+  "message": "The System Software has terminated.\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

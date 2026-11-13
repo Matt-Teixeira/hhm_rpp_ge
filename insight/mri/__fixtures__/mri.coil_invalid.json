@@ -1,0 +1,82 @@
+[
+ {
+  "templates_seen": 1713,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Not all connectors of a multiple connector coil are connected.  Please connect the rest.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1695,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coils connected are not compatible. Please use appropriate coil.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 67,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Internal software error during coil validation. Coil database access error. RecordSetIface::getConnectedSetValidity returned unexpected ermesStatus\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 62,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil information for port Multi Coil Port P1 is incorrect. Please reconnect the coil\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 21,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil information for port Port 1 (P1) is incorrect. Please reconnect the coil\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 18,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil is valid, but not on this port. Port: Multicoil A Port\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 15,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil is valid, but not on this port. Port: Port 2 (P2)\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil is valid, but not on this port. Port: Multicoil B Port\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil is valid, but not on this port. Port: Multi Coil Port P4\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2277604,
+  "type": "HOST\tcim",
+  "message": "Invalid coil connected. Scanning is not allowed. \n Coil information for port Port A is incorrect. Please reconnect the coil\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

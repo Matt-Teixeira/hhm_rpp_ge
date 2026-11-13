@@ -1,0 +1,186 @@
+[
+ {
+  "templates_seen": 1256,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "dsserver died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 339,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "No class A service licenses are installed. This does not affect clinical use.\\nPlease contact your service representative.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 229,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Turnover code not as expected.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 198,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: fastgrass fse2 pcvi gtof sgd dwepi flairepi special smartprep .\\n. ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine sgdperf .\\n. idrivePro idrive sprep99 probe99 pps rtca ushorttr t2bhold .\\n. ssfsemrcp t1bhold acgdplus ftmra ssfsexl DynR1 fiesta2d fiesta3d .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 198,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: asset probep FR3DFSE asset91 tricks fiestac breast2 propdwi .\\n. fiesta3dfs propt2 ideal propbody propnpw lavade inlineviz merge3d .\\n. cubet2 mfgre2d arc fctlfusn de3d quickstep fiesta2dfs lava FLAIR3D .\\n. MPhVar blflwmaps merge2d lavaxv bravo breastsvq cosmic3d inhan3dpc .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 198,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: inhanifir inhan2dtof propt2flr propt1flr prop inh3dflow edwi .\\n. iprotect fctlmrstd fctlser resappHDx channel16 .\\n_\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 155,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine sgdperf\\nidrive sprep99 pps perfusion rtet rtca ushorttr t2bhold ssfsemrcp\\nacgdplus ftmra ssfsexl DynR1 fiesta2d fiesta3d delenhmt asset\\ntensor FR3DFSE asset91 tricks fiestac propdwi delenhmt3d fiesta3dfs\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 148,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: smartprep ssfse threeplane hisris e3dtof fsexl bloodsupp\\nidrivePro idrive sprep99 rtca t2bhold ssfsemrcp t1bhold ftmra ssfsexl\\nfiesta2d fiesta3d asset FR3DFSE asset91 tricks fiestac propdwi propt2\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 96,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: fastgrass fse2 pcvi gtof sgd dwepi flairepi special smartprep .\\n. ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine sgdperf .\\n. idrivePro idrive sprep99 probe99 rtca ushorttr t2bhold ssfsemrcp .\\n. t1bhold acgdplus ftmra ssfsexl DynR1 fiesta2d fiesta3d delenhmt .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 96,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: asset probep navigator FR3DFSE asset91 fiestac breast2 .\\n. propdwi delenhmt3d fiesta3dfs propt2 propbody propnpw lavade .\\n. inlineviz merge3d mfgre2d arc fctlfusn de3d quickstep fiesta2dfs .\\n. realcard lava MPhVar blflwmaps tmcourse merge2d lavaxv bravo .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 96,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: cosmic3d inhan3dpc inhanifir inhan2dtof propt2flr propt1flr .\\n. prop inh3dflow edwi cineir heart3d iprotect fctlmrstd fctlser .\\n. resappHDx channel16 .\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 68,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: fastgrass fse2 pcvi gtof sgd dwepi flairepi special smartprep .\\n. ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine sgdperf .\\n. idrivePro idrive sprep99 probe99 pps rtca ushorttr t2bhold .\\n. ssfsemrcp t1bhold acgdplus prose ftmra ssfsexl DynR1 fiesta2d .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 68,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: fiesta3d asset probep tensor FR3DFSE asset91 tricks fiestac .\\n. breast2 propdwi fiesta3dfs propt2 ideal propbody propnpw lavade .\\n. inlineviz merge3d mfgre2d arc fctlfusn de3d quickstep fiesta2dfs .\\n. lava tracto MPhVar blflwmaps merge2d lavaxv bravo breastsvq .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 68,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: cosmic3d inhan3dpc inhanifir inhan2dtof propt2flr propt1flr .\\n. prop inh3dflow edwi iprotect fctlmrstd fctlser resappHDx channel16 .\\n_\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 40,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine sgdperf\\nidrive sprep99 pps rtca ushorttr t2bhold ssfsemrcp t1bhold acgdplus\\nssfsexl DynR1 fiesta2d fiesta3d delenhmt asset FR3DFSE asset91 tricks\\nbreast2 propdwi fiesta3dfs propt2 resappHDx ideal de3d arc cubet2\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 40,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: inhan2dtof inhan3dpc inhanifir fiesta2dfs realcard channel16\\n_\\n_\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 38,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: fastgrass fse2 pcvi research spectro gtof resrchpsd sgd dwepi .\\n. flairepi special smartprep ssfse threeplane hisris e3dtof fsexl .\\n. bloodsupp fastcine tagging sgdperf idrivePro idrive sprep99 probe99 .\\n. perfusion rtet spiralHR spiralRT rtca probe3d ushorttr t2bhold .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 38,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: ssfsemrcp t1bhold acgdplus prose ftmra ssfsexl DynR1 fiesta2d .\\n. fiesta3d delenhmt asset probep navigator tensor FR3DFSE asset91 .\\n. tricks fiestac breast2 propdwi delenhmt3d fiesta3dfs brnwavrt .\\n. brnwavpa brnwavhw propt2 ideal propbody propnpw lavade inlineviz .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 38,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: merge3d cubet2 mfgre2d arc fctlfusn de3d quickstep fiesta2dfs .\\n. realcard lava tracto FLAIR3D MPhVar blflwmaps tmcourse swift t2map .\\n. merge2d lavaxv bravo cosmic3d inhan3dpc inhanifir inhan2dtof .\\n. propt2flr propt1flr prop edwi iprotect fctlmrstd fctlser resappHDx .\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 20,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine sgdperf\\nidrive sprep99 hispeed rtca ushorttr t2bhold ssfsemrcp t1bhold\\nftmra ssfsexl DynR1 fiesta2d fiesta3d asset FR3DFSE asset91 tricks\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 15,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: bloodsupp fastcine idrivePro idrive sprep99 ushorttr t2bhold\\nt1bhold acgdplus ftmra ssfsexl DynR1 fiesta2d fiesta3d asset FR3DFSE\\n_\\n_\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 8,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: ssfse threeplane hisris e3dtof fsexl bloodsupp fastcine tagging\\nidrivePro idrive sprep99 probe99 pps rtca ushorttr t2bhold ssfsemrcp\\nacgdplus prose ftmra ssfsexl DynR1 fiesta2d fiesta3d delenhmt asset\\nnavigator FR3DFSE asset91 tricks fiestac breast2 propdwi delenhmt3d\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 8,
+  "message_number": 2227566,
+  "type": "HOST\tmrt_commentator",
+  "message": "Config: propt2 resappHDx ideal de3d arc cubet2 swan3d inhan2dtof\\ninhanifir fiesta2dfs realcard channel8 lava FLAIR3D MPhVar blflwmaps\\n_\\n_\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

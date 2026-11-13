@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 6597,
+  "message_number": 2218672,
+  "type": "HOST\tscn",
+  "message": "This system has a failure that could significantly degrade Image Quality. Please contact your Service Provider for corrective action.\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

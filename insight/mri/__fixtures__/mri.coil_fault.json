@@ -1,0 +1,322 @@
+[
+ {
+  "templates_seen": 583,
+  "message_number": 103428,
+  "type": "HOST\tNSP",
+  "message": "Coil validation error:\nThe table controller (SRI) is unable to communicate with the Coil ID for the\ncurrently connected coil.\nPlease try connecting the coil again.\nOne-wire device not present.\nConnector: Multicoil B Port->\n\r",
+  "coil": "HNS Head",
+  "psd": "BRAVO"
+ },
+ {
+  "templates_seen": 512,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1 Channel 9 of 16, counting from 1\nValue: 96 mA, Limit: 98 mA\nMask of failed channels: 0x100\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "HD BodyUpper",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 113,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 1 of 16, counting from 1\nValue: 248 mA    Limit: 298 mA\nMask of failed channels: 0x19\nCh 1-8 : Legacy MC Conn\nCh 17-24 : Conn A\nCh 25-32 : Conn B->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 99,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 5 of 16, counting from 1\nValue: -9 mA, Limit: 0 mA\nMask of failed channels: 0x4450\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "Fiesta"
+ },
+ {
+  "templates_seen": 78,
+  "message_number": 2273000,
+  "type": "HOST\tNSP",
+  "message": "Coil validation error:\nCoil ID device was not detected on a coil.\nCoil ID is required for this connector.\nPlease try connecting coil again.\nConnector: Port 1 (P1)->\n\r",
+  "coil": "Body 36 AA2",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 41,
+  "message_number": 2274023,
+  "type": "HOST\tNSP",
+  "message": "Coil Fault - Open Circuit\nA multicoil bias fault was detected.\nReseat all coils and check coil connections.\n\nConnector: Port 1 (P1)\nChannels faulted: 0x1000\nFirst channel: 13 of 32, counting from 1\nFault value: 7943 mV, Channel: 13->\n\r",
+  "coil": "2Brst Int SMI",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 37,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1 Channel 11 of 16, counting from 1\nValue: 2 mA, Limit: 49 mA\nMask of failed channels: 0x9c00\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "HNS CTL456",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 32,
+  "message_number": 2252305,
+  "type": "HOST\tNSP",
+  "message": "TR Driver Fault Detected - Open Circuit.\nSource of Fault is Head TR on Connector A.\nValue: 10 mA    Limit: 100 mA->\n\r",
+  "coil": "HD TRknee PA",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 28,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD2 Channel 3 of 16, counting from 1\nValue: 169 mA, Limit: 298 mA\nMask of failed channels: 0x1c\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "SHLDRPA4",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 17,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 4 of 16, counting from 1\nValue: 167 mA    Limit: 198 mA\nMask of all failed channels: 0x38->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 11,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD2 Channel 1 of 16, counting from 1\nValue: 245 mA, Limit: 348 mA\nMask of failed channels: 0xe7\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "8Ch Body FullFOV",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 11,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 3 of 16, counting from 1\nValue: 170 mA    Limit: 198 mA\nMask of all failed channels: 0x3c->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 11,
+  "message_number": 2274023,
+  "type": "HOST\tNSP",
+  "message": "Coil Fault - Open Circuit\nA multicoil bias fault was detected.\nReseat all coils and check coil connections.\n\nConnector: Port A\nChannels faulted: 0x10\nFirst channel: 5 of 8, counting from 1\nFault value: 7943 mV, Channel: 5->\n\r",
+  "coil": "HD Foot Ankle",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 11,
+  "message_number": 2276129,
+  "type": "HOST\tNSP",
+  "message": "Coil Connection Error.\nA receive coil was detected with body transmit disabled.\n\nConnector: Port 1 (P1)->\n\r",
+  "coil": "Body 24 AA1",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 9,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD2 Channel 1 of 16, counting from 1\nValue: 245 mA, Limit: 348 mA\nMask of failed channels: 0xc7\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "8Ch Body FullFOV",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 9,
+  "message_number": 2274023,
+  "type": "HOST\tNSP",
+  "message": "Coil Fault - Open Circuit\nA multicoil bias fault was detected.\nReseat all coils and check coil connections.\n\nConnector: Port 1 (P1)\nChannels faulted: 0xffff\nFirst channel: 1 of 32, counting from 1\nFault value: 7943 mV, Channel: 9->\n\r",
+  "coil": "Body 36 AA2",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 8,
+  "message_number": 2274023,
+  "type": "HOST\tNSP",
+  "message": "Coil Fault - Open Circuit\nA multicoil bias fault was detected.\nReseat all coils and check coil connections.\n\nConnector: Port 1 (P1)\nChannels faulted: 0xff00\nFirst channel: 9 of 32, counting from 1\nFault value: 7943 mV, Channel: 9->\n\r",
+  "coil": "HD Breast",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 8,
+  "message_number": 2276129,
+  "type": "HOST\tNSP",
+  "message": "Coil Connection Error.\nA receive coil was detected with body transmit disabled.\n\nConnector: Multicoil B->\n\r",
+  "coil": "HNS CTL456",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 7,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 1 of 16, counting from 1\nValue: 250 mA    Limit: 298 mA\nMask of all failed channels: 0x3f->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 7,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 1 of 16, counting from 1\nValue: 244 mA    Limit: 298 mA\nMask of failed channels: 0x3f\nCh 1-8 : Legacy MC Conn\nCh 17-24 : Conn A\nCh 25-32 : Conn B->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 7,
+  "message_number": 2273015,
+  "type": "HOST\tNSP",
+  "message": "Coil disconnected while scanning or running calibrations.\nConnector: Port 2 (P2)->\n\r",
+  "coil": "Head+Neck 40",
+  "psd": "T2flair"
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 2 of 16, counting from 1\nValue: -8 mA, Limit: 0 mA\nMask of failed channels: 0x2a2\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "Fiesta"
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 3 of 16, counting from 1\nValue: 167 mA    Limit: 248 mA\nMask of all failed channels: 0xc->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 3 of 16, counting from 1\nValue: 252 mA    Limit: 298 mA\nMask of failed channels: 0x3c\nCh 1-8 : Legacy MC Conn\nCh 17-24 : Conn A\nCh 25-32 : Conn B->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2274023,
+  "type": "HOST\tNSP",
+  "message": "Coil Fault - Open Circuit\nA multicoil bias fault was detected.\nReseat all coils and check coil connections.\n\nConnector: Port 2 (P2)\nChannels faulted: 0x80004c00\nFirst channel: 11 of 32, counting from 1\nFault value: 7943 mV, Channel: 11->\n\r",
+  "coil": "Head 24",
+  "psd": "T2flair"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD2 Channel 2 of 16, counting from 1\nValue: 258 mA, Limit: 298 mA\nMask of failed channels: 0xfe\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "HNS CTL456",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1 Channel 1 of 16, counting from 1\nValue: 0 mA, Limit: 98 mA\nMask of failed channels: 0xa9\nMCD1 1-8  : A or C\nMCD1 9-16 : B\nMCD2 1-8  : B or Legacy MC\nMCD2 9-16 : C->\n\r",
+  "coil": "HD TRknee PA",
+  "psd": "FGRE-XL"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 7 of 16, counting from 1\nValue: -6 mA, Limit: 0 mA\nMask of failed channels: 0xc440\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "BODY",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 6 of 16, counting from 1\nValue: -8 mA, Limit: 0 mA\nMask of failed channels: 0xa0a0\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "Fiesta"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2273015,
+  "type": "HOST\tNSP",
+  "message": "Coil disconnected while scanning or running calibrations.\nConnector: Port A->\n\r",
+  "coil": "HDBreast",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 3 of 16, counting from 1\nValue: 170 mA    Limit: 298 mA\nMask of failed channels: 0xc\nCh 1-8 : Legacy MC Conn\nCh 17-24 : Conn A\nCh 25-32 : Conn B->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2252305,
+  "type": "HOST\tNSP",
+  "message": "TR Driver Fault Detected - Open Circuit.\nSource of Fault is Body TR.\nValue: 96 mA    Limit: 2400 mA->\n\r",
+  "coil": "BODY",
+  "psd": "cal"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 5 of 16, counting from 1\nValue: -10 mA, Limit: 0 mA\nMask of failed channels: 0xa0f0\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "GEM Flex LG Full",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 10 of 16, counting from 1\nValue: -8 mA, Limit: 0 mA\nMask of failed channels: 0x3e00\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "HD BodyFull",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2252301,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault Detected - Open Circuit.\nTry re-seating all coil connectors.\u0001\nMCD1    Channel 1 of 16, counting from 1\nValue: 252 mA    Limit: 298 mA\nMask of failed channels: 0xf\nCh 1-8 : Legacy MC Conn\nCh 17-24 : Conn A\nCh 25-32 : Conn B->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 9 of 16, counting from 1\nValue: -8 mA, Limit: 0 mA\nMask of failed channels: 0xff00\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "HD Wrist",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 1 of 16, counting from 1\nValue: -9 mA, Limit: 0 mA\nMask of failed channels: 0x85f3\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "Fiesta"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2252395,
+  "type": "HOST\tNSP",
+  "message": "Multicoil Bias Fault - Transmit Fault.\nTry re-seating all coil connectors.\nMCD2 Channel 5 of 16, counting from 1\nValue: -9 mA, Limit: 0 mA\nMask of failed channels: 0x64d0\nMCD1 1-8  : A\nMCD1 9-16 : UNO\nMCD2 1-8  : B\nMCD2 9-16 : B->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "Fiesta"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2273000,
+  "type": "HOST\tNSP",
+  "message": "Coil validation error:\nCoil ID device was not detected on a coil.\nCoil ID is required for this connector.\nPlease try connecting coil again.\nConnector: Port A->\n\r",
+  "coil": "Body 24 AA3",
+  "psd": "efgre3d_aspir"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2276129,
+  "type": "HOST\tNSP",
+  "message": "Coil Connection Error.\nA receive coil was detected with body transmit disabled.\n\nConnector: Port A->\n\r",
+  "coil": "HNS CTL456",
+  "psd": "FSE-XL"
+ }
+]

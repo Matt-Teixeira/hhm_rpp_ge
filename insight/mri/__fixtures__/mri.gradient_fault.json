@@ -1,0 +1,242 @@
+[
+ {
+  "templates_seen": 458,
+  "message_number": 2250082,
+  "type": "HOST\tNSP",
+  "message": "Z Axis Gradient Data Overrange Occurred. \nThe pulse data from upper stream of GP includes higher SR than spec \nor GP had a calculation error. \nIf IREF_SEQ Overrange also occurred, the pulse data itself was abnormal \nand we would suspect PSD error.->\n\r",
+  "coil": "HD BodyFull",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 265,
+  "message_number": 2244860,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a SGA Power Supply OverCurrent Fault.->\n\r",
+  "coil": "HRWRIST",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 85,
+  "message_number": 2244845,
+  "type": "HOST\tNSP",
+  "message": "The GP reported mutliple Gradient Amplifier Y Axis Current Distortion \nFaults.->\n\r",
+  "coil": "BODY",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 66,
+  "message_number": 2244862,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a SGA Power Supply Under Voltage Fault.->\n\r",
+  "coil": "8HRBRAIN",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 34,
+  "message_number": 2244847,
+  "type": "HOST\tNSP",
+  "message": "The GP reported a Gradient Amplifier Y Axis Internal Wiring \nFault or Control Undervoltage.->\n\r",
+  "coil": "HRWRIST",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 26,
+  "message_number": 2244857,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting SGA Power Supply Power Off Fault.->\n\r",
+  "coil": "SHLDRPA4",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 20,
+  "message_number": 2244845,
+  "type": "HOST\tNSP",
+  "message": "The GP reported mutliple Gradient Amplifier X Axis Current Distortion \nFaults.->\n\r",
+  "coil": "BODY",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2244851,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Gradient Amplifier X Axis Current Distortion \nFault.->\n\r",
+  "coil": "BODY",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 7,
+  "message_number": 2244850,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Gradient Amplifier Y Axis UnderVoltage Fault.->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 2244847,
+  "type": "HOST\tNSP",
+  "message": "The GP reported a Gradient Amplifier X Axis Internal Wiring \nFault or Control Undervoltage.->\n\r",
+  "coil": "HDBreast",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2244573,
+  "type": "HOST\tNSP",
+  "message": "The GP reported a Gradient Amplifier X Axis Internal Wiring Fault \nor Control Undervoltage.->\n\r",
+  "coil": "HNS Head",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2244858,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting SGA Power Supply Internal Wiring Fault\nor Control Undervoltage.->\n\r",
+  "coil": "HRWRIST",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2250109,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Gradient Clock Stop. The GP stopped\nreceiving a gradient clock signal from the systems cabinet.->\n\r",
+  "coil": "HNS Head",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2244851,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Gradient Amplifier Y Axis Current Distortion \nFault.->\n\r",
+  "coil": "BODY",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2244860,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: Grad ECC Verification     Iteration: 11 of infinite    Action: 1\nTask ID: 0xd109748     Time: 25900253      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply OverCurrent Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2244861,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a SGA Power Supply Over Voltage Fault.->\n\r",
+  "coil": "HRWRIST",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2250082,
+  "type": "HOST\tNSP",
+  "message": "Z Axis Gradient Data Overrange Occurred.->\n\r",
+  "coil": "HD TRknee PA",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244850,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Gradient Amplifier X Axis UnderVoltage Fault.->\n\r",
+  "coil": "8Ch Body Upper",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244860,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: Grad ECC Verification     Iteration: 3 of infinite    Action: 1\nTask ID: 0xd1096c0     Time: 13916574      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply OverCurrent Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244860,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: Grad Hammer     Iteration: 5 of infinite    Action: 1\nTask ID: 0xd109570     Time: 7246620      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply OverCurrent Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244862,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: Grad Frame/Clk     Iteration: 2 of infinite    Action: 1\nTask ID: 0xd1096c0     Time: 13836279      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply Under Voltage Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244862,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: Grad Frame/Clk     Iteration: 10 of infinite    Action: 1\nTask ID: 0xd109748     Time: 25819970      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply Under Voltage Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244862,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: Grad ECC Verification     Iteration: 5 of infinite    Action: 1\nTask ID: 0xd109570     Time: 7232190      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply Under Voltage Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244897,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Y Axis OverTemperature Fault.\nSystem will wait 5 minutes before attempting recovery.->\n\r",
+  "coil": "8CTL456",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2244897,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a X Axis OverTemperature Fault.\nSystem will wait 5 minutes before attempting recovery.->\n\r",
+  "coil": "HNS Head",
+  "psd": "Vasc TOF SPGR"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2244573,
+  "type": "HOST\tNSP",
+  "message": "The GP reported a Gradient Amplifier Y Axis Internal Wiring Fault \nor Control Undervoltage.->\n\r",
+  "coil": "HD Foot Ankle",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2244573,
+  "type": "HOST\tNSP",
+  "message": "The GP reported a Gradient Amplifier Z Axis Internal Wiring Fault \nor Control Undervoltage.->\n\r",
+  "coil": "HNS_ CTL12",
+  "psd": "MERGE"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2244847,
+  "type": "HOST\tNSP",
+  "message": "The GP reported a Gradient Amplifier X Axis Internal Wiring \nFault or Control Undervoltage or Fan Fault.\n(Fan fault is for SSSA or the later amplifier.)->\n\r",
+  "coil": "HNS Head",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2244850,
+  "type": "HOST\tNSP",
+  "message": "The GP is reporting a Gradient Amplifier Z Axis UnderVoltage Fault.->\n\r",
+  "coil": "HEAD",
+  "psd": "FGRE-XL"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2244860,
+  "type": "HOST\tdiagCoord",
+  "message": "Diagnostic: TR DD MC Diag     Iteration: 1 of 1    Action: 1\nTask ID: 0xd062dc8     Time: 32232      Object: SCP\nFunction: Gradient: N/A\nThe GP is reporting a SGA Power Supply OverCurrent Fault.->\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

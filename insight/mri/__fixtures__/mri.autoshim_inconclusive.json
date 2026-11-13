@@ -1,0 +1,90 @@
+[
+ {
+  "templates_seen": 523,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1: 21.88 %, plane 2: 40.04 %, plane 3: 14.94 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 327,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1: 21.92 %, plane 2: 18.61 %, plane 3:  3.55 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 221,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1:  9.92 %, plane 2: 11.57 %, plane 3: 18.11 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 166,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1: 18.87 %, plane 2:  0.00 %, plane 3: 40.44 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 157,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1:  6.22 %, plane 2:  8.14 %, plane 3:  6.36 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 119,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1:  7.69 %, plane 2: 24.23 %, plane 3:  8.76 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 101,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1:  6.30 %, plane 2:  0.00 %, plane 3: 11.84 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 33,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive. Shim values were not changed.\n Points used for plane 1: 19.45 %, plane 2:  0.00 %, plane 3:  9.52 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive.  Shim values were not changed.  \nPoints used for plane 1: 24.29 %, plane 2:  6.39 %, plane 3: 38.38 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive.  Shim values were not changed.  \nPoints used for plane 1: 16.16 %, plane 2: 24.70 %, plane 3: 61.38 %\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2224708,
+  "type": "HOST\tpsc",
+  "message": "Autoshim results inconclusive.  Shim values were not changed.  \nPoints used for plane 1:  7.42 %, plane 2: 17.05 %, plane 3: 44.72 %\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

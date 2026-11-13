@@ -1,0 +1,242 @@
+[
+ {
+  "templates_seen": 5405,
+  "message_number": 103453,
+  "type": "HOST\tNSP",
+  "message": "Warning: Home switch position appears to have moved.\nLast home position: 41938 counts\nNew home position:  42778 counts\n(Approx. 32 counts/mm)->\n\r",
+  "coil": "HNS Head",
+  "psd": "BRAVO"
+ },
+ {
+  "templates_seen": 2779,
+  "message_number": 103466,
+  "type": "HOST\tNSP",
+  "message": "Cradle motion oscillation has been detected during the move.\nPlease wait a moment and try the move again.\nMove Sequence: 192\n\r",
+  "coil": "HNS CTL12",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 670,
+  "message_number": 103413,
+  "type": "HOST\tNSP",
+  "message": "The table is moving faster or slower than what was commanded.\nPlease check for obstructions and try to move the table again.\nIf this problem persists, contact service for support.\nExpected: -25000um/s\nActual:   -8170um/s->\n\r",
+  "coil": "GEM Flex LG Full",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 622,
+  "message_number": 2224842,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it moved differently than expected.\nThis can occur if the table was moved by hand.\n\nLast Velocity Commanded: -25 mm/sec\nMeasured Cradle Velocity: -6 mm/sec->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 358,
+  "message_number": 2268955,
+  "type": "HOST\tNSP",
+  "message": "The system has detected more than expected clutch slip during cradle motion,\nmotion may be impaired.\nExpected Velocity: 100000 um/s\nPosition Velocity: 4980 um/s\nMotor Speed:       15523 um/s\nPosition:          2033662 um->\n\r",
+  "coil": "Body 48 AA",
+  "psd": "LAVA"
+ },
+ {
+  "templates_seen": 227,
+  "message_number": 2268955,
+  "type": "HOST\tNSP",
+  "message": "The system has detected more than expected clutch slip during cradle motion,\nmotion may be impaired.\nExpected Velocity: -100000 um/s\nPosition Velocity: -3180 um/s\nMotor Speed:       10510 um/s\nPosition:          2133310 um->\n\r",
+  "coil": "Body 24 AA2",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 210,
+  "message_number": 2268821,
+  "type": "HOST\tNSP",
+  "message": "Cradle didn't start moving when requested.\nLast stop position: 2034824 um\nCurrent position:   2035259 um\nTarget position:    2036364 um->\n\r",
+  "coil": "Body 48 AA",
+  "psd": "LAVA"
+ },
+ {
+  "templates_seen": 204,
+  "message_number": 103453,
+  "type": "HOST\tNSP",
+  "message": "Warning: Home switch position appears to have moved.\nLast home position: -720 counts\nNew home position:  90 counts\n(Approx. 32 counts/mm)->\n\r",
+  "coil": "HD BodyFull",
+  "psd": "LAVA"
+ },
+ {
+  "templates_seen": 200,
+  "message_number": 103418,
+  "type": "HOST\tNSP",
+  "message": "Cradle move failed to reach target position within position tolerance\nTarget: 1694495 um\nActual: 1375865 um\nTolerance: 500 um->\n\r",
+  "coil": "HNS CTL12",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 161,
+  "message_number": 103413,
+  "type": "HOST\tNSP",
+  "message": "The table is moving faster or slower than what was commanded.\nPlease check for obstructions and try to move the table again.\nIf this problem persists, contact service for support.\nExpected: -25000um/s\nActual:   361um/s->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 160,
+  "message_number": 2261552,
+  "type": "HOST\tNSP",
+  "message": "The table moved off of scan plane while scanning.\n\nScan location: -44411\nOn plane location: -44413\nOff plane location: -44386->\n\r",
+  "coil": "HNS CTLTOP",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 147,
+  "message_number": 103413,
+  "type": "HOST\tNSP",
+  "message": "The table is moving faster or slower than what was commanded.\nPlease check for obstructions and try to move the table again.\nIf this problem persists, contact service for support.\nExpected: 100000um/s\nActual:   49898um/s->\n\r",
+  "coil": "HNS CTL12",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 125,
+  "message_number": 2268836,
+  "type": "HOST\tNSP",
+  "message": "Cradle move failed to reach target position within position tolerance\nTarget: 2036364 um\nAcutal: 2033454 um\nTolerance: 500 um\n\r",
+  "coil": "Body 48 AA",
+  "psd": "LAVA"
+ },
+ {
+  "templates_seen": 94,
+  "message_number": 2224842,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it moved differently than expected.\nThis can occur if the table was moved by hand.\n\nLast Velocity Commanded: -25 mm/sec\nMeasured Cradle Velocity:  2 mm/sec->\n\r",
+  "coil": "HD BodyUpper",
+  "psd": "LAVA"
+ },
+ {
+  "templates_seen": 93,
+  "message_number": 2224842,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it moved differently than expected.\nThis can occur if the table was moved by hand.\n\nLast Velocity Commanded:  100 mm/sec\nMeasured Cradle Velocity: -27 mm/sec->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 57,
+  "message_number": 103419,
+  "type": "HOST\tNSP",
+  "message": "Cradle didn't start moving when requested.  Possible obstruction.\nCheck for obstructions and try to move the cradle again.\nLast stop position: 688941 um\nCurrent position:   689065 um->\n\r",
+  "coil": "HNS Head",
+  "psd": "BRAVO"
+ },
+ {
+  "templates_seen": 53,
+  "message_number": 2268819,
+  "type": "HOST\tNSP",
+  "message": "Velocity tolerance exceeded.\nExpected: 100000um/s\nActual:   120053um/s\n\r",
+  "coil": "Body 24 AA3",
+  "psd": "LAVA"
+ },
+ {
+  "templates_seen": 48,
+  "message_number": 2261552,
+  "type": "HOST\tNSP",
+  "message": "The table moved off of scan plane while scanning.\n\nScan location: 26045\nOn plane location: 26047\nOff plane location: 26021->\n\r",
+  "coil": "HNS CTL456",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 39,
+  "message_number": 103414,
+  "type": "HOST\tNSP",
+  "message": "Cradle didn't start moving when requested.  Possible obstruction.\nCheck for obstructions and try to move the cradle again.\nLast stop position: 770350 um\nCurrent position:   770350 um\nTarget position:    1716150 um->\n\r",
+  "coil": "GEM Flex Medium",
+  "psd": "PROPELLER"
+ },
+ {
+  "templates_seen": 36,
+  "message_number": 2268879,
+  "type": "HOST\tNSP",
+  "message": "Cradle didn't start moving when requested.\nLast stop position: 97884 um\nCurrent position:   97884 um->\n\r",
+  "coil": "TL Spine 24 3",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 31,
+  "message_number": 2268819,
+  "type": "HOST\tNSP",
+  "message": "Velocity tolerance exceeded.\nExpected: -25000um/s\nActual:   -1040um/s\n\r",
+  "coil": "HDBreast",
+  "psd": "VIBRANT"
+ },
+ {
+  "templates_seen": 14,
+  "message_number": 2224842,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it moved differently than expected.\nThis can occur if the table was moved by hand.\n\nLast Velocity Commanded:  100 mm/sec\nMeasured Cradle Velocity:  124 mm/sec->\n\r",
+  "coil": "HNS Head",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 13,
+  "message_number": 2224864,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it was moving faster than expected.\nThis can occur if the table was moved by hand.\n\nLimit: 150 mm/sec\nLast Velocity Commanded: -25 mm/sec\nMeasured Cradle Velocity: -160 mm/sec->\n\r",
+  "coil": "HNS CTL123",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 10,
+  "message_number": 2224864,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it was moving faster than expected.\nThis can occur if the table was moved by hand.\n\nLimit: 150 mm/sec\nLast Velocity Commanded:  100 mm/sec\nMeasured Cradle Velocity:  162 mm/sec->\n\r",
+  "coil": "HNS CTL456",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2224842,
+  "type": "HOST\tNSP",
+  "message": "SRI Hardware Error:  Unexpected cradle motion.\nThis error would occur if the table were moved by hand.\nPlease run SRI diagnostics if that is not the case.\n\nExpected Cradle Velocity: 100 mm/sec\nMeasured Cradle Velocity: 0 mm/sec\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2224864,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it was moving faster than expected.\nThis can occur if the table was moved by hand.\n\nLimit: 150 mm/sec\nLast Velocity Commanded:  0 mm/sec\nMeasured Cradle Velocity: -182 mm/sec->\n\r",
+  "coil": "8CTL456",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2268955,
+  "type": "HOST\tNSP",
+  "message": "The system has detected more than expected clutch slip during cradle motion,\nmotion may be impaired.\nExpected Velocity: 12500 um/s\nPosition Velocity: -8783 um/s\nMotor Speed:       33233 um/s\nPosition:          75581 um->\n\r",
+  "coil": "HDBreast",
+  "psd": "VIBRANT"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 103413,
+  "type": "HOST\tNSP",
+  "message": "The table is moving faster or slower than what was commanded.\nPlease check for obstructions and try to move the table again.\nIf this problem persists, contact service for support.\nExpected: 100000um/s\nActual:   -51um/s->\n\r",
+  "coil": "HD BodyFull",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2224864,
+  "type": "HOST\tNSP",
+  "message": "Table motion was stopped because it was moving faster than expected.\nThis can occur if the table was moved by hand.\n\nLimit: 150 mm/sec\nLast Velocity Commanded: -25 mm/sec\nMeasured Cradle Velocity:  198 mm/sec->\n\r",
+  "coil": "HNS Head",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2268819,
+  "type": "HOST\tNSP",
+  "message": "Velocity tolerance exceeded.\nExpected: -100000um/s\nActual:   0um/s\n\r",
+  "coil": "Breast SMI",
+  "psd": "efgre3d_aspir"
+ }
+]

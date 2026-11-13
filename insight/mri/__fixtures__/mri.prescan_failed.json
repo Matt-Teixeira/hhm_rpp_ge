@@ -1,0 +1,322 @@
+[
+ {
+  "templates_seen": 635,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Driver Module error occurred.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 412,
+  "message_number": 2224666,
+  "type": "HOST\tNSP",
+  "message": "Auto Prescan failed, Please Try Again.\n\r",
+  "coil": "HNSp CTLTOP",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 371,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, signal too small. Please try Manual Prescan.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 176,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, possible data acquisition error.\n Try again or use Manual Prescan.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 109,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, The IRF board clock or fiber cables were interrupted. \nTPS Reset required before scanning.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 98,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, RF coil air temperature out of specification\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 87,
+  "message_number": 2255008,
+  "type": "HOST\tLxMxConsumer",
+  "message": "Auto Prescan failed, Stop button was pressed.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 81,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, RF Hub RF/bias setup not complete\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 63,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Scan room door is open.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 60,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Invalid coil connected.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 47,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Master Gradient is not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 42,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Gradients are not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 41,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, possible data acquisition error. \n Try again or use Manual Prescan.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 31,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, Driver Module error occurred.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 11,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Asynchronous stop scan.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 11,
+  "message_number": 2224666,
+  "type": "HOST\tNSP",
+  "message": "Auto Prescan failed, UPM Scale Factors setup incomplete\n\r",
+  "coil": "HNS Head",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 10,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, RF amplifier is not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 10,
+  "message_number": 2255008,
+  "type": "HOST\tLxMxConsumer",
+  "message": "Auto Prescan failed, The table is not at scan plane.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 7,
+  "message_number": 2224666,
+  "type": "HOST\tNSP",
+  "message": "Auto Prescan failed, Stop button was pressed.\n\r",
+  "coil": "HNS Head",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 7,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, Master Gradient is not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, RF Hub RF/bias setup not complete\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, Gradients are not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Setting of R1 failed. Please try again or perform a TPS reset if problem repeats.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Autoshim failure in sending scan setup packet. Please try again or perform a TPS reset if problem repeats.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, Scan room door is open.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, RF coil air temperature out of specification\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, possible error while updating hardware.\n Try again or use Manual Prescan.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "\nManual Prescan failed, by Operator Request.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, The IRF board clock or fiber cables were interrupted. \nTPS Reset required before scanning.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, Please Try Again.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Gradient amplifiers are not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, SCP received an unexpected packet, check error log.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, RF amplifier is not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, 999\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2224667,
+  "type": "HOST\tpsc",
+  "message": "Manual Prescan failed, Failure in setting up Data Acquisition Control. \nPlease try again or perform a TPS reset if problem repeats.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Universal Power Monitor 2 is not ready.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, 1\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2255008,
+  "type": "HOST\tLxMxConsumer",
+  "message": "Auto Prescan failed, \n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, Setting of center frequency failed. Please try again or perform a TPS reset if problem repeats.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2224666,
+  "type": "HOST\tpsc",
+  "message": "Auto Prescan failed, cradle must be advanced from inside scan room with an IntelliTouch landmark.\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

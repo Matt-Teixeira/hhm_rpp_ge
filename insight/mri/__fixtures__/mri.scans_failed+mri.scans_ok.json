@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 18429,
+  "message_number": 2218650,
+  "type": "HOST\tscn",
+  "message": "Scn: No of Successful Scan = 12 , No of Failed Scan = 0\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

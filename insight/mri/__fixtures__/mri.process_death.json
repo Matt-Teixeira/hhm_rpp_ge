@@ -1,0 +1,306 @@
+[
+ {
+  "templates_seen": 186,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process DHI, pid 13379 terminated by unexpected signal 9\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 185,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process diagCoord, pid 12330 terminated by unexpected signal 9\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 185,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process envMon, pid 12713 terminated by unexpected signal 9\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 173,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process autoview, pid 15387 terminated by unexpected signal 9\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 155,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "WavDisp died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 121,
+  "message_number": 200002354,
+  "type": "HOST\thostMonitor",
+  "message": "An unexpected death of autoview caused it to be restarted.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 61,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: prescanserver, signal causing \nthe crash: 6, time: 05:00:37, date: 2025-09-09, UTC: 1757412037.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 53,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "autoview died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 38,
+  "message_number": 200002354,
+  "type": "HOST\thostMonitor",
+  "message": "An unexpected death of RtpHost caused it to be restarted.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 18,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "startJVMmxsystem died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 15,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process app, pid 12049 terminated by unexpected signal 11\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 10,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: dpserver, signal causing \nthe crash: 6, time: 05:01:43, date: 2025-09-19, UTC: 1758276103.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 10,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: dpserver, signal causing \nthe crash: 6, time: 05:00:37, date: 2026-01-16, UTC: 1768557637.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of WindowGroupManager_MV.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of RTPSIServer.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 6,
+  "message_number": 200002354,
+  "type": "HOST\thostMonitor",
+  "message": "An unexpected death of irm caused it to be restarted.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: prescanserver, signal causing \nthe crash: 6, time: 05:00:30, date: 2026-05-19, UTC: 1779181230.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of RTIA.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 200002354,
+  "type": "HOST\thostMonitor",
+  "message": "An unexpected death of AUTOVOICE caused it to be restarted.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 5,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process AUTOVOICE, pid 18252 terminated by unexpected signal 6\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: OrchestraCartes, signal causing \nthe crash: 6, time: 08:51:02, date: 2026-04-30, UTC: 1777553462.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: rtpserver, signal causing \nthe crash: 6, time: 15:47:18, date: 2025-10-07, UTC: 1759870038.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 4,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of cim.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of scn.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "EReportingIcon died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "OnlineHelp died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process scn, pid 15461 terminated by unexpected signal 6\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: OrchestraCartes, signal causing \nthe crash: 6, time: 16:30:18, date: 2026-06-19, UTC: 1781911818.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of NSP.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 200002354,
+  "type": "HOST\thostMonitor",
+  "message": "An unexpected death of OnlineHelp caused it to be restarted.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "irm died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "fsa died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 200002356,
+  "type": "HOST\thostMonitor",
+  "message": "spectro died unexpectedly, no action being taken.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[i05:00:40). Process: ERROR, signal causing \nthe crash: :, time: Found, date: core, UTC: file.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 2223878,
+  "type": "HOST\tNSP",
+  "message": "A process has crashed on the VRE (00:00:00:00:00:00[icn1]). Process: rdsserver, signal causing \nthe crash: 6, time: 05:00:38, date: 2025-07-04, UTC: 1751623238.->\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 200002352,
+  "type": "HOST\thostMonitor",
+  "message": "A HOST_SHUTDOWN was initiated by the death of RIR.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 200002354,
+  "type": "HOST\thostMonitor",
+  "message": "An unexpected death of PowerMon caused it to be restarted.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 200002381,
+  "type": "HOST\thostMonitor",
+  "message": "Process ist, pid 23425 terminated by unexpected signal 13\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

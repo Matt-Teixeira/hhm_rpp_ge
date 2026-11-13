@@ -1,0 +1,18 @@
+[
+ {
+  "templates_seen": 747,
+  "message_number": 2218663,
+  "type": "HOST\tscn",
+  "message": "System is being used in GE-Service Mode i.e Patient ID is GESERVICE.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 740,
+  "message_number": 2218664,
+  "type": "HOST\tscn",
+  "message": "System is being used in Normal Mode i.e Patient ID is other than GESERVICE.\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

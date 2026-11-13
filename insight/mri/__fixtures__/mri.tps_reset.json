@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 590,
+  "message_number": 2227557,
+  "type": "HOST\tsdm",
+  "message": "***    Reset/Download TPS In progress.    ***\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

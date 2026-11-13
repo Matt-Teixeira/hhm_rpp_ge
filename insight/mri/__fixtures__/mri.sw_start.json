@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 1323,
+  "message_number": 200002347,
+  "type": "HOST\thostMonitor",
+  "message": "The System Software is starting.....\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

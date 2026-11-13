@@ -11,7 +11,12 @@
 - **MRI-1 (migration 009): BUILT 2026-11-13, rehearsed on a local
   throwaway DB** (§6). **Codex review CLOSED 2026-11-13: no blocking
   defect** (`REVIEW-MRI1-SCHEMA-CODEX.md`, §6.6); 009 unchanged. Applied
-  by the user after the CV-5 close-out (§6.5). **Next: MRI-2, the extract.**
+  by the user after the CV-5 close-out (§6.5).
+- **MRI-2 (extract): BUILT 2026-11-13, uncommitted** (§7): new files in
+  `insight/mri/`. Prod dry run (read-only) equal to the independent SQL on
+  every cell; write path rehearsed on the local DB. **Next: the Codex
+  review** (`REVIEW-MRI2-EXTRACT-HANDOFF.md`). First prod write only after
+  009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
   MRI-safe.** They exclude `cv.*` rather than select CT keys, so the first
   `mri.*` catalog row on prod would fail them. A CT code change (C1-MRI),
@@ -285,7 +290,7 @@ The CV path, on CT's architecture:
 | **MRI-0 Decide** ✅ 2026-11-13 | this section, §3 answered | the user's answers recorded | done |
 | **MRI-2a Code inventory** ✅ 2026-11-13 (§5) | `PLAN-MRI-INSIGHTS-CODES.md`: every code above the §3 Q3 cut, with category, metric and evidence (read-only) | the mapping agreed | now (read-only) |
 | **MRI-1 Schema** (built 2026-11-13, §6) | migration 009: `ge_mri_facts`, `ge_mri_daily`, catalog rows, new objects only | tests, a local rehearsal, a Codex review (closed 2026-11-13, no blocking defect), applied by the user | built now, applied after the CV-5 close-out |
-| **MRI-2 Extract** | `insight/mri/` rules + extract + backfill CLI (dry run, rehearse, apply), as CV-2 | dry run equals independent SQL per system × metric; review closed | built now as new files; written to prod after 009 |
+| **MRI-2 Extract** | `insight/mri/` rules + extract + backfill CLI (dry run, rehearse, apply), as CV-2 | dry run equals independent SQL per system × metric; review closed | built 2026-11-13 (§7); written to prod after 009, C1-MRI, C2-MRI |
 | **MRI-3 Derive** | daily, capabilities, sessions, inventory; `verify_derive` | verifiers pass; review closed | after MRI-2 |
 | **MRI-4 Findings** | replay the history, propose rules with evidence, agree, build, `verify-findings` | replay drift 0; review closed | after MRI-3 |
 | **MRI-5 Stage** | `run_mri_insight` after `GE_MRI`, shared wrapper, `INSIGHT_MRI_ENABLED` | as CV §12.4: 7 days clean, CT and CV unchanged | after the CV-5 close-out |
@@ -624,6 +629,14 @@ The CT and CV suites still pass (unchanged): `insight/test` (8 files),
   interlock pattern). This is a CT code change, so after the CV-5 close-out,
   with its own review, the stage rehearsal and a deploy.
 
+  The change also updates two tests that pin today's CV-only filters:
+  `insight/test/cv_scope.test.js` (its in-memory catalog would add `mri.*`
+  / `mri_` rows) and `insight/cv/test/cv.test.js` "C1: every CV catalog
+  row is one the CT verifiers' filters leave out" (it matches the exact
+  `NOT LIKE 'cv.%'` text). `insight/mri/test/mri.test.js` "C1-MRI
+  interlock" pins that the CT verifiers are not MRI-aware yet; it flips in
+  the same change.
+
   The CV verifiers already select `cv.*` and are MRI-safe.
   `insight/cv/stage.js`'s "CT unchanged" fingerprints exclude only `cv.`,
   so MRI rows count as "CT" there. They stay constant during a CV run,
@@ -695,3 +708,126 @@ node migrations/run.js up --apply    # type the DB name, then APPLY
 - **Partition horizon:** 2028-12 is a maintenance point. The extract
   counts records outside the partitions, and MRI-3's verify flags any. A
   migration adds months before 2028-06.
+
+## 7. MRI-2 extract: `insight/mri/` (built 2026-11-13, uncommitted)
+
+**Files** (all new; nothing in the CT or CV run loads them, pinned by the
+isolation tests):
+- `rules.js`: the agreed mapping (§5.2) as a registry: `mri.error` + the
+  22 named metrics, each with `version`, catalog `category`, MRI `group`
+  and its code → matcher map. `validate()` refuses a non-`mri.` key, a bad
+  group, or a code in two metrics (except 2218650, the two scan counts).
+- `codes_reviewed.js`: the 823 reviewed codes (Q-M7).
+- `extract.js`: stream `log.ge_mri_gesys` by id (50k batches). `host_local`
+  = 1970-01-01 + `epoch` (the 009 CHECK). Dedupe on the natural key: the
+  first source row (lowest id) gives the facts, later copies are counted
+  as duplicates. Unstorable rows are counted by reason (no system, key,
+  code, `host_datetime`, or outside the partitions).
+- `load.js`: the write path, modelled on `insight/cv/load.js`:
+  - insight_writer only, advisory lock `insight_ge_mri`;
+  - per batch, one transaction: the conflict check, the upsert on
+    `ge_mri_facts_natural_key` (DO UPDATE only for a higher rule version;
+    the key and the first source row are never changed), the
+    `ge_mri_extract` watermark, and the touched device days in
+    `ge_mri_derive.pending` for MRI-3;
+  - late-commit re-read (rows below the watermark captured within 2 h of
+    it whose record has no facts yet), as CT and CV;
+  - preflight: not a superuser, schema ≥ 9, C2-MRI (schema USAGE, then
+    SELECT on the source), and for `--apply` the C1-MRI interlock (each CT
+    verifier exports `MRI_AWARE = true`); it warns when fewer than 18
+    months of partitions are left.
+- **The conflict rule (§6.6):** one key with two different records
+  (md5 of code, type and message) is a conflict. Within a batch it is
+  found in JS; against earlier batches through the facts' unique index and
+  the source primary key. A conflict refuses the batch (nothing written,
+  watermark unchanged, job status `error`) and fails `verify` and the dry
+  run. A re-sent identical copy is a duplicate, not a conflict.
+- `reconcile_sql.js`: the independent SQL, written from §5.2's definitions
+  (not from `rules.js`): per (system, metric), `mri.error` per (system,
+  code), the scan sums, coverage (counted + duplicates + unstorable =
+  rows) and conflicts.
+- `verify.js`: the exit check over the watermark range: all of the above
+  equal, coverage, 0 conflicts, the `mri.*` catalog = the registry.
+- `cli.js`: `dry-run` (read-only, no prompt), `backfill --rehearse`
+  (asks for the DB name; one transaction, rolled back, with a second pass
+  and verify), `backfill --apply` (DB name, then APPLY), `verify`
+  (read-only).
+- `tools/build_fixtures.js` + `__fixtures__/` (22 files, 281 samples):
+  real rows of the 84 named codes, labelled by the independent SQL, with
+  host names, system ids, MAC / IP addresses, serials, UDIs and AE titles
+  masked; a sample is kept only if it classifies exactly as the unmasked
+  row. Only the rule inputs are kept (code, `HOST\t<process>`, message,
+  coil, psd).
+- `test/mri.test.js`: 21 tests (no DB).
+
+### 7.1 Tests
+
+`node insight/mri/test/mri.test.js`: 21 of 21. Every other suite still
+passes (272 tests in 22 files): CT 110, CV 71, migrations 29, parsers 41.
+
+### 7.2 Prod dry run (read-only, 2026-11-13 19:23 UTC)
+
+`INSIGHT_PG_USER= node insight/mri/cli.js dry-run`, 22 s; log in
+`~/cv_d3b_evidence/mri/mri2/dry_run_prod.log`:
+
+| | |
+|---|---|
+| source ids | 0 … 5,123,766 |
+| rows | 374,614 = 329,761 records + 44,853 duplicates + 0 unstorable |
+| facts | 438,469 |
+| per (system, metric) | 303 cells, 0 differences |
+| `mri.error` per (system, code) | 2,668 cells, 0 differences |
+| scan sums (ok / failed) per system | 34 cells, 0 differences |
+| natural-key conflicts | 0 (JS and SQL) |
+| rule errors | 0 |
+| codes | 823, 0 unreviewed |
+
+Prod state, read-only: `insight_writer` has USAGE on `log` but no SELECT
+on `log.ge_mri_gesys` (C2-MRI open); schema version 8 (009 not applied);
+no `mri.*` catalog or `ge_mri_*` job rows.
+
+### 7.3 Write path on the local throwaway DB (2026-11-13)
+
+The real code (`run_extract`, `verify`, `dry_run`) through a harness on
+the local socket (`db.js` needs SSL, which a socket doesn't offer).
+374,355 copied prod rows, 009 applied. Logs and harness:
+`~/cv_d3b_evidence/mri/mri2/`.
+- **Refused:** without C2-MRI (also without schema USAGE), with a clear
+  message; `--apply` with the real CT verifiers (C1-MRI not done), naming
+  all three.
+- **Rehearsal:** 438,145 facts, second pass 0, verify PASS on the
+  uncommitted facts (303 + 2,667 + 34 cells equal, coverage, 0 conflicts,
+  catalog 23 = 23), pending days for 17 systems; after the rollback 0
+  facts, 0 catalog rows, 0 jobs. 131 s.
+- **Apply** (C1-MRI simulated in memory in the harness only): 3 batches,
+  verify PASS to the watermark; resumed to the end, verify PASS on all
+  374,355 rows; a run with nothing new: 0.
+- **Edge cases** (synthetic rows in the local copy):
+  - a late commit below the watermark: re-read and stored;
+  - a re-sent identical copy: counted as a duplicate, 0 facts written;
+  - a different record on an existing key: the dry run reports it (JS and
+    SQL) and fails; `--apply` refuses the batch, the watermark stays,
+    status `error`;
+  - after removing the synthetic rows: verify PASS, 438,145 facts.
+
+### 7.4 Open points for the review
+
+- Facts are never deleted: a rule-version bump that stops giving a named
+  fact leaves the old fact (as CV). Not an issue at version 1.
+- `stats.facts` counts facts sent, including no-op re-sends from earlier
+  batches; `upserted` is what was written.
+- The stage entry (`extract_step`) comes with MRI-5; `apply_range` is the
+  lock-free core it will use, as CV's.
+
+### 7.5 First prod write (after the CV-5 close-out; the user runs it)
+
+In order: 009 applied (§6.5); the C2-MRI grant; C1-MRI (a CT change with
+its own review and deploy); then
+```
+node insight/mri/cli.js backfill --rehearse     # DB name; rolled back
+node insight/mri/cli.js backfill --apply        # DB name, then APPLY
+node insight/mri/cli.js verify                  # read-only
+```
+Then the CT and CV verifiers, which must still pass with `mri.*` rows in
+the catalog (that is what C1-MRI makes true).
+

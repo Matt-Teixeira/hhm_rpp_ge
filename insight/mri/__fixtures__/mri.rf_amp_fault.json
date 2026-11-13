@@ -1,0 +1,74 @@
+[
+ {
+  "templates_seen": 171,
+  "message_number": 101255,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Fault.\nError Code: 0x13D,  Error Parameters: 0  0  0  0. ->\n\r",
+  "coil": "QUADKNEE",
+  "psd": "FSE-XL"
+ },
+ {
+  "templates_seen": 47,
+  "message_number": 2254352,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Interface <-> RF Amplifier serial link failure.\nThe serial link appears to be broken.\nCheck the RF Amp power and the serial link.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 30,
+  "message_number": 2254050,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier fault 80.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 14,
+  "message_number": 2248765,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Error.\nRF amplifier failed to go to operate when commanded to do so.->\n\r",
+  "coil": "Body 48 AA",
+  "psd": "Spin Echo"
+ },
+ {
+  "templates_seen": 10,
+  "message_number": 2248775,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Error.\nThe RF amplifier failed to go into the commanded mode (head or body),\nor took too long to go to commanded mode.->\n\r",
+  "coil": "Body 48 AA",
+  "psd": "FRFSE-XL"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2248775,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Error.\nThe RF amplifier failed to go into the commanded mode (head or body),\nor took too long to go to commanded mode.\nPlease power cycle the RF Subsystem and perform a TPS Reset.\n\r",
+  "coil": "BODY",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 3,
+  "message_number": 2254204,
+  "type": "HOST\tNSP",
+  "message": "SRFD2 RF Amplifier Power Supply Fault.\nRF Amplifier indicates the high voltage power supply is out of specification.\nPossible causes:  Supply feedback loop exceeds 2.5v, PS heat sink is overheated,\nPower supply FETS are shorted.->\n\r",
+  "coil": "HNS Head",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 2,
+  "message_number": 2248765,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Error.\nRF amplifier failed to go to operate when commanded to do so.\nPlease power cycle the RF Subsystem and perform a TPS Reset.\n\r",
+  "coil": "8CTL456",
+  "psd": "Gradient Echo"
+ },
+ {
+  "templates_seen": 1,
+  "message_number": 101255,
+  "type": "HOST\tNSP",
+  "message": "RF Amplifier Fault.\nError Code: 0x208,  Error Parameters: 0  0  0  0. ->\n\r",
+  "coil": "Unknown",
+  "psd": "Unknown"
+ }
+]

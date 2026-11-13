@@ -1,0 +1,10 @@
+[
+ {
+  "templates_seen": 1332,
+  "message_number": 2218716,
+  "type": "HOST\tscn",
+  "message": "Door sensor is not working. Please contact your service representative.\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

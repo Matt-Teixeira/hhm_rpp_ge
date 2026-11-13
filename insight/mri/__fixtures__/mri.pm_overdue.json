@@ -1,0 +1,18 @@
+[
+ {
+  "templates_seen": 2404,
+  "message_number": 2218673,
+  "type": "HOST\tscn",
+  "message": "This system is overdue for Planned Maintenance. Planned Maintenance has been scheduled for  05/30/2026.\n\r",
+  "coil": null,
+  "psd": null
+ },
+ {
+  "templates_seen": 1929,
+  "message_number": 2218671,
+  "type": "HOST\tscn",
+  "message": "This system is overdue for Planned Maintenance. Please contact your Service Provider.\n\r",
+  "coil": null,
+  "psd": null
+ }
+]

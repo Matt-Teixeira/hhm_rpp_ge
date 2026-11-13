@@ -16,7 +16,13 @@
   `insight/mri/`. Prod dry run (read-only) equal to the independent SQL on
   every cell; write path rehearsed on the local DB. Committed 2eb7ea0.
   **Codex review 2026-11-13: two P2s, both fixed and re-rehearsed** (§7.6;
-  `REVIEW-MRI2-EXTRACT-CODEX.md`). First prod write only after
+  `REVIEW-MRI2-EXTRACT-CODEX.md`); review closed (4345243).
+- **MRI-3 (derive): BUILT 2026-11-13, uncommitted** (§8): daily, code
+  labels, and derived queries (capabilities, inventory, sessions, deaths
+  with a restart mark). Local rehearsal: every check equal; labels equal
+  JS vs SQL on prod's PG 16 (read-only). Q-D1–Q-D5 AGREED 2026-11-13
+  (§8.5). **Next: the Codex review** (`REVIEW-MRI3-DERIVE-HANDOFF.md`).
+- MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
   MRI-safe.** They exclude `cv.*` rather than select CT keys, so the first
@@ -292,7 +298,7 @@ The CV path, on CT's architecture:
 | **MRI-2a Code inventory** ✅ 2026-11-13 (§5) | `PLAN-MRI-INSIGHTS-CODES.md`: every code above the §3 Q3 cut, with category, metric and evidence (read-only) | the mapping agreed | now (read-only) |
 | **MRI-1 Schema** (built 2026-11-13, §6) | migration 009: `ge_mri_facts`, `ge_mri_daily`, catalog rows, new objects only | tests, a local rehearsal, a Codex review (closed 2026-11-13, no blocking defect), applied by the user | built now, applied after the CV-5 close-out |
 | **MRI-2 Extract** | `insight/mri/` rules + extract + backfill CLI (dry run, rehearse, apply), as CV-2 | dry run equals independent SQL per system × metric; review closed | built 2026-11-13 (§7); written to prod after 009, C1-MRI, C2-MRI |
-| **MRI-3 Derive** | daily, capabilities, sessions, inventory; `verify_derive` | verifiers pass; review closed | after MRI-2 |
+| **MRI-3 Derive** | daily, capabilities, sessions, inventory; `verify_derive` | verifiers pass; review closed | built 2026-11-13 (§8); prod after MRI-2's backfill |
 | **MRI-4 Findings** | replay the history, propose rules with evidence, agree, build, `verify-findings` | replay drift 0; review closed | after MRI-3 |
 | **MRI-5 Stage** | `run_mri_insight` after `GE_MRI`, shared wrapper, `INSIGHT_MRI_ENABLED` | as CV §12.4: 7 days clean, CT and CV unchanged | after the CV-5 close-out |
 | **MRI-6 Viewer** | "GE MRI Insights — Internal" report | as CT §16.4 | after MRI-5, or after CV-6 |
@@ -874,3 +880,116 @@ On the local DB with the real code:
 - the local DB was then reset and re-applied at version 1 (§7.3 state).
 
 Logs: `~/cv_d3b_evidence/mri/mri2/13_*` … `18_*`.
+
+## 8. MRI-3 derive (built 2026-11-13, uncommitted)
+
+**Files** (new in `insight/mri/`, nothing in the CT or CV run loads them):
+`labels.js`, `derive.js`, `derived_sql.js`, `verify_derive.js`,
+`test/derive.test.js`. Changed MRI files: `codes_reviewed.js` (+ the
+reviewed categories), `cli.js` (+ `derive`, `verify-derive`),
+`test/mri.test.js` (one usage example).
+
+### 8.1 What it builds
+
+- **`insight.ge_mri_daily`** (as CV's `ge_cv_daily`): per system, device
+  day, metric and dim: n, value sum / min / max / last, first / last
+  device time. Scope: the days the extract recorded as pending (§7), or
+  the whole system when more than 31 days or `--full`; one transaction per
+  system that also clears its days and marks the codes as owed
+  (`codes_pending`, as CV review CV3-DERIVE P2).
+- **`insight.ge_mri_codes`**, rebuilt in full when owed: per message code
+  of the `mri.error` facts: n, systems, first / last device time, the most
+  common process, the **reviewed category** (`codes_reviewed.js`
+  `CATEGORY_CODES`: the 361 codes above the MRI-2a cut, totals equal to
+  `PLAN-MRI-INSIGHTS-CODES.md` §6, pinned by a test; NULL for the 462
+  long-tail codes and for new codes), and the **label** = the most common
+  masked template with its share.
+- **Labels** (`labels.js`): the MRI-2a masking in one function, with one
+  change: **every host name seen in the source** is masked, not only the
+  record's own (a message can name another system). ASCII first, 200
+  characters, empty → no label.
+- **Derived queries** (`derived_sql.js`), read-only SQL, **no tables**
+  (Q-D2); MRI-4 uses them and MRI-6 turns them into `api` views:
+  - capabilities per system × metric (first / last day, days, n), from
+    `ge_mri_daily`;
+  - inventory per system: the latest System Up (software version, field
+    strength, hardware attrs), when that version was first seen, versions
+    and field strengths seen;
+  - software sessions: a start ended by a stop (`sw_stop` or its companion
+    200002364), by the next start with no stop (`no_stop`), or `open`;
+  - service-mode sessions: an 'on' (not preceded by 'on') to the next
+    'off';
+  - process deaths with `at_restart` (Q-D1).
+- **Commands:** `cli.js derive --rehearse` (database name; one
+  transaction, rolled back), `derive --apply [--full]` (name, then APPLY),
+  `verify-derive` (read-only). Same lock as the extract.
+
+### 8.2 The check (`verify_derive.js`)
+
+| Check | Compares |
+|---|---|
+| A | daily per (system, device day, metric) with the independent source count (§7 conditions on the deduped records; **device day from `host_date`**, not `epoch`) |
+| B | `mri.error` daily per (system, day, code) with the source |
+| C | daily with a plain GROUP BY over the facts, every column, both directions |
+| D | `ge_mri_codes`, every field, rebuilt from the source in SQL: the label masking rewritten as PostgreSQL regexes (not the JS function); first / last from `host_date` + `host_time`; ties smallest under `COLLATE "C"` |
+| E | no label holds a host name, an IPv4 / MAC address or a system id |
+| F | each derived query = an independent JS computation from the facts |
+
+### 8.3 Evidence (local throwaway DB, the §7.3 facts; logs in `~/cv_d3b_evidence/mri/mri3/`)
+
+| Step | Result |
+|---|---|
+| `derive --rehearse` | 69,882 daily rows, 823 codes (all labelled; 462 uncategorized = the long tail). Second pass identical; the last-7-days rebuild equals the full one. Verify: A 17,011 cells, B 52,917 cells, C both ways, D 823 codes, E 0 leaks in 823 labels, F capabilities 303 / inventory 17 / sw sessions 1,323 / service sessions 742 / deaths 1,289 rows, **all 0 differences**. Rolled back. 88 s. |
+| `derive --apply` (pending from the extract: 13 systems "full", 4 by day) | 9 s; pending cleared; `verify-derive` PASS from a read-only session |
+| again | nothing pending, nothing done |
+| a synthetic record on a new device day with a new code → extract → derive | only that day pending; with the code rebuild made to fail: status `error`, `codes_pending` kept; the next run rebuilt the codes (a planted stale label replaced) and cleared it; the run after: nothing. The new code: label `Synthetic MRI-# test # at <ip>`, category NULL. Verify PASS |
+| `derive --apply --full` | byte-identical to the pending path |
+| cleanup, `--full`, verify | PASS; the daily fingerprint equals the rehearsal's |
+| **prod, read-only (PG 16.15)**: D's SQL vs the JS derive over the same deduped source rows (ids ≤ 5,123,858) | **823 codes, 0 differences** (labels, shares, processes, categories, first / last). 23 s SQL, 7 s JS. |
+
+Tests: `insight/mri/test/derive.test.js` 14 of 14; every suite 288 of 288.
+
+### 8.4 What the derived queries show (local, all history)
+
+- **Inventory:** one software version per system over the whole history
+  (no upgrades seen); 16 systems at 1.5 T, SME16342 at 3 T (SME16380:
+  1.5 T, the Q-M10 configuration question).
+- **Software sessions:** 1,323 starts: 1,240 ended by a stop, 67 by a new
+  start with no stop between (crash or power loss), 16 still open.
+  Median session 618 min.
+- **Service mode:** 742 sessions, 740 closed, median 3 min.
+- **Deaths:** 823 of 1,289 at a restart (Q-D1).
+
+### 8.5 Questions (AGREED 2026-11-13: the recommendation in each)
+
+- **Q-D1 The restart mark (refines Q-M2).** Q-M2 planned "±10 min of a
+  software stop or start". On the data that marks only 446 of 1,289 deaths:
+  the shutdown kills (DHI, diagCoord, envMon die together in the same
+  minute, 185 times) are mostly hours from any logged `sw_stop`, because
+  the stop is often logged only as its companion 200002364 (1,252 rows vs
+  1,120 `sw_stop`). **Recommended:** restart events = `sw_start`,
+  `sw_stop`, System Up **and 200002364**, ±10 device minutes. Then 823 of
+  1,289 are marked: DHI 185 of 186, diagCoord / envMon 184 of 185, WavDisp
+  155 of 155, app 15 of 15; while the likely crashes stay unmarked
+  (autoview 338 of 347, vre:dpserver 20 of 20, AUTOVOICE 10 of 10,
+  vre:prescanserver 47 of 66). No change to the facts: the mark is
+  computed.
+- **Q-D2 Derived queries, not tables.** **Recommended:** capabilities,
+  inventory, sessions and deaths stay read-only SQL until MRI-6 makes them
+  `api` views (with the runner scope change agreed in Q-M9). They are small
+  (all history in under 200 ms), always consistent with the facts, and need
+  no migration now. Not chosen: a migration 010 with tables, which would
+  need its own derive, verify and review for no gain at this size.
+- **Q-D3 Long-tail category.** **Recommended:** `category` NULL for the
+  462 long-tail codes and for new codes (009's comment: "NULL = not yet
+  reviewed"; the long tail was reviewed as a group only, Q-M7). A later
+  category pass fills them without a schema change.
+- **Q-D4 Device clock (as CV K1).** **Recommended:** no clock table in
+  v1. Days, sessions and the restart window are all in device time, and
+  every comparison is within one system. The viewer labels times as
+  device time. SME21284's time zone / clock (Q-M10) is for field service.
+- **Q-D5 Labels mask every known host.** **Recommended** (already built):
+  stricter than MRI-2a's own-host masking; the leak check (E) enforces it.
+  Cost: a host name that is also an ordinary word (none today; names
+  shorter than 3 characters are never masked) would be masked in labels.
+

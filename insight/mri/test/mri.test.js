@@ -296,7 +296,7 @@ test("cli flags", () => {
   assert.throws(() => args(["backfill", "--apply", "--batches", "1"]), /only for --rehearse/);
   assert.throws(() => args(["verify", "--to-id", "1"]), /no flags/);
   assert.throws(() => args(["dry-run", "--apply"]), /only --to-id/);
-  assert.throws(() => args(["derive"]), /usage/);
+  assert.throws(() => args(["findings"]), /usage/);
   assert.throws(() => args(["dry-run", "--to-id", "x"]), /non-negative integer/);
 });
 

@@ -21,6 +21,17 @@
 //       and migration 009 is applied. Run verify afterwards.
 //   node insight/mri/cli.js verify
 //       READ-ONLY. The MRI-2 exit check over the watermark range.
+//   node insight/mri/cli.js derive --rehearse
+//       Asks for the database name. As insight_writer, ONE transaction,
+//       rolled back: full rebuild of ge_mri_daily and ge_mri_codes, a
+//       second identical pass, a touched-days pass (must equal the full
+//       rebuild), verify-derive on the uncommitted rows. Writes nothing.
+//   node insight/mri/cli.js derive --apply [--full]
+//       Asks for the database name, then APPLY. As insight_writer: the days
+//       the extract recorded as pending (or every system with --full), one
+//       transaction per system, then the code labels. Run verify-derive after.
+//   node insight/mri/cli.js verify-derive
+//       READ-ONLY. The MRI-3 exit check (verify_derive.js).
 // Nothing in the GE CT or CV run loads this file.
 const crypto = require("crypto");
 const readline = require("readline");
@@ -28,9 +39,11 @@ const { validate } = require("./rules");
 const { stream } = require("./extract");
 const { run_extract, read_job, unreviewed } = require("./load");
 const { verify_mri_facts, compare, expected } = require("./verify");
+const { run_derive } = require("./derive");
+const { verify_mri_derive } = require("./verify_derive");
 
 function args(argv) {
-  const a = { cmd: argv[0], from_id: null, to_id: null, rehearse: false, apply: false, batches: null };
+  const a = { cmd: argv[0], from_id: null, to_id: null, rehearse: false, apply: false, batches: null, full: false };
   const int = (i) => {
     const v = argv[i + 1];
     if (v === undefined || !/^\d+$/.test(v)) throw new Error(`${argv[i]} needs a non-negative integer`);
@@ -42,10 +55,21 @@ function args(argv) {
     else if (argv[i] === "--batches") a.batches = int(i++);
     else if (argv[i] === "--rehearse") a.rehearse = true;
     else if (argv[i] === "--apply") a.apply = true;
+    else if (argv[i] === "--full") a.full = true;
     else throw new Error(`unknown argument ${argv[i]}`);
   }
-  if (!["dry-run", "backfill", "verify"].includes(a.cmd)) {
-    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive");
+  }
+  if (a.full && !(a.cmd === "derive" && a.apply)) throw new Error("--full is only for derive --apply");
+  if (a.cmd === "derive") {
+    if (a.rehearse === a.apply) throw new Error("derive needs exactly one of --rehearse / --apply");
+    if (a.from_id !== null || a.to_id !== null || a.batches !== null) throw new Error("derive takes only --full (with --apply)");
+    return a;
+  }
+  if (a.cmd === "verify-derive") {
+    if (a.from_id !== null || a.to_id !== null || a.batches !== null || a.rehearse || a.apply) throw new Error("verify-derive takes no flags");
+    return a;
   }
   if (a.cmd === "backfill") {
     if (a.rehearse === a.apply) throw new Error("backfill needs exactly one of --rehearse / --apply");
@@ -133,11 +157,17 @@ async function verify(db) {
 
 function print(o) { console.log(JSON.stringify(o, null, 2)); }
 
+// READ-ONLY: the MRI-3 exit check.
+async function verify_derive(db) {
+  await assert_read_only(db);
+  return db.tx((t) => verify_mri_derive(t));
+}
+
 // Typed confirmation before any writer-role run (rehearse: the database
 // name; apply: the database name, then APPLY).
-async function confirm(db, { mode, input = process.stdin, out = (s) => process.stdout.write(s) }) {
+async function confirm(db, { mode, what = "BACKFILL", input = process.stdin, out = (s) => process.stdout.write(s) }) {
   const t = await db.one("SELECT current_database() AS db, current_user AS usr");
-  out(`target: database=${t.db} host=${process.env.PG_HOST} user=${t.usr} — MRI BACKFILL ${mode === "apply" ? "APPLY (writes)" : "REHEARSAL (one transaction, rolled back)"}\n`);
+  out(`target: database=${t.db} host=${process.env.PG_HOST} user=${t.usr} — MRI ${what} ${mode === "apply" ? "APPLY (writes)" : "REHEARSAL (one transaction, rolled back)"}\n`);
   const rl = readline.createInterface({ input, terminal: false });
   const it = rl[Symbol.asyncIterator]();
   const ask = async (q) => {
@@ -158,16 +188,28 @@ async function confirm(db, { mode, input = process.stdin, out = (s) => process.s
 async function main() {
   const a = args(process.argv.slice(2));
   const { connect } = require("../db");
-  if (a.cmd === "dry-run" || a.cmd === "verify") {
+  if (a.cmd === "dry-run" || a.cmd === "verify" || a.cmd === "verify-derive") {
     const db = connect("readonly", { statementTimeoutMs: 900000, applicationName: "insight_mri" });
     try {
-      const r = a.cmd === "dry-run" ? await dry_run(db, a) : await verify(db);
+      const r = a.cmd === "dry-run" ? await dry_run(db, a) : a.cmd === "verify" ? await verify(db) : await verify_derive(db);
       print(r);
       if (!r.ok) process.exitCode = 1;
     } finally { db.$pool.end(); }
     return;
   }
   const db = connect("writer", { statementTimeoutMs: 900000, applicationName: "insight_mri" });
+  if (a.cmd === "derive") {
+    try {
+      const mode = a.rehearse ? "rehearse" : "apply";
+      await confirm(db, { mode, what: "DERIVE" });
+      const { pgp } = require("../db");
+      const r = await run_derive(db, pgp, { mode, full: a.full, run_id: crypto.randomUUID(), verify: verify_mri_derive, log: (s) => console.log(s) });
+      print(r);
+      const bad = r.skipped || (r.rolled_back && (!r.second_pass_identical || !r.touched_days_identical || !(r.verified && r.verified.ok)));
+      if (bad) process.exitCode = 1;
+    } finally { db.$pool.end(); }
+    return;
+  }
   try {
     const mode = a.rehearse ? "rehearse" : "apply";
     await confirm(db, { mode });
@@ -182,4 +224,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(`FAILED: ${e.message}`); process.exitCode = 2; });
 
-module.exports = { args, dry_run, verify, confirm };
+module.exports = { args, dry_run, verify, verify_derive, confirm };

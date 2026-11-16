@@ -31,9 +31,11 @@
 - **MRI-4 (findings): BUILT 2026-11-16** (§9.7): new files in
   `insight/mri/findings/`. Local rehearsal: the §9.2 list exactly, every
   check 0; verify-findings PASS; CT / CV rows untouched. `--apply` is
-  refused until C1-MRI. Review handoff `REVIEW-MRI4-FINDINGS-HANDOFF.md`;
-  awaiting `REVIEW-MRI4-FINDINGS-CODEX.md`. The C1-MRI change is planned
-  in §10, for its own review.
+  refused until C1-MRI. Committed 4b0b0a7. **Codex review CLOSED
+  2026-11-16: one P2, withdrawn in round 2** (§9.8;
+  `REVIEW-MRI4-FINDINGS-CODEX.md`): no code change, a regression test
+  added. The C1-MRI change is planned in §10,
+  for its own review.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -1431,6 +1433,52 @@ deployed (§10) → `node insight/mri/cli.js findings --rehearse --replay`
 (expect `ok` and the §9.2 list, differences explained by new data) →
 `findings --apply --replay` → `verify-findings` → the CT and CV verifiers.
 Later runs use the default mode (the MRI-5 stage).
+
+### 9.8 Codex review (closed 2026-11-16): `REVIEW-MRI4-FINDINGS-CODEX.md`
+
+Codex confirmed rules 1–3 and 5–11 against the SQL (baselines, evidence,
+severity, the fold), the residual's code categories and the pinned
+exclusion list, rule 7's observed / baseline, every statement scoped to
+`ge_mri` / `mri_`, CT's pieces reused and no CV code loaded, the preflight
+refusals, the fixture's contents, and §9.2 / F1–F12 as built. One P2:
+
+- **P2 (claimed): a next-day restart could suppress a historical
+  crash-loop trip,** in both the JS and the SQL. The review reads `full`
+  (a death not at a restart, by any event up to the run's `today`) as
+  being used on the as-of day D, so a restart at 00:05 on D+1 would drop
+  a 23:55 death from D's count.
+
+  **Not reproduced.** `crashes(ctx, D)` uses `full` only for deaths on
+  days *before* D; a death on D uses `strict` (events on a day ≤ D). A
+  restart within ±10 minutes of a death is on the death's day or the
+  next, so for a death before D every event that can mark it is on a day
+  ≤ D. The SQL has the same split (`mark_any` for `dday < d`,
+  `mark_early` for `dday = d`).
+  - **Local DB, Codex's exact case** (one transaction per variant, rolled
+    back; `~/cv_d3b_evidence/mri/mri4/p2_db.js`, `30_p2_db.log`):
+    synthetic deaths on SME21932 at noon on 10-05 (×2), 10-06 and 10-07,
+    and at 23:55 on 10-08; variant A adds a start at 00:05 on 10-09. As of
+    10-08, 10-09 and 11-16, the 10-08 trip (5 deaths) is the same in both
+    variants. Only 10-09 differs (A: no trip, because the start is that
+    day's data; B: a trip), which is Q-D1 as agreed. JS = the independent
+    SQL in all six cases. 0 synthetic rows left.
+  - **In the real data no restart that marks a death is on a later
+    device day** (1,390 matching pairs, all on the death's own day), so
+    the real-data fixture couldn't show this either way.
+  - **Regression test added** (the one the review proposed):
+    `findings.test.js` "review MRI4-FINDINGS P2": day D's result is equal
+    with and without the D+1 start, as of D, D+1 and later; D+1 sees the
+    start; and day by day, `crashes()` as of every day equals what a run
+    on that day computed, with deaths on both sides of midnight.
+    **Mutation:** using `full` on the as-of day too (the bug the review
+    describes) fails this test and the existing restart-mark test.
+  - Tests: findings 27; every suite 315 of 315.
+
+**No code change.** **Round 2 (Codex, 2026-11-16): P2 withdrawn.** Codex
+re-checked against this section and the regression test: it had read
+`full` as used for a death on the evaluated day; `crashes()` uses `strict`
+there, and the SQL's `mark_early` / `mark_any` split follows the same rule.
+No code change indicated; findings tests 27 of 27. **Review closed.**
 
 ## 10. C1-MRI: the CT verifiers scoped to CT catalog rows (planned 2026-11-16, for its own review)
 

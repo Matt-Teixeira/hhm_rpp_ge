@@ -150,6 +150,27 @@ test("context: a death is at a restart within 10 device minutes; as of its own d
   assert.deepStrictEqual([...crashes(ctx_of(inp), D(9))], [], "out of the window");
 });
 
+test("review MRI4-FINDINGS P2: a restart just after midnight never changes the trip of the day before", () => {
+  // 4 deaths on days 2-4, a 5th at 23:55 on day 5; variant A adds a start at 00:05 on day 6.
+  const deaths = [at(2, "11:00:00"), at(2, "12:00:00"), at(3, "12:00:00"), at(4, "12:00:00"), at(5, "23:55:00")].map((t) => ({ at: t, process: "synthproc" }));
+  const A = synth(20, () => [], { deaths, events: [{ at: at(6, "00:05:00"), kind: "start" }] });
+  const B = synth(20, () => [], { deaths });
+  const day = (inp, today, i) => rule("mri_process_crash_loop").evaluate(ctx_of(inp, today), D(i));
+  for (const today of [dstr(D(5)), dstr(D(6)), "2026-12-31"]) {
+    assert.deepStrictEqual(day(A, today, 5), day(B, today, 5), `day 5 as of ${today}: the same with or without the day-6 start`);
+    assert.strictEqual(day(A, today, 5).observed, 5);
+  }
+  assert.strictEqual(day(A, "2026-12-31", 6), null, "on day 6 the start is that day's data: the 23:55 death is at a restart");
+  assert.strictEqual(day(B, "2026-12-31", 6).observed, 5);
+  // and day by day: every as-of day sees exactly what a run on that day saw, for deaths on either side of midnight
+  const both = synth(20, () => [], {
+    deaths: [...deaths, { at: at(9, "00:03:00"), process: "synthproc" }, ...[8, 8, 9, 9].map((i, k) => ({ at: at(i, `1${k}:00:00`), process: "synthproc" }))],
+    events: [{ at: at(6, "00:05:00"), kind: "start" }, { at: at(8, "23:58:00"), kind: "stop" }],
+  });
+  const full = ctx_of(both);
+  for (let i = 0; i < 20; i++) assert.deepStrictEqual([...crashes(full, D(i))], [...crashes(ctx_of(both, dstr(D(i))), D(i))], `day ${i}`);
+});
+
 // ------------------------------------------------------------------ rules: boundaries
 test("rule 1 failed scans: >= 10 failed, >= 5%, >= 3x the share of D-34..D-7 (>= 100 scans there)", () => {
   const scans = (ok, f) => [{ m: "mri.scans_ok", dim: "", n: 1, v: ok }, { m: "mri.scans_failed", dim: "", n: 1, v: f }];

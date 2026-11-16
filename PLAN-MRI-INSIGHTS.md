@@ -42,9 +42,12 @@
   (`REVIEW-C1-MRI-CODEX.md`, §10.6). Committed on `dev` and deployed
   only after the CV-5 close-out (§10.4).
 - **MRI-5 (the stage, shared wrapper): AGREED 2026-11-16 (§11),** every
-  §11.3 recommendation. Step 1 (new files only, a new
-  `insight/stage_wrapper.js` counts as one) is being built within the
-  freeze; the `index.js` hook waits for the CV-5 close-out.
+  §11.3 recommendation. **Step 1 BUILT 2026-11-16 (§11.6):** the shared
+  `insight/stage_wrapper.js` (identical to the CT and CV wrappers in 24
+  harness scenarios), `insight/mri/{index,stage}.js`, `stage --rehearse`;
+  suites 340 / 340; local rehearsal and live path OK. Review handoff
+  `REVIEW-MRI5-STAGE-HANDOFF.md`. The `index.js` hook waits for the CV-5
+  close-out.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -1541,6 +1544,10 @@ this small change.
 - `insight/mri/test/findings.test.js` "preflight refusals": `--apply` now
   passes the interlock (the refusal stays covered by the `mri.test.js`
   cases with fake modules).
+- `insight/mri/test/stage.test.js` "stage_preflight with the real extract
+  preflight: refused until C1-MRI" (added with MRI-5, §11.6, after the
+  worktree was cut): flips the same way. The worktree change is rebased
+  onto `dev` before its commit.
 
 ### 10.3 Checks before the commit
 
@@ -1917,3 +1924,102 @@ rolled back, measured twice; `timing.js`, `timing.log`):
 
 Checkpoints for your go-ahead: the answers to §11.3, after step 1, before
 the hook, before each commit, the prod rehearsal, and each deploy action.
+
+### 11.6 Step 1 build (2026-11-16): new files, and three MRI files
+
+**Files.** Nothing in the GE CT or GE CV run loads any of them; the
+isolation tests check that.
+- **New: `insight/stage_wrapper.js`,** the shared wrapper (§11.2 item 1).
+  - It is the CT / CV wrapper body, with `func`, `app_name`, `label`,
+    `load_stage`, `run_args` and `preflight_warnings` as `cfg`.
+  - It loads only `./db` and `crypto`.
+  - It also refuses an incomplete `cfg` (an ERROR before connecting).
+- **New: `insight/mri/index.js` `run_mri_insight`.**
+  - With `INSIGHT_MRI_ENABLED` unset, it returns before anything is
+    loaded, the wrapper included (a test checks the module cache).
+  - It sends a partition-horizon WARN (18 months, §6.6), and the run goes
+    on.
+  - If the wrapper can't be loaded, that is an ERROR event, never a
+    rejection.
+- **New: `insight/mri/stage.js`,** with CV's shape:
+  - `STEPS`, `run_stage`, `summarize` and `step_warnings`.
+  - MRI's warnings: rule errors, and a derive over `DERIVE_WARN_MS` =
+    30 s (§11.3 Q3).
+  - `stage_preflight`: the extract apply preflight, schema ≥ 9, and an
+    extract watermark.
+  - `rehearse_stage`: REPEATABLE READ, 3 runs, the three verifiers,
+    touched = full, default = replay, `OTHERS_SQL` (every non-MRI row of
+    findings, both catalogs and job state).
+- **`insight/mri/load.js`:** `extract_step`, which is `apply_range` from
+  the watermark with one batch, plus `behind_ids`.
+- **`insight/mri/cli.js`:** `stage --rehearse` only, asking for the
+  database name first.
+- **`insight/mri/findings/run.js`:** `findings --rehearse` runs in
+  REPEATABLE READ (§11.2 item 6).
+- **New: `insight/mri/test/stage.test.js` (25 tests)**, modelled on CV's
+  `stage.test.js`. It also covers:
+  - the wrapper's `cfg` checks;
+  - `run_args` loaded before connecting, with the key order;
+  - the CT / CV timeouts;
+  - the require lists of the wrapper and of MRI's `index.js`.
+
+**Tests:**
+- **Every suite: 340 of 340** (315 + 25).
+- **Mutations:** 22 mutations of the new code. Each fails at least one
+  test.
+  - Among them: two batches per run, the findings preflight in rehearse
+    mode, the job-state prefix, the 30 s boundary, a missing watermark
+    check, READ COMMITTED (stage and findings), the switch, the app name,
+    the partition WARN, a top-level wrapper require, the unlock after the
+    deadline, `cfg` checks, `run_args`, the kill, the option order,
+    `behind_ids`, and `stage` without `--rehearse`.
+  - One survived at first: `extract_step` defaulting to 2 batches, since
+    the fake source had only one. The fake now has a second batch
+    waiting.
+
+**The equivalence harness** (`~/cv_d3b_evidence/mri/mri5/equiv.js`,
+`equiv.log`, DB-free; the groundwork for MRI-5b, §11.3 Q1):
+- It compares the live `run_ct_insight` and `run_cv_insight` with
+  `run_insight_stage`, configured as CT and as CV.
+- It covers 12 scenarios each: ok, a WARN step, lock held, preflight
+  refused, a partition warning, a failed step, a failed watermark read,
+  a stage throw with a failing unlock, a connect throw, a throwing
+  logger, no run id, and the deadline.
+- **IDENTICAL in all 24** (return values, run-log events, connection
+  calls, `run_stage` options).
+- The harness itself catches a changed label, application name or
+  warning text.
+
+**Local rehearsal** (throwaway PG 14):
+- 1,340 new `log.ge_mri_gesys` rows were copied read-only from prod at
+  20:25 UTC (ids to 5,127,394; the counts below the old maximum match).
+- `reh.js` → `02_reh.log`, `rc_control.js` → `03_rc_control.log`.
+
+| Case | Result |
+|---|---|
+| **A**, the rehearsal on the `dev` checkout (CT verifiers not MRI-aware) | refused: C1-MRI |
+| **B**, the rehearsal (C1-MRI simulated in memory), with a `ge_ct_` job-state row committed by another session after run 1 | **OK**. Run 1, catch-up (1,293 rows): 10.7 s. Run 2, the last run (47 rows): 9.7 s. Run 3, no rows: 2.0 s. Watermarks equal after each run. Verify 303 cells, 0 diffs; verify-derive ok; verify-findings PASS (70 = 70); touched = full (17 systems); default = replay (0 changes); non-MRI rows unchanged; watermarks unchanged after the rollback |
+| **C**, the live path (`run_mri_insight` → wrapper → stage, committing, local writer pool) | Catch-up: 10.1 s (extract 0.6 s, 1,340 rows; derive 7.4 s; findings 2.1 s). No rows: 2.1 s. INFO events, watermarks equal at 5,127,394. The three verifiers pass afterwards; non-MRI rows unchanged |
+| **D**, the MRI lock held by another session | INFO lock skip; no advisory lock left afterwards |
+| **Control:** the same fingerprint with the same concurrent commit | READ COMMITTED: "changed" (a false failure). REPEATABLE READ: unchanged |
+
+- **The cost is as measured in §11.1:** about 10 s with rows (the code
+  labels take about 7.5 s of it), about 2 s without.
+- The new data opened one finding: `mri_table_fault` (medium) on one
+  current system, on 2026-11-16. It is local only; on prod it would be
+  reviewed in the monitoring (§11.4).
+- **The local DB now holds the stage's committed state:** extract,
+  derive and findings at 5,127,394; 442,576 facts; 70 findings (27
+  open).
+
+**Not touched:** the root `index.js`, CT's and CV's wrappers and stages,
+and `insight/cv/`. Nothing was written to prod; the copy was a read-only
+transaction. The CT and CV suites pass unchanged.
+
+**Next:**
+1. The Codex review: `REVIEW-MRI5-STAGE-HANDOFF.md`.
+2. After the CV-5 close-out: the `index.js` hook (§11.5 step 2).
+3. Note for C1-MRI (§10): its commit also flips
+   `insight/mri/test/stage.test.js` "stage_preflight with the real
+   extract preflight: refused until C1-MRI", as it does the
+   `findings.test.js` preflight case (§10.2).

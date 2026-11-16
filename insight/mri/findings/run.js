@@ -86,6 +86,9 @@ const STORED_SQL = `SELECT finding_key, opened_at, source, status, severity, win
   FROM insight.findings WHERE system_id = $1 AND source = 'ge_mri'`;
 const SYSTEMS_SQL = "SELECT system_id FROM insight.ge_mri_facts UNION SELECT system_id FROM insight.ge_mri_daily ORDER BY 1";
 
+// The rehearsal's isolation level (see run_findings, mode "rehearse").
+const REHEARSAL_TX_MODE = new pgp.txMode.TransactionMode({ tiLevel: pgp.txMode.isolationLevel.repeatableRead });
+
 const keyOf = (r) => `${r.finding_key}|${new Date(r.opened_at).toISOString()}`;
 
 // CT's fold writes source 'ge_ct'; every MRI row is relabelled here, and
@@ -215,7 +218,10 @@ async function run_findings(db, { mode, replay = false, systems = null, today, r
       };
 
       if (mode === "rehearse") {
-        return await conn.tx(async (t) => {
+        // REPEATABLE READ (plan §11.2 item 6, as CV review CV5-STAGE): one
+        // snapshot, so a CT or CV stage committing meanwhile can't show as
+        // "others changed"; only MRI-lock holders write MRI rows.
+        return await conn.tx({ mode: REHEARSAL_TX_MODE }, async (t) => {
           const before = await t.one(COUNTS_SQL);
           const others_before = await t.one(OTHERS_SQL);
           log(`before (inside the transaction): ${JSON.stringify(before)}`);
@@ -300,5 +306,5 @@ async function findings_step(conn, { replay = false, systems = null, list = null
 
 module.exports = {
   run_findings, findings_step, write_job, findings_system, preflight, sync_catalog, all_systems, read_as_of, as_mri_rows,
-  JOB, WRITE_JOB_SQL, COUNTS_SQL, FINGERPRINT_SQL, OTHERS_SQL, STORED_SQL, SYSTEMS_SQL, STALE_DAYS,
+  JOB, WRITE_JOB_SQL, COUNTS_SQL, FINGERPRINT_SQL, OTHERS_SQL, REHEARSAL_TX_MODE, STORED_SQL, SYSTEMS_SQL, STALE_DAYS,
 };

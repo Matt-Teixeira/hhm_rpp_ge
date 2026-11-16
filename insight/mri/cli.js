@@ -46,6 +46,15 @@
 //   node insight/mri/cli.js verify-findings
 //       READ-ONLY. The MRI-4 exit check (findings/verify.js), each system at
 //       its recorded as-of date.
+//   node insight/mri/cli.js stage --rehearse
+//       Asks for the database name. As insight_writer, ONE REPEATABLE READ
+//       transaction, rolled back (stage.js, plan §11.2 item 4): the MRI-5
+//       stage as GE_MRI would run it on the pending range (catch-up, the
+//       last run's rows, a run with no rows), then verify, verify-derive,
+//       verify-findings on the uncommitted data, derive touched = full
+//       rebuild, findings default = replay, every non-MRI row unchanged;
+//       the watermarks are read again after the rollback. Writes nothing.
+//       The live stage runs only from the repo's index.js (GE_MRI).
 // Nothing in the GE CT or CV run loads this file.
 const crypto = require("crypto");
 const readline = require("readline");
@@ -83,8 +92,13 @@ function args(argv) {
     }
     else throw new Error(`unknown argument ${argv[i]}`);
   }
-  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings"].includes(a.cmd)) {
-    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive | findings --rehearse|--apply [--replay] [--system S] | verify-findings");
+  if (!["dry-run", "backfill", "verify", "derive", "verify-derive", "findings", "verify-findings", "stage"].includes(a.cmd)) {
+    throw new Error("usage: cli.js dry-run [--to-id N] | backfill --rehearse [--batches N] | backfill --apply [--from-id N] [--to-id N] | verify | derive --rehearse | derive --apply [--full] | verify-derive | findings --rehearse|--apply [--replay] [--system S] | verify-findings | stage --rehearse");
+  }
+  if (a.cmd === "stage") {
+    // the live stage runs only from index.js (GE_MRI); the CLI only rehearses it
+    if (!a.rehearse || a.apply || a.from_id !== null || a.to_id !== null || a.batches !== null || a.full || a.replay || a.system) throw new Error("stage takes only --rehearse");
+    return a;
   }
   if ((a.replay || a.system) && a.cmd !== "findings") throw new Error("--replay and --system are only for findings");
   if (a.cmd === "findings" || a.cmd === "verify-findings") {
@@ -248,6 +262,21 @@ async function main() {
     return;
   }
   const db = connect("writer", { statementTimeoutMs: 900000, applicationName: "insight_mri" });
+  if (a.cmd === "stage") {
+    try {
+      await confirm(db, { mode: "rehearse", what: "STAGE" });
+      const { rehearse_stage } = require("./stage");
+      const t0 = Date.now();
+      const r = await rehearse_stage(db, { log: (s) => console.log(s) });
+      if (r.skipped) { console.log(`skipped: ${r.skipped}`); process.exitCode = 1; return; }
+      const { runs, ...rest } = r;
+      print({ ok: r.ok, rolled_back: r.rolled_back, watermarks_unchanged_after_rollback: r.watermarks_unchanged_after_rollback, checks: rest.checks,
+        runs: runs.map((x) => ({ label: x.label, ok: x.ok, ms: x.ms, warnings: x.warnings })), total_ms: Date.now() - t0 });
+      console.log(`stage rehearsal: ${r.ok ? "overall: OK" : "overall: FAILED"} (rolled back)`);
+      if (!r.ok) process.exitCode = 1;
+    } finally { db.$pool.end(); }
+    return;
+  }
   if (a.cmd === "findings") {
     try {
       const mode = a.rehearse ? "rehearse" : "apply";

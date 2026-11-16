@@ -353,7 +353,7 @@ async function run_extract(db, { mode, from_id = null, to_id = null, max_batches
 // The apply path (lock-free core; the caller holds LOCK_KEY): catalog sync,
 // the late-commit re-read, then batches from start to end (at most
 // max_batches), each one transaction with its watermark and touched days.
-// stats is filled in place. MRI-5's stage will call this as CV's does.
+// stats is filled in place. MRI-5's stage calls it (extract_step below).
 async function apply_range(conn, { job, start, end, max_batches = null, run_id, started_at, stats, log = () => {} }) {
   await conn.tx((t) => t.none(catalog_statement(rules)));
   let watermark = start;
@@ -387,8 +387,25 @@ async function apply_range(conn, { job, start, end, max_batches = null, run_id, 
   return { watermark, watermark_capture };
 }
 
+// The stage's extract (MRI-5, plan §11.2 item 3; the caller holds LOCK_KEY
+// and has run the apply preflight): from the ge_mri_extract watermark, at
+// most max_batches batches (one by default, §11.3 Q6), up to the source max
+// (or to_id in the rehearsal). behind_ids = what is left for the next runs.
+async function extract_step(conn, { run_id, started_at = new Date(), max_batches = 1, to_id = null, log = () => {}, check = validate }) {
+  const invalid = check();
+  if (invalid.length) throw new Error(`invalid MRI rule registry, nothing written: ${invalid.join("; ")}`);
+  const job = await read_job(conn);
+  if (!job) throw new Error("no ge_mri_extract watermark: run `mri/cli.js backfill --apply` first");
+  const from = Number(job.watermark_id);
+  const max_id = Number((await conn.one("SELECT coalesce(max(id), 0) AS m FROM log.ge_mri_gesys")).m);
+  const end = to_id ?? max_id;
+  const stats = new_stats("stage");
+  const { watermark } = await apply_range(conn, { job, start: from, end, max_batches, run_id, started_at, stats, log });
+  return { from, watermark, end, behind_ids: Math.max(0, max_id - watermark), stats };
+}
+
 module.exports = {
-  run_extract, apply_range, reread_late, prune_stale, is_full_replay, PRUNE_SQL, write_job, read_job, preflight, check_conflicts, dedupe_facts, upsert_statements, merge_pending,
+  run_extract, apply_range, extract_step, reread_late, prune_stale, is_full_replay, PRUNE_SQL, write_job, read_job, preflight, check_conflicts, dedupe_facts, upsert_statements, merge_pending,
   ct_verifiers_not_mri_aware, unreviewed, fact_key, JOB, DERIVE_JOB, LOCK_KEY, CHUNK, FACT_CS, UPSERT_SUFFIX, LATE_SQL, EXISTING_SQL,
   LATE_WINDOW_S, PENDING_FULL_DAYS, MIN_SCHEMA_VERSION, PARTITION_WARN_MONTHS,
 };

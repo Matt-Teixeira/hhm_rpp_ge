@@ -31,6 +31,10 @@ test("template: dates, AE titles, ARS line, host: prefix, JVM prefix", () => {
   assert.strictEqual(template("No Route to Site Archive. Retry"), "No Route to <ae>. Retry");
   assert.strictEqual(template("Network session creation for REMOTEAE failed"), "Network session creation for <ae> failed");
   assert.strictEqual(template("Association was rejected from SITEAE1."), "Association was rejected from <ae>.");
+  // double spaces / line breaks around the title (the real shape of 11010, 11011, 600220200)
+  assert.strictEqual(template("Association was rejected from  SITEAE1\n"), "Association was rejected from <ae>");
+  assert.strictEqual(template("ECHO was received from\n SITEAE2"), "ECHO was received from <ae>");
+  assert.strictEqual(template("push failed:  SITEPACS  could not perform the operation."), "push failed: <ae> could not perform the operation.");
   assert.strictEqual(template("call rejected by the remote host SOMEHOST"), "call rejected by the remote host <ae>");
   assert.strictEqual(template("Resetting ARS dev12 - build 4.5 more"), "Resetting ARS <device> - <build>");
   assert.strictEqual(template("Unable: HOST: srv-a1:port"), "Unable: host <host>:port");
@@ -62,8 +66,12 @@ test("build_codes: counts, systems, device first / last, process, reviewed categ
   assert.deepStrictEqual(codes.map((c) => c.message_number), [2218714, 9999991]);
   const c = codes[0];
   assert.deepStrictEqual([c.n, c.systems, c.process, c.category, c.label, c.label_share, c.first_seen, c.last_seen, c.rule_version],
-    [4, 2, "scn", "utilization", "New Exam Started", 0.5, "2026-10-30T01:00:00", "2026-11-03T09:00:00", 1]);
-  assert.deepStrictEqual([codes[1].process, codes[1].category, codes[1].label], ["", null, "on <host> x"], "no process -> ''; a code outside the reviewed categories -> NULL");
+    [4, 2, "scn", "utilization", "New Exam Started", 0.5, "2026-10-30T01:00:00", "2026-11-03T09:00:00", 2]);
+  assert.deepStrictEqual([codes[1].process, codes[1].category, codes[1].label, codes[1].label_share], ["", null, null, null],
+    "no process -> ''; an unreviewed (uncategorized) code -> no category and NO label (review MRI3-DERIVE P2-2)");
+  // a long-tail code (reviewed as a group, no category) gets no label either, even with operator-like free text
+  const [lt] = build_codes([r({ message_number: 2254012, message: "Dr Smith at Riverside said hi" })], []);
+  assert.deepStrictEqual([lt.category, lt.label], [null, null]);
 });
 
 test("reviewed categories: 361 codes, the totals of PLAN-MRI-INSIGHTS-CODES.md §6, named codes in their rule's group", () => {
@@ -125,9 +133,16 @@ test("inventory: the latest System Up, when its version was first seen, versions
     ["V2", 1.5, "2026-02-01T08:00:00", 2, [1.5, 3], 4, "2026-03-01T08:00:00"]);
 });
 
-test("same_rows compares as sets over the given fields", () => {
+test("same_rows compares multisets over the given fields (review MRI3-DERIVE P2-1)", () => {
   assert.strictEqual(same_rows([{ a: 1, d_s: "5" }], [{ a: 1, d_s: 5 }], ["a", "d_s"]).diffs, 0);
   assert.strictEqual(same_rows([{ a: 1 }], [{ a: 2 }], ["a"]).diffs, 2);
+  const twice = same_rows([{ a: 1 }, { a: 1 }], [{ a: 1 }], ["a"]);
+  assert.deepStrictEqual([twice.diffs, twice.samples[0].sql, twice.samples[0].js], [1, 2, 1], "a row twice on one side, once on the other");
+  assert.strictEqual(same_rows([{ a: 1 }, { a: 1 }], [{ a: 1 }, { a: 1 }], ["a"]).diffs, 0);
+  // deaths keep one row per event: the code is part of the comparison
+  const d = js_deaths([ev("A", "2026-11-01T10:00:00", "mri.process_death", { dim: "irm", message_number: 200002354 }),
+    ev("A", "2026-11-01T10:00:00", "mri.process_death", { dim: "irm", message_number: 200002356 })]);
+  assert.deepStrictEqual(d.map((x) => x.message_number), [200002354, 200002356]);
 });
 
 test("the SQL label rewrite: host match is case-insensitive, all JS steps present, no template leftovers", () => {
@@ -140,6 +155,8 @@ test("the SQL label rewrite: host match is case-insensitive, all JS steps presen
   assert.match(TPL_SQL, /^nullif\(left\(/);
   assert.match(D_SRC, /ORDER BY message_number, c DESC, tpl COLLATE "C"/);
   assert.match(E_SQL, /label ~\* /);
+  for (const k of ["digit", "serial", "ae", "unreviewed_labelled"]) assert.match(E_SQL, new RegExp(`AS ${k},`), `leak check ${k}`);
+  assert.match(D_SRC, /CASE WHEN cat\.category IS NOT NULL THEN lab\.tpl END AS label/);
 });
 
 test("cli: derive and verify-derive flags", () => {

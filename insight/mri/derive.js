@@ -19,7 +19,11 @@
 //          time), the most common process, the reviewed category
 //          (codes_reviewed.js; NULL for the long tail and new codes), and
 //          the label = the most common masked template (labels.js) with
-//          its share, from the source rows behind the facts.
+//          its share, from the source rows behind the facts. Labels are
+//          stored ONLY for the reviewed (categorized) codes, whose
+//          templates were read in MRI-2a; a long-tail or new code gets no
+//          label until a review categorizes it, so unread source text is
+//          never stored (review MRI3-DERIVE P2-2).
 //
 //   rehearse: ONE transaction, rolled back: full rebuild, a second
 //             identical pass, a touched-days pass over each system's last
@@ -64,10 +68,11 @@ function build_codes(rows, hosts, category = CODE_CATEGORY) {
     if (tp) bump(c.tpl, tp);
   }
   return [...by].sort((a, b) => a[0] - b[0]).map(([message_number, c]) => {
-    const label = mode(c.tpl);
+    const cat = category.get(message_number) ?? null;
+    const label = cat === null ? null : mode(c.tpl); // review MRI3-DERIVE P2-2: no label for an unreviewed code
     const proc = mode(c.proc);
     return {
-      message_number, process: proc ? proc[0] : "", category: category.get(message_number) ?? null,
+      message_number, process: proc ? proc[0] : "", category: cat,
       label: label ? label[0] : null, label_share: label ? label[1] / c.n : null,
       n: c.n, systems: c.systems.size, first_seen: c.first, last_seen: c.last, rule_version: LABEL_VERSION,
     };

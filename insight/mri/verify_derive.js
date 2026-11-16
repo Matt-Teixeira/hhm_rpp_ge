@@ -14,10 +14,14 @@
 //      process, the reviewed category, and the label (the labels.js
 //      masking rewritten in PostgreSQL regexes, not the JS function) with
 //      its share. Ties: smallest, COLLATE "C";
-//   E  no label holds a host name, an IPv4 / MAC address or a system id;
+//   E  no label holds a host name, an IPv4 / MAC address, a system id, a
+//      digit (every digit run is masked), an unmasked serial or AE phrase;
+//      and no uncategorized (unreviewed) code has a label (review
+//      MRI3-DERIVE P2-2);
 //   F  each derived query (derived_sql.js) = an independent JS computation
-//      from the facts: capabilities, inventory, software sessions, service
-//      sessions, deaths with the restart mark;
+//      from the facts, compared as multisets (row counts matter; review
+//      MRI3-DERIVE P2-1): capabilities, inventory, software sessions,
+//      service sessions, deaths with the restart mark;
 //   +  pending days left for any system (a note).
 // Nothing in the GE CT or CV run loads this file.
 const { COND, STORABLE } = require("./reconcile_sql");
@@ -76,6 +80,7 @@ const DAY = "Mon|Tue|Wed|Thu|Fri|Sat|Sun";
 const R = (x, pat, rep, flags = "g") => `regexp_replace(${x}, '${pat}', '${rep}', '${flags}')`;
 function tpl_sql() {
   let x = R("m0", String.raw`\\n|\\r|\r\n|\n|\r`, " | ");
+  x = R(x, String.raw`[[:space:]]+`, " ");
   x = `CASE WHEN alt IS NULL THEN ${x} ELSE regexp_replace(${x}, '(?<![A-Za-z0-9_])(' || alt || ')(?![A-Za-z0-9_])', '<host>', 'gi') END`;
   x = R(x, String.raw`\y([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\y`, "<mac>");
   x = R(x, String.raw`SERIAL=[^[:space:]]+`, "SERIAL=<serial>");
@@ -90,7 +95,7 @@ function tpl_sql() {
   x = R(x, String.raw`Operation timed out \[[^]]*\]`, "Operation timed out [<ae>]");
   x = R(x, String.raw`No Route to [^.]+\.`, "No Route to <ae>.");
   x = R(x, String.raw`Network session creation for [^[:space:]]+`, "Network session creation for <ae>");
-  x = R(x, String.raw`(Association was rejected from|ECHO was received from|rejected by the remote host) [^[:space:].]+`, String.raw`\1 <ae>`);
+  x = R(x, String.raw`(Association was rejected from|ECHO was received from|rejected by the remote host) (?:\| )*[^[:space:].|]+`, String.raw`\1 <ae>`);
   x = R(x, String.raw`Resetting ARS [^[:space:]]+ - .*$`, "Resetting ARS <device> - <build>", "");
   x = R(x, String.raw`host: [^[:space:]]+:`, "host <host>:", "gi");
   x = R(x, String.raw`^<date> com\.ge\.[A-Za-z0-9_.$]+ [A-Za-z0-9_]+([[:space:]]*\|)?[[:space:]]*`, "", "");
@@ -113,7 +118,9 @@ agg AS (SELECT message_number, count(*)::int AS n, count(DISTINCT system_id)::in
 pr AS (SELECT DISTINCT ON (message_number) message_number, proc FROM (SELECT message_number, proc, count(*) AS c FROM t WHERE proc IS NOT NULL GROUP BY 1, 2) x ORDER BY message_number, c DESC, proc COLLATE "C"),
 lab AS (SELECT DISTINCT ON (message_number) message_number, tpl, c FROM (SELECT message_number, tpl, count(*) AS c FROM t WHERE tpl IS NOT NULL GROUP BY 1, 2) x ORDER BY message_number, c DESC, tpl COLLATE "C"),
 cat AS (SELECT * FROM unnest($2::int[], $3::text[]) AS c(message_number, category))
-SELECT agg.message_number, coalesce(pr.proc, '') AS process, cat.category, lab.tpl AS label, lab.c::float8 / agg.n AS label_share,
+SELECT agg.message_number, coalesce(pr.proc, '') AS process, cat.category,
+       CASE WHEN cat.category IS NOT NULL THEN lab.tpl END AS label,
+       CASE WHEN cat.category IS NOT NULL THEN lab.c::float8 / agg.n END AS label_share,
        agg.n, agg.systems, agg.first_seen, agg.last_seen
 FROM agg LEFT JOIN pr USING (message_number) LEFT JOIN lab USING (message_number) LEFT JOIN cat USING (message_number)`;
 const D_CODES = `SELECT message_number, process, category, label, label_share, n::int, systems,
@@ -127,12 +134,16 @@ SELECT count(*) FILTER (WHERE h.alt IS NOT NULL AND c.label ~* ('(?<![A-Za-z0-9_
        count(*) FILTER (WHERE c.label ~ '\y[0-9]{1,3}(\.[0-9]{1,3}){3}\y')::int AS ip,
        count(*) FILTER (WHERE c.label ~ '\y([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\y')::int AS mac,
        count(*) FILTER (WHERE c.label ~ '\ySME[0-9]')::int AS system_id,
+       count(*) FILTER (WHERE c.label ~ '[0-9]')::int AS digit,
+       count(*) FILTER (WHERE c.label ~ 'SERIAL=(?!<serial>)')::int AS serial,
+       count(*) FILTER (WHERE c.label ~ '(push failed: (?!<ae> )[^ ]+ could not perform|Message received from (?!<ae> )|Operation timed out \[(?!<ae>\])|No Route to (?!<ae>\.)|Network session creation for (?!<ae>)|(Association was rejected from|ECHO was received from|rejected by the remote host) (?!<ae>))')::int AS ae,
+       count(*) FILTER (WHERE c.category IS NULL)::int AS unreviewed_labelled,
        count(*)::int AS labels
 FROM insight.ge_mri_codes c, h WHERE c.label IS NOT NULL`;
 
 // F: the inputs of the JS side, straight from the facts.
 const F_EVENTS_SQL = `
-  SELECT system_id, to_char(host_local, 'YYYY-MM-DD"T"HH24:MI:SS') AS t, record_number_concurrent AS rnc, id::text AS id, metric_key, dim, value_num, attrs
+  SELECT system_id, to_char(host_local, 'YYYY-MM-DD"T"HH24:MI:SS') AS t, record_number_concurrent AS rnc, id::text AS id, metric_key, dim, value_num, attrs, message_number
   FROM insight.ge_mri_facts
   WHERE metric_key IN ('mri.sw_start', 'mri.sw_stop', 'mri.system_up', 'mri.service_mode', 'mri.process_death')
      OR (metric_key = 'mri.error' AND dim = '${D.STOP_COMPANION}')`;
@@ -180,7 +191,7 @@ function js_deaths(events, window_min = D.RESTART_WINDOW_MIN) {
   return events.filter((e) => e.metric_key === "mri.process_death").map((d) => {
     const w = window_min * 60;
     const at_restart = (restart.get(d.system_id) || []).some((r) => Math.abs(secs(r.t) - secs(d.t)) <= w);
-    return { system_id: d.system_id, at: d.t, process: d.dim, at_restart };
+    return { system_id: d.system_id, at: d.t, process: d.dim, message_number: d.message_number, at_restart };
   });
 }
 
@@ -199,13 +210,16 @@ function js_inventory(events) {
   return out;
 }
 
-// Two row sets, compared as sorted canonical JSON over the given fields.
+// Two row lists, compared as MULTISETS of canonical JSON over the given
+// fields: a row present twice on one side and once on the other is a
+// difference (review MRI3-DERIVE P2-1). diffs = sum of |count_sql - count_js|.
 function same_rows(a, b, fields) {
-  const canon = (rows) => rows.map((r) => JSON.stringify(fields.map((f) => (r[f] === undefined ? null : typeof r[f] === "bigint" || /^-?\d+$/.test(String(r[f])) && f.endsWith("_s") ? Number(r[f]) : r[f])))).sort();
-  const x = canon(a), y = canon(b);
-  const xs = new Set(x), ys = new Set(y);
-  const only_sql = x.filter((r) => !ys.has(r)), only_js = y.filter((r) => !xs.has(r));
-  return { rows: x.length, js_rows: y.length, diffs: only_sql.length + only_js.length, samples: [...only_sql.slice(0, 3).map((r) => ({ sql: r })), ...only_js.slice(0, 3).map((r) => ({ js: r }))] };
+  const canon = (r) => JSON.stringify(fields.map((f) => (r[f] === undefined ? null : typeof r[f] === "bigint" || /^-?\d+$/.test(String(r[f])) && f.endsWith("_s") ? Number(r[f]) : r[f])));
+  const count = (rows) => { const m = new Map(); for (const r of rows) { const k = canon(r); m.set(k, (m.get(k) || 0) + 1); } return m; };
+  const x = count(a), y = count(b);
+  const out = [];
+  for (const k of new Set([...x.keys(), ...y.keys()])) { const d = (x.get(k) || 0) - (y.get(k) || 0); if (d) out.push({ row: k, sql: x.get(k) || 0, js: y.get(k) || 0, n: Math.abs(d) }); }
+  return { rows: a.length, js_rows: b.length, diffs: out.reduce((s, o) => s + o.n, 0), samples: out.slice(0, 5) };
 }
 
 // ---------------------------------------------------------------- checks
@@ -250,11 +264,11 @@ async function verify_mri_derive(t, to = null) {
       ["system_id", "sw", "field_strength_t", "attrs", "last_up_at", "sw_first_seen", "sw_versions", "field_strengths_t", "system_ups"]),
     sw_sessions: same_rows(await t.any(D.SW_SESSIONS_SQL, [null]), js_sw_sessions(events), ["system_id", "started_at", "end_kind", "next_at", "duration_s"]),
     service_sessions: same_rows(await t.any(D.SERVICE_SESSIONS_SQL, [null]), js_service_sessions(events), ["system_id", "started_at", "ended_at", "end_kind", "duration_s"]),
-    deaths: same_rows(await t.any(D.DEATHS_SQL, [null]), js_deaths(events), ["system_id", "at", "process", "at_restart"]),
+    deaths: same_rows(await t.any(D.DEATHS_SQL, [null]), js_deaths(events), ["system_id", "at", "process", "message_number", "at_restart"]),
   };
   const p = await t.oneOrNone("SELECT last_run_stats->'pending' AS p, last_run_stats->'codes_pending' AS c FROM insight.job_state WHERE job_name = $1", [DERIVE_JOB]);
   const pending = p && p.p ? Object.keys(p.p).length : 0;
-  const leaks = E.host + E.ip + E.mac + E.system_id;
+  const leaks = E.host + E.ip + E.mac + E.system_id + E.digit + E.serial + E.ae + E.unreviewed_labelled;
   const ok = !A.diffs && !B.diffs && !C.missing_in_daily && !C.extra_in_daily && !Dc.diffs && !leaks && Object.values(F).every((x) => !x.diffs);
   return { to: upto, daily_vs_source: A, mri_error_by_code_vs_source: B, daily_vs_facts: C, codes_vs_source: Dc, label_leaks: E, derived: F,
     pending_systems: pending, codes_pending: !!(p && p.c === true), ok };

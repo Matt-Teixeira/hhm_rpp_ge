@@ -21,7 +21,8 @@
   labels, and derived queries (capabilities, inventory, sessions, deaths
   with a restart mark). Local rehearsal: every check equal; labels equal
   JS vs SQL on prod's PG 16 (read-only). Q-D1–Q-D5 AGREED 2026-11-13
-  (§8.5). **Next: the Codex review** (`REVIEW-MRI3-DERIVE-HANDOFF.md`).
+  (§8.5). Committed b4522c8. **Codex review 2026-11-13: two P2s, fixed
+  and re-rehearsed** (§8.6); labels now only for the 361 reviewed codes.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -903,7 +904,8 @@ reviewed categories), `cli.js` (+ `derive`, `verify-derive`),
   `CATEGORY_CODES`: the 361 codes above the MRI-2a cut, totals equal to
   `PLAN-MRI-INSIGHTS-CODES.md` §6, pinned by a test; NULL for the 462
   long-tail codes and for new codes), and the **label** = the most common
-  masked template with its share.
+  masked template with its share, **only for the 361 reviewed codes**
+  (§8.6 P2-2).
 - **Labels** (`labels.js`): the MRI-2a masking in one function, with one
   change: **every host name seen in the source** is masked, not only the
   record's own (a message can name another system). ASCII first, 200
@@ -992,4 +994,45 @@ Tests: `insight/mri/test/derive.test.js` 14 of 14; every suite 288 of 288.
   stricter than MRI-2a's own-host masking; the leak check (E) enforces it.
   Cost: a host name that is also an ordinary word (none today; names
   shorter than 3 characters are never masked) would be masked in labels.
+
+### 8.6 Codex review (2026-11-13): `REVIEW-MRI3-DERIVE-CODEX.md`
+
+Codex confirmed the daily rebuild and pending / `codes_pending` protocol,
+device times, deterministic ties, the source-retention handling, the JS /
+SQL label equivalence, that the derived queries match Q-D1–Q-D5, and that
+derive writes only MRI rows. Two P2s, both fixed:
+
+- **P2-1: check F compared sets, not row counts.** Two identical output
+  rows on one side and one on the other passed. **Fix:** `same_rows`
+  compares multisets (diffs = Σ |count_sql − count_js|); the deaths
+  comparison includes `message_number`. Re-check: still 0 differences.
+- **P2-2: labels for unreviewed codes could store unread text.** A new or
+  long-tail code's label is its most common template, which nobody has
+  read; operator free text or a site name could be stored. **Fix:**
+  - **a label is stored only for the 361 reviewed (categorized) codes**,
+    whose templates were read in MRI-2a; the long tail and new codes get
+    `label` NULL until a review categorizes them;
+  - check E extended: no digit (every digit run is masked, so a digit
+    means a leak), no unmasked serial, no unmasked AE phrase, no label on
+    an uncategorized code.
+
+  **The extended check found three real leaks**, all fixed: AE titles in
+  codes 11010, 11011, 600220200 and 600220203, where the title is framed
+  by double spaces or a line break. `labels.js` ran the phrase masks before
+  collapsing whitespace (MRI-2a's doc scrub ran on collapsed text, so the
+  doc never showed them). **Fix:** whitespace is collapsed right after the
+  line-break step, and the "… from / remote host" phrases skip ` | `
+  separators; same in the SQL rewrite; `LABEL_VERSION` 2.
+
+  A test in the MRI-3 commit (`derive.test.js`) used one of those real AE
+  titles as a sample string. That commit had not been pushed; it was
+  rewritten (16b91c8 → b4522c8, only that string changed) before this fix,
+  so the title is in no pushed or reachable commit.
+
+**Re-checked:** tests 288 of 288. Local: rehearsal all checks 0 (E: 0 of 8
+leak kinds in 361 labels; 462 codes unlabelled = the long tail); `--full`
+changed only the code rows; verify PASS. Prod, read-only (PG 16.15): SQL vs
+JS 823 codes, 0 differences; the leak checks on the prod-built labels: 0,
+including the three titles. Logs: `~/cv_d3b_evidence/mri/mri3/30_*` …
+`37_*`.
 

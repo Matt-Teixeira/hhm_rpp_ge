@@ -8,7 +8,8 @@
 // boundaries, any case) -> <host>; MAC -> <mac>; serials; IPv4 -> <ip>;
 // 0x-hex and every digit run -> #; GE's date formats -> <date>; DICOM AE
 // titles / remote hosts in the known phrases -> <ae>; the ARS device line;
-// the JVM log prefix. Line breaks (real or a literal backslash-n) -> ' | '.
+// the JVM log prefix. Line breaks (real or a literal backslash-n) -> ' | ',
+// then runs of whitespace -> one space, before any phrase is matched.
 // Text is made ASCII first (each non-ASCII character -> '?') so the SQL
 // check (verify_derive.js) means the same by \s, word boundaries and the
 // 200-character cut. verify_derive.js rewrites this independently in
@@ -16,7 +17,7 @@
 //
 // Nothing in the GE CT or CV run loads this file.
 
-const LABEL_VERSION = 1;
+const LABEL_VERSION = 2; // 2: whitespace collapsed before the phrase masks
 const LABEL_MAX = 200;
 const MIN_HOST = 3; // shorter "hosts" would mask ordinary words
 
@@ -38,6 +39,10 @@ const DAY = "Mon|Tue|Wed|Thu|Fri|Sat|Sun";
 function template(message, host_re) {
   let m = ascii(message);
   m = m.replace(/\\n|\\r|\r\n|\n|\r/g, " | ");
+  // Collapse whitespace BEFORE the phrase masks, which expect single spaces:
+  // AE titles framed by double spaces / line breaks slipped through
+  // otherwise (review MRI3-DERIVE P2-2 follow-up, found by the extended check E).
+  m = m.replace(/\s+/g, " ");
   if (host_re) m = m.replace(host_re, "<host>");
   m = m.replace(/\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b/g, "<mac>");
   m = m.replace(/SERIAL=\S+/g, "SERIAL=<serial>");
@@ -52,7 +57,7 @@ function template(message, host_re) {
   m = m.replace(/Operation timed out \[[^\]]*\]/g, "Operation timed out [<ae>]");
   m = m.replace(/No Route to [^.]+\./g, "No Route to <ae>.");
   m = m.replace(/Network session creation for \S+/g, "Network session creation for <ae>");
-  m = m.replace(/(Association was rejected from|ECHO was received from|rejected by the remote host) [^\s.]+/g, "$1 <ae>");
+  m = m.replace(/(Association was rejected from|ECHO was received from|rejected by the remote host) (?:\| )*[^\s.|]+/g, "$1 <ae>");
   m = m.replace(/Resetting ARS \S+ - .*$/, "Resetting ARS <device> - <build>");
   m = m.replace(/host: \S+:/gi, "host <host>:");
   m = m.replace(/^<date> com\.ge\.[A-Za-z0-9_.$]+ [A-Za-z0-9_]+(\s*\|)?\s*/, "");

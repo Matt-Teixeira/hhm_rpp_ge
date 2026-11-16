@@ -34,8 +34,13 @@
   refused until C1-MRI. Committed 4b0b0a7. **Codex review CLOSED
   2026-11-16: one P2, withdrawn in round 2** (§9.8;
   `REVIEW-MRI4-FINDINGS-CODEX.md`): no code change, a regression test
-  added. The C1-MRI change is planned in §10,
-  for its own review.
+  added.
+- **C1-MRI (CT verifiers scoped to CT rows): BUILT 2026-11-16, uncommitted,
+  in a worktree** (§10.5; branch `c1-mri-aware` from d563c75, outside the
+  repo directory; the main checkout and prod unchanged). Tests and the
+  local rehearsal pass. **Codex review CLOSED 2026-11-16, no findings**
+  (`REVIEW-C1-MRI-CODEX.md`, §10.6). Committed on `dev` and deployed
+  only after the CV-5 close-out (§10.4).
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -1480,7 +1485,7 @@ re-checked against this section and the regression test: it had read
 there, and the SQL's `mark_early` / `mark_any` split follows the same rule.
 No code change indicated; findings tests 27 of 27. **Review closed.**
 
-## 10. C1-MRI: the CT verifiers scoped to CT catalog rows (planned 2026-11-16, for its own review)
+## 10. C1-MRI: the CT verifiers scoped to CT catalog rows (planned and built 2026-11-16, uncommitted)
 
 **Why:** C1 (PLAN-CV-INSIGHTS.md §11) scoped the three CT verifiers by
 *excluding* `cv.*` / `cv_`. The first `mri.*` metric catalog row (the MRI-2
@@ -1522,10 +1527,13 @@ this small change.
   checks accept the two-part filters. Renamed in spirit to "scope", the
   file name kept.
 - `insight/cv/test/cv.test.js` "C1: every CV catalog row is one the CT
-  verifiers' filters leave out": its `includes(... <> 'cv_')` text check
-  still holds; add the MRI rows to the "no CT row is excluded" half.
+  verifiers' filters leave out": **unchanged** (built 2026-11-16): its text
+  checks still hold on the two-part filters, so no file in `insight/cv/`
+  changes. The real MRI registries are checked from the MRI side instead
+  (`mri.test.js`, below).
 - `insight/mri/test/mri.test.js` "C1-MRI interlock": now expects `[]` from
-  the real modules.
+  the real modules; plus a new test: every real MRI catalog row (23 metric,
+  11 finding) is one the CT filters leave out, and no CT row is.
 - `insight/mri/test/findings.test.js` "preflight refusals": `--apply` now
   passes the interlock (the refusal stays covered by the `mri.test.js`
   cases with fake modules).
@@ -1553,3 +1561,99 @@ this small change.
    `dev`, the CT stage rehearsal on prod (`node insight/cli.js stage
    --rehearse`), push, the user pulls on prod.
 6. MRI-2 backfill (§7.5), 7. MRI-3 derive, 8. MRI-4 findings (§9.7).
+
+### 10.5 Build (2026-11-16, uncommitted)
+
+**Where:** a scratch git worktree on branch `c1-mri-aware` (from `dev` at
+d563c75) in the session scratchpad, outside the repo directory, as C1 was
+built (CV §11). The main checkout, `index.js`, the CT and CV run, and prod
+are unchanged; the freeze holds.
+
+**The change** (`git diff` in the worktree, 6 files, +105 −38):
+- the three CT statements of §10.1, each module exporting
+  `MRI_AWARE = true` with a comment pointing here; nothing else in them
+  changes except comments;
+- the tests of §10.2:
+  - `insight/test/cv_scope.test.js`: copies of the 23 / 11 MRI keys (CT
+    code may not load `insight/mri`). MRI rows pass; a missing, extra or
+    changed CT row next to them still fails; `mrix.*`, `mrix_unknown`,
+    `mria` and `mri` count as CT; exactly two exclusions per statement;
+    the C1-only statement would have counted the MRI rows;
+  - `insight/mri/test/mri.test.js`: the interlock now expects `[]`, plus
+    the real-registry test;
+  - `insight/mri/test/findings.test.js`: preflight `--apply` passes.
+
+**Tests:** every suite in the worktree: **316, 315 pass, 1 skipped** (CT
+`stage.test.js` "F2 connect()", which needs a `.env`, and a worktree has
+none; the same skip as C1). `cv_scope` 7, `mri` 24, findings 27.
+**Mutations** (each fails ≥ 2 tests): either `mri.%` filter removed; the
+findings filter removed; a 3-character prefix `'mri'`; `LIKE 'mri%'`
+without the dot; `LIKE 'mri\_%'` (a backslash); `MRI_AWARE = false` on one
+module.
+
+**Local rehearsal** (throwaway PG 14, one transaction, rolled back;
+`~/cv_d3b_evidence/mri/c1mri/c1mri_local.js`, `c1mri_local.log`). Original
+modules = the main checkout; C1-MRI = the worktree; `insight/db.js` stubbed
+for both. CT catalogs seeded with CT's own statements (39 metric, 13
+finding rows) next to 23 `mri.*` / 11 `mri_*` (the real local rows) and 9
+`cv.*` / 5 `cv_*`; 69 `ge_mri` findings present:
+
+| Case | Original | C1-MRI |
+|---|---|---|
+| CV + MRI rows: `verify_facts` / derive invariants / findings catalog | FAIL ×3 (62 vs 39; 24 vs 13) | PASS ×3 (39 = 39; 13 = 13) |
+| MRI rows only | FAIL ×3 | PASS ×3 |
+| CT metric row missing / extra `mrix.not_mri` | – | both metric checks FAIL |
+| CT finding label changed / extra `mrix_unknown`, `mria`, `mri` | – | findings catalog FAILS |
+| No CV / MRI rows (correct, and with a missing CT row) | identical to C1-MRI | identical to original |
+| `standard_conforming_strings` on / off | – | PASS, catches `mria`; MRI's own catalog statements 11 / 11 under both |
+| `ct_verifiers_not_mri_aware()`; real MRI `backfill` and `findings` preflight `--apply` | all 3 named; both refused (C1-MRI) | `[]`; both pass |
+
+After the rollback the local catalogs and findings are as before.
+
+**Incident while recording this (2026-11-16, no effect):** the plan text
+for this section was first passed through an unquoted shell heredoc, so
+the shell ran each backticked phrase as a command. Among them were
+`node insight/cli.js stage` and `node insight/cv/cli.js stage` (the
+`--rehearse` flag was on the next line, so not passed), from the main
+checkout, whose `.env` targets prod. Both stopped at argument parsing
+("stage needs --rehearse" / "stage takes only --rehearse"): the CT CLI
+throws that before `connect()`, and the CV CLI parses arguments before it
+even loads `db.js`. So no database connection was opened and nothing was
+written. The rest were not commands, or not executable (a `git diff` in
+the main checkout ran, read-only); nothing from `.env` was printed. Plan
+edits now use quoted heredocs only.
+
+**Next (each step after the previous one; the user decides):**
+1. Codex review (`REVIEW-C1-MRI-HANDOFF.md`): done, closed (§10.6).
+2. After the CV-5 close-out: commit on `dev` (asking first); the worktree
+   is removed once the change is there.
+3. The CT stage rehearsal on prod (the user): `node insight/cli.js stage
+   --rehearse`; then the CV stage rehearsal (`node insight/cv/cli.js stage
+   --rehearse`, unchanged code, as a check).
+4. Push, pull on prod; then §10.4 from step 6.
+
+### 10.6 Codex review (closed 2026-11-16): `REVIEW-C1-MRI-CODEX.md`
+
+**No findings; no change to the worktree.** Codex ran the four no-DB
+suites in the worktree (`cv_scope` 7, `mri` 24, findings 27, `cv` 17, all
+pass) and no CLI, migration runner or database command. Answers to the
+five handoff questions:
+
+1. **Filters:** `NOT LIKE 'mri.%'` (`.` literal) and
+   `left(finding_key, 4) <> 'mri_'` drop exactly the MRI namespaces; `mri`,
+   `mria` and `mrix_*` stay CT; no backslash dependency; no CT registry
+   key starts `mri.`.
+2. **Completeness:** the three statements are the only CT checks that
+   gate on catalog contents. `findings/run.js` (extra catalog keys logged,
+   aggregate counts), `load.js` and the stage's fresh read only report;
+   CT findings reads and verification are scoped to `source = 'ge_ct'`.
+   CV's stage "CT unchanged" fingerprint includes MRI rows on purpose: it
+   detects changes during a CV stage run, not the presence of MRI rows.
+   Concurrent MRI writes are MRI-5's shared lock.
+3. **`cv_scope.test.js`:** its fake applies each exclusion as a conjunct,
+   which models the two ANDed predicates; the copied keys and the
+   real-registry test in `mri.test.js` complement each other.
+4. **`cv.test.js` unchanged:** right; the CV suite keeps pinning CV
+   behaviour without owning MRI's registry.
+5. **Deploy order:** sound as in §10.5 "Next"; keep 009 and the C2-MRI
+   grant in the §10.4 order; C1-MRI needs no schema change.

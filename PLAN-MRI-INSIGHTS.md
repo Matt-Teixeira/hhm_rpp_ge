@@ -26,8 +26,14 @@
 - **MRI-4a (findings groundwork): AGREED 2026-11-16** (the recommendation
   in each of F1–F12; §9): the series of every candidate, 11 proposed rules
   replayed on the local copy refreshed to 2026-11-16 (69 findings, 26
-  open; 9 open on the 6 current systems), decisions F1–F12. The shared
-  findings tables need no migration (§9.4). Next: the MRI-4 build.
+  open; 8 open on the 6 current systems), decisions F1–F12. The shared
+  findings tables need no migration (§9.4).
+- **MRI-4 (findings): BUILT 2026-11-16** (§9.7): new files in
+  `insight/mri/findings/`. Local rehearsal: the §9.2 list exactly, every
+  check 0; verify-findings PASS; CT / CV rows untouched. `--apply` is
+  refused until C1-MRI. Review handoff `REVIEW-MRI4-FINDINGS-HANDOFF.md`;
+  awaiting `REVIEW-MRI4-FINDINGS-CODEX.md`. The C1-MRI change is planned
+  in §10, for its own review.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -1107,7 +1113,7 @@ for every rule. Keys `mri_`.
 | 10 | `mri_error_storm` | a storm day: residual ≥ 300 and ≥ 10× max(baseline, 1), as CV. Trips with a storm day in the last 7 | high with ≥ 3 storm days in 28 | 8 on 5 systems, 2 open: SME21914 ×4, every storm day the `autoview` bad-image code 100055 (2 high; **the latest 11-14 → open**), SME21824 09-30 → open, SME19647 07-27 → 08-17, SME21923 05-18 → 06-12, SME02582 04-28 → 05-21 |
 | 11 | `mri_unclean_restarts` (new) | ≥ 3 software sessions ended by a new start with no stop, in 7 days, counted on the day of that new start | low | 3, 0 open: SME02582 2025-05-12, SME19647 06-02, SME21824 07-17 |
 
-**Total:** 69 findings, 26 open. **On the 6 current systems, 9 open:**
+**Total:** 69 findings, 26 open. **On the 6 current systems, 8 open:**
 - SME02582: image-quality warning (since its first data days), prescan
   failures (11-11);
 - SME19647: coil faults (high), table faults (persistent);
@@ -1116,7 +1122,7 @@ for every rule. Keys `mri_`.
   the same `autoview` bad-image code), table faults (11-09);
 - SME21920, SME21932: none.
 
-The other 17 open findings are on the 11 systems that stopped sending; they
+The other 18 open findings are on the 11 systems that stopped sending; they
 stay open at their `data_through`, as CT's do (§9.4).
 
 **Rule 10's residual** = the `mri.error` rows whose code is reliability,
@@ -1324,3 +1330,178 @@ migrations):**
   explained by its codes and series; `--apply --replay`, then
   `verify-findings` PASS; the CT and CV verifiers and the CT viewer
   unchanged.
+
+### 9.7 MRI-4 build (2026-11-16)
+
+**Files** (new, apart from the MRI CLI and one MRI test line; nothing in
+the CT or CV run loads them, pinned by the isolation tests):
+- `insight/mri/findings/`:
+  - `context.js`: pure. Dense day series per system (scan sums, cooling
+    with its cryo kinds, TPS failures, prescan without the operator
+    reasons, coil, table, IQ, PM, the rule 10 residual, unclean restarts)
+    and the deaths per day and process with two counts: not at a restart
+    by events on a day ≤ the death's day (used on the as-of day), and not
+    at a restart at all (earlier days). Same shape as CT's context, so
+    CT's fold runs on it. The residual's excluded codes come from the
+    registry (48 codes), the restart window from `derived_sql.js`.
+  - `rules.js`: the 11 rules of §9.2 (thresholds as agreed), the catalog
+    rows, validation (`mri_` prefix, windowed only, internal, quiet 14).
+  - `load.js`: data days (midnight and last instants) and restart events /
+    deaths from `ge_mri_facts`, cells from `ge_mri_daily`. Read-only.
+  - `run.js`: rehearse / apply / replay, from CV's (CT's `reconcile`,
+    `totals`, upsert and fold, unchanged). `as_mri_rows` relabels to
+    `ge_mri` and refuses any other key. Every read, write and delete is
+    limited to `source = 'ge_mri'` / `mri_` catalog keys.
+  - `verify_sql.js`: independent SQL from §9.2's definitions: categories
+    from `ge_mri_codes`, the excluded codes and thresholds written out
+    (a test pins them to the registry), the restart mark as a range join
+    with the as-of cut, unclean restarts by `lag()`, CT's island method.
+  - `verify.js`: inventory (fact days = daily days), findings = SQL field
+    by field at each system's as-of date (CT's `compare_findings`), the
+    `mri_*` catalog = registry, invariants, no `mri_` key under another
+    source.
+- `insight/mri/cli.js`: `findings --rehearse|--apply [--replay]
+  [--system S]` (database name; `--apply` then APPLY) and
+  `verify-findings` (read-only).
+- `insight/mri/tools/build_findings_fixtures.js` and
+  `__fixtures__/findings/`: all 17 systems as of 2026-11-16 (1.2 MB of
+  compact arrays: device days and instants, codes, dims, counts, scan sums,
+  event kinds and process names; `mri.error` cells only for the codes a
+  rule reads), with the SQL's 69 findings.
+- `insight/mri/test/findings.test.js`: 26 tests.
+- `insight/mri/test/mri.test.js` "cli flags": the unknown-command case
+  now uses an unknown command (`findings` exists).
+
+**Interlocks (preflight):** insight_writer only, never a superuser; schema
+≥ 9; a successful `ge_mri_derive` on record with nothing pending and no
+owed codes; fact days = daily days; `--apply` needs C1-MRI (each CT
+verifier exports `MRI_AWARE`).
+
+**Tests:** findings 26: the registry; the SQL's thresholds and code lists
+= the registry's; the residual by category (noise, service, utilization
+and finding codes out; new codes in); scan sums, operator reasons, cryo;
+unclean restarts in source order; the as-of restart mark (a 23:55 death
+and a 00:05 start); every rule's boundaries; CT's fold (open, 14 evaluated
+quiet days, resolve, reopen; times); **as-of purity on the real data**
+(every rule, two cut days per system: 2,095 trip days equal); `as_mri_rows`;
+the preflight refusals; prefix filters with no backslash and every write
+scoped to `ge_mri`; loader / SQL read only MRI tables; isolation of the
+requires; CLI; **the fixture: JS = the independent SQL on all 17 systems**,
+invariants, no message text, IP or MAC in evidence; the fixture holds only
+codes, dims, counts, process names and device times; the §9.2 list
+(69 / 26, per key, the 8 open on the current systems, named episodes).
+**Every suite: 314 of 314 in 24 files** (288 before + 26).
+
+**Local evidence** (throwaway PG 14, the §9 copy; logs and harness in
+`~/cv_d3b_evidence/mri/mri4/`, `20_*` … `24_*`):
+- **JS vs SQL**, read-only, as of 2025-12-31, 2026-06-15, 08-10, 10-19 and
+  11-16: equal at each (7 / 42 / 60 / 66 / 69 findings).
+- **Synthetic `ge_ct` / `ge_cv` findings seeded** (4 rows, 2 on an MRI
+  system id, with 3 catalog rows).
+- **`findings --rehearse --replay`:** 69 findings, 26 open = §9.2; pass 2:
+  0 changes; a default pass after the replay: 0 changes, 0 drift;
+  incremental (replay as of 10-19, then default runs at 10-26, 11-02,
+  11-09, 11-16): identical to the replay, 0 drift; CT / CV rows and catalog
+  unchanged; `verify-findings` PASS inside the transaction; rolled back.
+  28 s.
+- **Refused:** `--apply` without C1-MRI (the real CT verifiers, naming all
+  three); derive pending; code labels owed; derive status `error`; a fact
+  day missing from `ge_mri_daily`; a superuser (whatever the environment
+  names).
+- **Apply** (`--replay`; C1-MRI simulated in memory in the harness only):
+  69 inserted, one transaction per system; `verify-findings` from a
+  read-only session PASS; a default re-run and a replay re-run: 0 changes,
+  0 drift; `--system SME21914`: 0 changes; the seeded CT / CV findings and
+  catalog rows byte-identical before and after.
+- **Privacy:** none of the 17 source host names, and no IPv4, in the
+  fixtures, the new code, this plan or the logs.
+
+**Found while building:**
+- **JIT compile time.** The first SQL marked restarts with two correlated
+  EXISTS over a CTE; PostgreSQL's cost estimate (11.8 M) switched on JIT
+  with optimization and inlining: 16.9 s of an 18.5 s query. As a range
+  join the same query costs a fraction and runs in 3.8 s (JIT 1.4 s), with
+  the same result. Worth knowing for prod's PG 16: a correlated subquery
+  in a verifier can cost seconds of JIT alone.
+- **The §9.2 count on the current systems was 8 open, not 9** (corrected
+  above); the totals (69 / 26) were right.
+
+**Prod order (the user runs it, after §7.5 and MRI-3 there):** C1-MRI
+deployed (§10) → `node insight/mri/cli.js findings --rehearse --replay`
+(expect `ok` and the §9.2 list, differences explained by new data) →
+`findings --apply --replay` → `verify-findings` → the CT and CV verifiers.
+Later runs use the default mode (the MRI-5 stage).
+
+## 10. C1-MRI: the CT verifiers scoped to CT catalog rows (planned 2026-11-16, for its own review)
+
+**Why:** C1 (PLAN-CV-INSIGHTS.md §11) scoped the three CT verifiers by
+*excluding* `cv.*` / `cv_`. The first `mri.*` metric catalog row (the MRI-2
+extract syncs 23) fails two of them, and the first `mri_*` finding catalog
+row (MRI-4, 11) fails the third. The CT stage rehearsal gates on all three,
+so this must be deployed before MRI-2's first prod write (§7.5). It is CT
+code, so after the CV-5 close-out, with its own Codex review, the CT stage
+rehearsal and a deploy, as C1 was.
+
+### 10.1 The change (three CT files, the catalog statements only)
+
+| File | Today | After |
+|---|---|---|
+| `insight/verify_facts.js` `CATALOG_SQL` | `WHERE metric_key NOT LIKE 'cv.%'` | `WHERE metric_key NOT LIKE 'cv.%' AND metric_key NOT LIKE 'mri.%'` |
+| `insight/derive/verify.js` `INVARIANTS_SQL` (catalog subselect) | the same | the same addition |
+| `insight/findings/verify.js` `CATALOG_SQL` | `WHERE left(finding_key, 3) <> 'cv_'` | `WHERE left(finding_key, 3) <> 'cv_' AND left(finding_key, 4) <> 'mri_'` |
+
+- Each module also exports **`MRI_AWARE = true`**, with a comment pointing
+  here; the MRI `backfill` and `findings` `--apply` interlocks read it
+  (`insight/mri/load.js` `ct_verifiers_not_mri_aware`).
+- No backslash in any literal (CV-C1 P2): `'mri.%'` has no `_`, and the
+  finding filter is a plain prefix test.
+- **No CT key starts with `mri`** (checked against both CT registries; a
+  test pins it), so nothing CT is hidden.
+- **Unchanged:** every other check, expected value and message.
+
+**Recommended: extend the exclusion (above).** Not chosen: select CT keys
+by the CT registry's prefixes (e.g. `split_part(metric_key, '.', 1) =
+ANY(...)`). It would survive a fourth modality without a change, but it is
+a larger change to closed-out CT code, and a new CT prefix would then need
+the verifier edited as well. With the exclusion, a fourth modality repeats
+this small change.
+
+### 10.2 Tests updated in the same change
+
+- `insight/test/cv_scope.test.js`: its fake catalog adds `mri.*` and
+  `mri_*` rows (pass with and without them; a missing / extra / changed
+  CT row still fails; `mrix.*` / `mrix_*` still count as CT). Its text
+  checks accept the two-part filters. Renamed in spirit to "scope", the
+  file name kept.
+- `insight/cv/test/cv.test.js` "C1: every CV catalog row is one the CT
+  verifiers' filters leave out": its `includes(... <> 'cv_')` text check
+  still holds; add the MRI rows to the "no CT row is excluded" half.
+- `insight/mri/test/mri.test.js` "C1-MRI interlock": now expects `[]` from
+  the real modules.
+- `insight/mri/test/findings.test.js` "preflight refusals": `--apply` now
+  passes the interlock (the refusal stays covered by the `mri.test.js`
+  cases with fake modules).
+
+### 10.3 Checks before the commit
+
+- Every suite (314 today).
+- **Local rehearsal** (throwaway PG 14, as CV §11.3): the CT catalogs
+  seeded from CT's own statements next to the 23 `mri.*` / 11 `mri_*` rows
+  (and the `cv` ones): the original modules FAIL, the changed ones PASS;
+  a missing / extra CT row and a changed CT label still FAIL; real MRI
+  `backfill` / `findings` preflight `--apply` passes.
+- **Other CT code** (as CV §11.4, log-only, not changed): CT findings
+  `sync_catalog` will list the `mri_*` keys as "not in the registry"; CT
+  `COUNTS_SQL` totals and the stage's "fresh read" count include
+  `ge_mri` rows. CV's `stage.js` "CT unchanged" fingerprints exclude only
+  `cv`, so MRI rows count there; they are constant within a CV run
+  unless MRI writes at the same minute, which the shared stage wrapper
+  (MRI-5) coordinates.
+
+### 10.4 Order (each step after the previous one; the user decides)
+
+1. CV-5 close-out. 2. Push. 3. 009 (§6.5). 4. C2-MRI grant.
+5. **C1-MRI:** build on a branch or worktree, review closed, commit on
+   `dev`, the CT stage rehearsal on prod (`node insight/cli.js stage
+   --rehearse`), push, the user pulls on prod.
+6. MRI-2 backfill (§7.5), 7. MRI-3 derive, 8. MRI-4 findings (§9.7).

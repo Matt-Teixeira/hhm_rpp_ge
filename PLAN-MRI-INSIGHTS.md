@@ -41,6 +41,10 @@
   local rehearsal pass. **Codex review CLOSED 2026-11-16, no findings**
   (`REVIEW-C1-MRI-CODEX.md`, §10.6). Committed on `dev` and deployed
   only after the CV-5 close-out (§10.4).
+- **MRI-5 (the stage, shared wrapper): AGREED 2026-11-16 (§11),** every
+  §11.3 recommendation. Step 1 (new files only, a new
+  `insight/stage_wrapper.js` counts as one) is being built within the
+  freeze; the `index.js` hook waits for the CV-5 close-out.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -1657,3 +1661,259 @@ five handoff questions:
    behaviour without owning MRI's registry.
 5. **Deploy order:** sound as in §10.5 "Next"; keep 009 and the C2-MRI
    grant in the §10.4 order; C1-MRI needs no schema change.
+
+## 11. MRI-5: the stage (AGREED 2026-11-16: the recommendation in each of §11.3 Q1–Q7)
+
+MRI-5 keeps the MRI tables current: `run_mri_insight` runs extract →
+derive → findings after the `GE_MRI` ingest, behind its own kill switch,
+and never fails the run. It follows CV §12 (CV-5, live since 2026-11-12)
+and CT §15. It is also the third stage, so the copied wrapper becomes one
+shared helper (§2, §3 Q2; CV §12.3 Q2). It starts on prod only after
+MRI-4's findings are applied there (§10.4). Everything below was measured
+read-only or on the local throwaway DB (`~/cv_d3b_evidence/mri/mri5/`).
+
+### 11.1 Evidence
+
+**Run cadence and ingest** (§1.5, prod run logs):
+- `GE_MRI` runs at :18 / :48 UTC, as a separate process started together
+  with `GE_CT` and `GE_CV`.
+- The ingest takes 18.4 s (p50), 45.6 s (max).
+- Rows per run: p50 6, p99 194, max 344. 418 of 705 runs had rows.
+
+**What exists:**
+- The lock-free cores, each run by the CLI under the MRI lock
+  (`insight_ge_mri`, `load.js` `LOCK_KEY`):
+  - `apply_range` (`load.js`): catalog sync, the late re-read, the
+    batches;
+  - `derive_step` (`derive.js`): the pending days, then the code labels
+    when owed;
+  - `findings_step` (`findings/run.js`).
+- Derive and findings already write their watermarks as CV's (= the
+  watermark they covered). So "the three watermarks are equal after each
+  run" is checkable, as for CT and CV.
+- **Missing:**
+  - `extract_step`: `apply_range` with the job read, the end id and one
+    batch;
+  - `insight/mri/stage.js`;
+  - the wrapper `run_mri_insight`;
+  - `mri/cli.js stage --rehearse`;
+  - the `index.js` hook.
+
+**Cost of one stage run** (local PG 14, the copy to 2026-11-16: 17
+systems, 441k facts, of which 332k are `mri.error`; one transaction,
+rolled back, measured twice; `timing.js`, `timing.log`):
+
+| Step | Local |
+|---|---|
+| extract: read 350 source ids | 20 ms |
+| extract: late re-read | 70–170 ms |
+| derive: 6 systems × 1 day | 60–150 ms |
+| derive: **code labels, full rebuild** (823 codes) | **7.6–9.4 s** |
+| findings: preflight (inventory check) | 0.2–0.3 s |
+| findings: default, all 17 systems | 1.7–3.5 s |
+
+- **A run with new rows takes about 10–15 s. A run without new rows
+  takes about 2–4 s** (findings only).
+- **The code labels dominate.** They are rebuilt from every `mri.error`
+  fact joined to its source message. On prod, the read side alone took
+  7.9 s (read-only, MRI-3 evidence `33_fix_prod_labels_pg16.log`). CV's
+  rebuild takes 0.6 s.
+- **Growth:** `mri.error` gains about 25–30k facts a month (Aug–Oct
+  2026; `growth.log`). The rebuild therefore grows about 8% a month,
+  roughly doubling in a year.
+
+**Shared tables and the other stages (read from the code):**
+- **The MRI, CT and CV rows are disjoint.** MRI's rows use the prefixes
+  `mri.` / `mri_`, `source = 'ge_mri'` and the job names `ge_mri_*`. The
+  unique indexes take different keys, so none of the three stages waits
+  on another.
+- **The CT stage rehearsal fingerprints CT rows only:** `source = 'ge_ct'`
+  and the `ge_ct_*` tables. Its unscoped counts are only logged (Codex
+  C1-MRI, §10.6).
+- **The CV stage rehearsal fingerprints every non-CV row,** so MRI rows
+  too, but in a REPEATABLE READ snapshot. A commit by the MRI stage during
+  that rehearsal is therefore invisible to it.
+- **MRI's `findings --rehearse` checks "others unchanged" in READ
+  COMMITTED.** A CT or CV stage committing during it would show as a
+  false FAIL. It is a CLI-only check, and you avoid :18 / :48.
+- **The wrappers** are `insight/index.js` (CT, 149 lines) and
+  `insight/cv/index.js` (143 lines): copies.
+  - They differ in the switch, `FUNC`, the application name and the
+    message texts.
+  - CT passes its rules registry to the stage and logs a partition
+    warning; CV does neither.
+
+### 11.2 Design (agreed)
+
+1. **`insight/stage_wrapper.js` (new, shared): `run_insight_stage(cfg,
+   run_log, addLogEvent, deps)`.**
+   - It is the body of the CT / CV wrappers, with the differences as
+     parameters: `func`, `app_name`, `label`, `load_stage`, `run_args`
+     and `preflight_warnings`.
+   - It keeps the same bounds: connect 10 s, statement 120 s, the
+     client-side query backstop, and the 5-minute stage deadline that
+     kills the connection.
+   - It has one lock per stage: the stage module's `LOCK_KEY`. If the
+     lock is held, it logs INFO and skips.
+   - It never rejects, and a throwing logger never fails the run.
+   - It loads no modality module. The CT, CV and MRI isolation tests
+     check that.
+2. **`insight/mri/index.js` `run_mri_insight(run_log, addLogEvent)`.**
+   - It is off unless `INSIGHT_MRI_ENABLED=true`. Off, it returns before
+     anything is loaded: no helper, no connection, no log event.
+   - On, it calls the helper with `insight_mri_stage`, `func`
+     `run_mri_insight` and `./stage`.
+3. **`insight/mri/stage.js`**, with CV's shape. A step runs only if the
+   one before it succeeded, and each catches up from its own state:
+   1. **extract:** `extract_step` (new, in `load.js`): `apply_range` from
+      the `ge_mri_extract` watermark, **at most one 50k batch**;
+   2. **derive:** `derive_step`: the pending days, then the code labels
+      if owed;
+   3. **findings:** the MRI-4 preflight (`mode: "apply"`), then
+      `findings_step`: all systems, default mode.
+   - **Preflight:**
+     - the writer role, not a superuser;
+     - schema ≥ 9;
+     - C1-MRI (`MRI_AWARE` on the three CT verifiers) and C2-MRI
+       (SELECT on `log.ge_mri_gesys`);
+     - an extract watermark exists (otherwise: "run `backfill --apply`
+       first").
+
+     Any failure logs a WARN and skips the run. A partition horizon
+     under 18 months (`load.js` `PARTITION_WARN_MONTHS`, §6.6) logs a
+     WARN, as CT's does at 6.
+   - **`summarize` / `step_warnings`** as CV's, plus a WARN when derive
+     takes more than 30 s (the label growth, §11.3 Q3).
+4. **`mri/cli.js stage --rehearse`**, as CV's `rehearse_stage`:
+   - one REPEATABLE READ transaction, rolled back, under the MRI lock;
+   - run 1, catch-up; run 2, the last run's rows; run 3, no new rows;
+   - then, on the uncommitted data:
+     - `verify`, `verify-derive` and `verify-findings`;
+     - derive touched = a full rebuild, and findings default = a replay
+       (fingerprints);
+     - **every non-MRI row unchanged** (findings, both catalogs, job
+       state);
+   - the watermarks are unchanged after the rollback;
+   - it asks for the database name before connecting.
+5. **The `index.js` hook** for `GE_MRI`, directly after the CV block,
+   with the same shape (try/catch, a guarded ERROR log).
+   - Isolation tests: `mri.test.js` allows exactly one
+     `require("./insight/mri")`, inside the `GE_MRI` branch.
+   - The CT and CV blocks are checked to be unchanged, with no `mri` in
+     them.
+6. **MRI `findings --rehearse` in REPEATABLE READ** (one line in
+   `insight/mri/findings/run.js`). A CT or CV stage commit then can't
+   show as "others changed", which is the fix CV review CV5-STAGE
+   prompted.
+7. **Run-log events** (`func` = `run_mri_insight`): one per step (INFO,
+   or WARN with the reason), then a summary with `ok`, ms, the
+   watermarks, `watermarks_equal` and `behind_ids`.
+8. **Monitoring:** `~/cv_d3b_evidence/mri/mri5/monitor.js`, read-only,
+   from CV's `monitor.js`. It checks:
+   - every `GE_MRI` run's stage and ingest;
+   - the `GE_CT` and `GE_CV` stage summaries;
+   - the MRI job state against the source max;
+   - leftover sessions.
+
+   A daily wrapper script is offered for your crontab, next to CV-5's,
+   which stays unchanged.
+
+### 11.3 Questions and answers (AGREED 2026-11-16: the recommendation in each)
+
+1. **Shared wrapper: when do CT and CV move onto it? Recommended: in a
+   separate, later step (MRI-5b), after MRI's 7 clean days.**
+   - MRI-5 adds the helper and uses it for MRI only. The live CT and CV
+     wrappers stay untouched during MRI's first week, so any problem in
+     that week has one cause.
+   - MRI-5b then makes `insight/index.js` and `insight/cv/index.js` thin
+     callers of the helper. Each is proven by an equivalence harness:
+     the old wrapper and the helper run the same scenarios (off, lock
+     held, preflight skip, step error, deadline, throwing logger) and
+     must give identical results and run-log events. Then come the CT
+     and CV stage rehearsals and 3 days of watching with the existing
+     monitors.
+   - Not chosen: moving all three in MRI-5. That changes the live CT and
+     CV paths in the same week MRI goes live.
+   - Not chosen: a third copy, which contradicts §3 Q2 / CV Q2 and leaves
+     three copies to drift.
+2. **Coordination between the three stages. Recommended: no lock across
+   modalities;** each stage keeps its own. The rows are disjoint and
+   nothing blocks (§11.1). The rehearsals read REPEATABLE READ snapshots
+   (CV's already does; MRI's does with §11.2 items 4 and 6). Not chosen:
+   a shared advisory lock, which would make three independent processes
+   queue at :18 / :48 for no benefit.
+3. **Code labels. Recommended: rebuild them on every run with new rows,
+   as CV** (8–10 s now, on about 59% of runs). The run log WARNs when
+   derive passes 30 s; at that point, plan a cheaper rebuild.
+   - Not chosen now: a once-a-day rebuild. The findings preflight
+     refuses while labels are owed (the MRI-4 interlock, reviewed). So
+     findings would skip on most runs, or that interlock would have to be
+     relaxed and reviewed again.
+   - Not chosen now: an incremental rebuild. It is a new derive
+     algorithm with its own review, for about 8 s every 30 minutes.
+4. **Findings cadence. Recommended: every run, all systems, default mode,
+   as CV** (1.7–3.5 s). Every run is then a drift check, and a date change
+   is never missed. An unchanged run writes no finding rows.
+5. **Kill switch. Recommended: a separate `INSIGHT_MRI_ENABLED=true`,
+   off by default,** as CV. Deploying the code then changes nothing, and
+   MRI can be switched off alone.
+6. **Per-run ceiling. Recommended: at most one 50k batch per run** (CT
+   Q5, CV Q4; the largest run seen was 344 rows).
+7. **First run. Recommended: it catches up from the watermark left by
+   your manual backfill / derive / findings applies** (§10.4 steps 6–8),
+   in one batch. Without an extract watermark the stage logs a WARN and
+   skips.
+
+### 11.4 Exit criteria (as CV §12.4)
+
+- The stage rehearsal passes on prod, and a typical run is measured
+  (expected 10–15 s with rows, 2–4 s without).
+- **7 consecutive days of clean runs:**
+  - every summary `ok`;
+  - the three MRI watermarks advance and are equal after each run;
+  - derive has nothing pending and no labels owed;
+  - `behind_ids` = 0;
+  - default findings report 0 drift.
+- `verify`, `verify-derive` and `verify-findings` pass at the end. Each
+  new finding or resolution in the 7 days is reviewed with evidence.
+- **The ingest is unaffected,** with the switch off and on:
+  `log.ge_mri_gesys` inserts, the Redis offsets, `gzip_n_save`, and the
+  errors / WARN baseline.
+- **CT and CV are unaffected:** their runs and stages stay clean, and
+  their three verifiers pass.
+
+### 11.5 Build order and checkpoints
+
+1. **Code (new files only):**
+   - `insight/stage_wrapper.js`, which nothing in the CT or CV run loads
+     until MRI-5b;
+   - `insight/mri/index.js` and `insight/mri/stage.js`;
+   - `extract_step`;
+   - `stage --rehearse`;
+   - the REPEATABLE READ line (§11.2 item 6).
+
+   Then the tests (no DB, from CT's and CV's `stage.test.js`), a local
+   rehearsal on the throwaway DB, and the Codex handoff
+   `REVIEW-MRI5-STAGE-HANDOFF.md`. **This step fits the freeze** (new
+   files that the CT and CV runs don't load); a new file in `insight/`
+   counts as one (agreed 2026-11-16).
+2. **After the CV-5 close-out:**
+   - the `index.js` hook and the isolation tests;
+   - a hook harness: `GE_MRI` identical with the switch unset, and
+     `GE_CT` and `GE_CV` identical;
+   - the Codex handoff `REVIEW-MRI5-HOOK-HANDOFF.md`.
+3. **After MRI-4's findings are applied on prod (§10.4):**
+   1. commit (I ask first);
+   2. you run `node insight/mri/cli.js stage --rehearse` on prod, avoiding
+      :18 / :48;
+   3. push;
+   4. pull with the switch unset; I confirm the next `GE_MRI`, `GE_CT`
+      and `GE_CV` runs are unchanged;
+   5. you set `INSIGHT_MRI_ENABLED=true`;
+   6. 7 days of monitoring, then the close-out against §11.4.
+4. **MRI-5b** (§11.3 Q1): CT and CV move onto the helper, with its own review,
+   both stage rehearsals and 3 days of watching. Then MRI-6 (`api` views
+   and the viewer), planned when it starts.
+
+Checkpoints for your go-ahead: the answers to §11.3, after step 1, before
+the hook, before each commit, the prod rehearsal, and each deploy action.

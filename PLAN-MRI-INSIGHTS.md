@@ -1,6 +1,6 @@
 # GE MRI Insights — plan
 
-**Current state (2026-11-13; read this first):**
+**Current state (2026-11-16; read this first):**
 - **MRI-0 (decide): AGREED 2026-11-13.** The user took the
   recommendation in each of Q1–Q7 (§3) and the §2 design. The evidence
   (§1) is read-only and was gathered against prod on 2026-11-13. Nothing
@@ -23,6 +23,11 @@
   JS vs SQL on prod's PG 16 (read-only). Q-D1–Q-D5 AGREED 2026-11-13
   (§8.5). Committed b4522c8. **Codex review 2026-11-13: two P2s, fixed
   and re-rehearsed** (§8.6); labels now only for the 361 reviewed codes.
+- **MRI-4a (findings groundwork): AGREED 2026-11-16** (the recommendation
+  in each of F1–F12; §9): the series of every candidate, 11 proposed rules
+  replayed on the local copy refreshed to 2026-11-16 (69 findings, 26
+  open; 9 open on the 6 current systems), decisions F1–F12. The shared
+  findings tables need no migration (§9.4). Next: the MRI-4 build.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -1036,3 +1041,286 @@ JS 823 codes, 0 differences; the leak checks on the prod-built labels: 0,
 including the three titles. Logs: `~/cv_d3b_evidence/mri/mri3/30_*` …
 `37_*`.
 
+## 9. MRI-4a: findings groundwork (2026-11-16, read-only on facts)
+
+**Evidence:**
+- The local throwaway DB (§6.3), refreshed read-only from prod on
+  2026-11-16 14:08 UTC: 2,547 new `log.ge_mri_gesys` rows (ids to
+  5,126,054; the 374,355 older rows matched prod's count). The committed
+  extract and derive then ran on it: 441,043 facts, extract `verify` PASS;
+  70,105 daily rows, `verify-derive` PASS (every check 0 differences).
+- 17 systems, 1,919 data days, device days 2025-05-02 → 2026-11-16.
+- Each candidate was replayed day by day with CT's own fold
+  (`insight/findings/state.js` `step`, loaded read-only), as CV §10: a
+  14-evaluated-day quiet period, severity never falls, at most one open
+  finding per key. Inputs: `ge_mri_daily` and the MRI-3 derived queries
+  (deaths with `at_restart`, software sessions). Nothing was written.
+- Scripts and logs: `~/cv_d3b_evidence/mri/mri4/` (`copy_new.js`,
+  `pull.js` → `data.json`, `series.js`, `deaths.js`, `sess.js`,
+  `scans.js`, `storm.js`, `sim.js`; `sim_final.log` is the §9.2 list,
+  `final.json` the same as data).
+
+### 9.1 What the series show
+
+Per system over its whole history; "active" = data days with ≥ 1 event.
+
+| Candidate (input) | Systems that log it | Shape |
+|---|---|---|
+| **Failed-scan share** (exam summaries, `mri.scans_ok` / `_failed` sums) | 17 | 0.8–5.9% per system over the history. 7-day share (≥ 20 scans) p50 0.4–6.0%; peaks 9.7% (SME21284 08-06, 22 of 226), 25.5% (SME21920 07-28, 12 of 47), 10.2% (SME21914 09-11, 9 of 88). Max failed scans per day 5–20 |
+| **Cooling** (`mri.cooling_fault`) | 7 | Three shapes. **Chronic:** SME21824 every data day (171 of 171; HEC coolant temp high 3,989, cryo-compressor flow high 745 / low 295; median 35 a day); SME21923 RF-coil airflow 43 of 44 days (~13 a day); SME16342 HEC cryo-compressor flow low 32 of 56 days (1–4 a day). **Bursts:** SME21920 BRM water flow 1,547 (05-19) and 3,210 (07-29), leak sensor 636 (09-02); SME16617 BRM 237 (05-07). **Singles:** SME16380, SME19647 (≤ 4 a day) |
+| **TPS reset failures** (2227556 'not successful' + 2256925 'StartupCondition … TPS reset failure', a day with either) | 11 | Rare: 1–10 failure days per system. Clustered on SME21824 (06-18, 07-16/17, 07-25, 08-07/10, 08-21/22) and SME21920 (07-23/24/27). Resets started (2227557): 15 systems, up to 10 a day (SME16339) |
+| **Process deaths not at a restart** (Q-D1: 466 of 1,289) | 10 | **SME21914 `autoview`: 332 deaths on 79 days, up to 14 in 24 h and 28 in 7 days.** Elsewhere small: SME02582 `vre:prescanserver` 42 over 18 months (≤ 3 a week), SME16380 `RtpHost` 10 on 04-28, SME21284 8 + 8 (≤ 2 a week) |
+| **Prescan failures** (`mri.prescan_failed`, by reason) | 17 | Active on 1–150 days; median 1–5 on an active day. Bursts of 13–69 in a day with one reason: driver module error, IRF clock / fibre (SME16339), RF hub setup (SME16342), RF-coil air temperature (SME21824 07-15: 51), data acquisition error (SME21284), gradient not ready (SME21923). Chronic low 'try again' on SME21914 (340) |
+| **Coil faults** (`mri.coil_fault`) | 16 | Mostly 'bias open circuit' at 1–10 a day. **SME19647: 166 of 199 days** (coil-ID comm 588, bias transmit 124); SME02582 87 of 408; SME21824 51 of 171 (coil ID missing). No coil name on these rows (the `coil` attr is empty), so the coil itself can't be named |
+| **Table faults** (`mri.table_fault`) | 16 | **Chronic:** SME19647 197 of 199 days (median 39, max 419: home switch moved 5,707, cradle oscillation 2,757); SME16342 53 of 56 (clutch slip, median 12); SME21284 133 of 140 at ~5 a day (unexpected motion). Episodes elsewhere (SME21914, SME21920, SME21923, SME02582) |
+| **GE image-quality warning** (2218672) | 2 | **Every data day:** SME02582 390 of 408 since 2025-05-02 (median 15 a day), SME21922 70 of 77 |
+| **PM overdue** (2218671 / 2218673) | 9 | Daily runs that end: SME21914 'scheduled' 04-06 → 06-18 then never again; SME21920 05-01 → 06-30. Still running at the last data day on 7 (SME21284 139 of 140 days) |
+| **Error storm** (residual, §9.2 rule 10) | 17 | Residual p50 8–79 a day per system. Storm days are one code: SME21914 `autoview` 'bad format or corrupted image' (100055: 5,088 on 04-02, 1,401 on 11-14), SME21824 coil-config edge parameter (2220018: 1,142 on 09-30), SME19647 Z-gradient data overrange (2250082 / 2250420 / 2250421: ~790 on 07-28), SME21923 worklist network (600100013: 579 on 05-19), SME02582 diagnostics VxWorks error (2252700: 760 on 04-28) |
+| **Unclean restarts** (software sessions ended by a new start with no stop) | 14 | 67 of 1,326 sessions; at most 4 in a week (SME02582 2025-05-12/13, its first captured days; SME21824 07-17 ×3 + 07-20; SME19647 06-02 ×3) |
+| **Service-mode sessions** | 16 | 745 sessions; median 1–7 min and p90 ≤ 10 min on 14 of the 16 (SME21284 and SME21922 longer). The long ones are not sessions: SME16380 1,507 h and SME21284 793 h have no 'off' for weeks; SME21922 three of 25–67 h |
+
+**Episodes cross candidates.** SME21920 07-23 → 07-30 has TPS failures,
+the failed-scan peak, driver-module prescan failures, an SGA power-supply
+overcurrent burst and the 3,210 BRM water-flow alarms. SME21284 08-05 →
+08-10 has the failed-scan peak, data-acquisition prescan failures and
+56 bias-open-circuit coil faults. As in CV §10.2, each is a different
+subsystem's evidence of one event; linking them is a viewer concern.
+
+### 9.2 Proposed rules (replayed)
+
+Windows are device days (7 d = D−6..D, 28 d = D−27..D). "Days" are data
+days (days with any MRI fact). A baseline is the median of the data days
+in D−28..D−1 and needs ≥ 7 of them (CV). Quiet period: 14 evaluated days
+for every rule. Keys `mri_`.
+
+| # | Finding key | Rule | Severity | Replay (as of each system's last data day) |
+|---|---|---|---|---|
+| 1 | `mri_failed_scans_high` | 7-day failed share ≥ 5% and ≥ 3× the baseline share, with ≥ 10 failed scans in the 7 days. Baseline = failed / all scans pooled over D−34..D−7 (the 4 weeks before the window), needs ≥ 100 scans | medium | 3: SME21284 08-06 → 08-31, SME21920 07-24 → 08-19, SME21922 08-05 → open |
+| 2 | `mri_cooling_fault` | cooling alarms on ≥ 3 data days of 7, or ≥ 50 on one day | **high** with a burst day or any HEC cryo-compressor alarm in the 7 days, else medium | 7, 4 open: SME21824 05-01 → open (high, HEC), SME16342 05-28 → open (high, cryo flow low), SME21923 05-05 → open (medium, RF-coil airflow), SME16617 05-07 → open (high, BRM burst); SME21920 three bursts (high), all resolved |
+| 3 | `mri_tps_reset_failures` | ≥ 2 data days in 7 with a TPS reset failure (2227556 or 2256925) | high with ≥ 4 such days in 28 | 5, 0 open: SME21824 07-17 → 08-07 and 08-10 → 09-11 (high), SME21920 07-24 → 08-21, SME16342 05-02 → 05-22, SME21914 09-08 → 09-29 |
+| 4 | `mri_process_crash_loop` | one process dies ≥ 5 times in 7 days, counting only deaths not at a restart (Q-D1) | high with ≥ 20 in 7 | 3: **SME21914 `autoview` 2026-02-09 → open (high)** and 2025-12-16 → 2026-01-29; SME16380 `RtpHost` 04-28 → 05-29 |
+| 5 | `mri_prescan_failures` | a day with ≥ 15 prescan failures (operator reasons left out: stop / pause button, operator request, door open, table not at scan plane) and ≥ 5× max(baseline, 1), in the last 7 | medium | 6, 2 open: **SME02582 11-11 → open** (driver module error 23–27 a day); SME16339, SME16342, SME21284, SME21824 resolved; SME21923 open (stopped sending 06-30) |
+| 6 | `mri_coil_fault` | coil faults on ≥ 4 data days of 7 | high with ≥ 14 such days in 28 | 13 on 6 systems, 3 open: **SME19647 05-05 → open (high, coil-ID comm)**, SME21824 09-18 → open (high), SME16339 08-03 → open |
+| 7 | `mri_table_fault` | **spike:** a day ≥ 10 and ≥ 5× max(baseline, 1) in the last 7; **persistent:** ≥ 10 on ≥ 5 data days of 7 | medium | 10 on 6 systems, 4 open: **SME19647 05-06 → open** (persistent), **SME21914 11-09 → open** (spike), SME16342 and SME21923 open (stopped sending) |
+| 8 | `mri_image_quality_warning` | GE's warning (2218672) on ≥ 2 data days of 7 | medium | 2, both open since their first data days: SME02582 2025-05-05, SME21922 2026-05-04 |
+| 9 | `mri_pm_overdue` | GE's PM-overdue message on ≥ 3 data days of 7 | low | 9, 7 open: SME21914 04-08 → 07-11 and SME21920 05-07 → 07-28 resolved (the message stopped); SME21284 open; 6 on systems that stopped sending |
+| 10 | `mri_error_storm` | a storm day: residual ≥ 300 and ≥ 10× max(baseline, 1), as CV. Trips with a storm day in the last 7 | high with ≥ 3 storm days in 28 | 8 on 5 systems, 2 open: SME21914 ×4, every storm day the `autoview` bad-image code 100055 (2 high; **the latest 11-14 → open**), SME21824 09-30 → open, SME19647 07-27 → 08-17, SME21923 05-18 → 06-12, SME02582 04-28 → 05-21 |
+| 11 | `mri_unclean_restarts` (new) | ≥ 3 software sessions ended by a new start with no stop, in 7 days, counted on the day of that new start | low | 3, 0 open: SME02582 2025-05-12, SME19647 06-02, SME21824 07-17 |
+
+**Total:** 69 findings, 26 open. **On the 6 current systems, 9 open:**
+- SME02582: image-quality warning (since its first data days), prescan
+  failures (11-11);
+- SME19647: coil faults (high), table faults (persistent);
+- SME21284: PM overdue;
+- SME21914: process crash loop (`autoview`, high), error storm (11-14,
+  the same `autoview` bad-image code), table faults (11-09);
+- SME21920, SME21932: none.
+
+The other 17 open findings are on the 11 systems that stopped sending; they
+stay open at their `data_through`, as CT's do (§9.4).
+
+**Rule 10's residual** = the `mri.error` rows whose code is reliability,
+hardware or not yet reviewed (`ge_mri_codes.category` NULL), minus:
+- every code of a metric that has its own finding (rules 2–9: cooling,
+  TPS failed + 2256925, process death, prescan, coil fault, table, IQ,
+  PM);
+- the restart signatures (200002347 / 200002348 start and stop, 200002364
+  the stop companion, 200002379 'exited with status', 5600 msgView).
+
+Noise, utilization, service and inventory codes never count. It is defined
+by code, so it is exact from `ge_mri_daily` (`mri.error`, dim = code)
+whatever the number of named facts per row (CV's note on its residual
+doesn't apply). New codes count until reviewed. RF-amp, gradient and
+receiver faults have no rule of their own and land here (SME19647's
+gradient overrange storm).
+
+**Rule 4's restart mark, as of D.** Q-D1 marks a death at a restart when a
+restart event is within ±10 device minutes. A death at 23:55 can be marked
+by a restart at 00:05 the next day. To keep a day's result a function of
+the data up to that day (CT review F2), the rule counts a restart event
+only if its device day is ≤ D. The replay above used the full mark; the
+build uses the cut, and `verify-findings` checks it.
+
+**Sensitivity** (counts of findings / open; `sim.js` with env overrides):
+
+| Change | Effect |
+|---|---|
+| prescan floor 10 instead of 15 | 6 → 16 findings: ten single days of 10–14 driver-module errors with no other sign |
+| prescan floor 20 | 6 → 4 (drops SME16342's RF-hub and SME21923) |
+| prescan with operator reasons counted | unchanged at 15 |
+| coil faults on ≥ 3 days instead of 4 | 13 → 22: SME02582's bias-open-circuit weeks (3 a week) |
+| storm floor 200 / 500, factor 5 | 12 / 9 / 8; 300 and 10× as CV |
+| failed share factor 2, or ≥ 5 failed scans | 5 / 8 findings: small-number weeks (e.g. 9 of 88) |
+| TPS failure on 1 day instead of 2 | 5 → 22: every isolated failed reset |
+| unclean restarts ≥ 2 instead of 3 | 3 → 11 |
+| cooling on ≥ 2 days, or a burst of 20 | 8 / 7 |
+| table spike floor 20 | 10 → 6 |
+| IQ on ≥ 1 day, PM on ≥ 1 day | unchanged |
+
+**Coverage and history (the 6 of 17, and SME02582):**
+- **The thresholds come from 17 systems' history, but only 6 send today
+  (§1.1).** 11 of the 17 stopped between 05-11 and 11-09, so most of the
+  1,919 system-days are from May–August. Every rule is per system
+  (absolute counts or the system's own baseline), so none depends on how
+  many systems send. A re-tune is due when more systems join (MRI-6
+  review, or 3 months of data from the new ones).
+- **A joining system:** the baseline rules (1, 5, 7 spike, 10) can't trip
+  until it has 7 data days in 28 (rule 1: 100 scans in the 4 weeks before
+  the window). The count rules (2, 3, 4, 6, 7 persistent, 8, 9, 11) can
+  trip from its first days. A system whose first capture reads the whole
+  device log (SME02582, SME21914) gets its history's findings at its first
+  run, opened on device days before it joined.
+- **SME02582's history from 2025-05-02** comes from one read of the
+  device's log at capture start. Its baselines exist from 2025-05, and 7
+  of its 9 findings opened before 2026-04-27. A finding opened in its first
+  data days (the IQ warning, 2025-05-05) means "present since the data
+  starts", not an onset. The viewer shows each system's first data day
+  next to `opened_at`; no extra field.
+- **Capabilities ("doesn't log it" is not zero, Q-M4).** No rule infers a
+  fault from an absence: each trips only on logged events, and rule 1 needs
+  ≥ 100 summarized scans in its baseline. Exam starts (the Q-M4 metric
+  missing on SME21284) feed no rule. What absence does do is resolve: a
+  finding resolves after 14 evaluated days without a trip, and an
+  evaluated day is any data day. The viewer shows capabilities next to
+  findings, so a system that never logs, say, cooling is not read as
+  "no cooling faults".
+
+### 9.3 Not findings in v1 (data only, shown in the viewer)
+
+- **Long service-mode sessions.** Sessions are minutes; the long ones are
+  missing 'off' lines, not service work (§9.1). A rule would report
+  logging gaps.
+- **Invalid coil connected** (`mri.coil_invalid`): handling, chronic on 4
+  systems (SME21824 'not compatible' 163 of 171 days). Coil-database
+  errors stay countable by code.
+- **Door sensor not working** (2218716): every day on SME01096 and SME12152
+  (both stopped sending in June), sparse elsewhere. Whether it means a
+  failed sensor or a door left open is for field service (F7 below).
+- **RF-amp, gradient and receiver faults, autoshim inconclusive:** no rule
+  of their own; their bursts come with TPS resets (§5.1) and land in the
+  storm residual.
+- **Exam starts, service mode, DART, the Q-M6 watch list** (bad image,
+  DICOM push, worklist): countable by code; the bad-image and worklist
+  storms surface through rule 10.
+- **Coil use** (Q-M3): still no measure.
+
+### 9.4 Design (follows CV §10.4, CT §14.2 / §14.7)
+
+- **Files:** all new, in `insight/mri/findings/`, loaded by nothing in the
+  CT or CV run (the isolation test grows to cover them):
+  - `context.js`: dense day series per system (the CV shape, so CT's fold
+    runs unchanged);
+  - `rules.js`: the 11 rules and the catalog rows (`mri_` keys,
+    `customer_visible = false`, validation);
+  - `load.js`: data days from `ge_mri_facts`; cells from `ge_mri_daily`
+    (the named metrics, and `mri.error` by code for the residual and
+    2256925); deaths and restart events with device times (for the as-of
+    mark), software start / stop events (rule 11);
+  - `run.js`: rehearse / apply / replay;
+  - `verify_sql.js` / `verify.js`: independent SQL.
+- **Source and names:** `source = 'ge_mri'`, keys `mri_*`, job
+  `ge_mri_findings`, the `mri_*` rows of `insight.finding_catalog` synced
+  from the registry (MRI's rows only). Categories: `mri_cooling_fault` →
+  environment, `mri_pm_overdue` → compliance, the rest → reliability (as
+  §6.1's metric mapping).
+- **Device time:** windows on `host_local` days. `opened_at` / `resolved_at`
+  = the instant of the device day's local midnight, from the facts
+  (`host_datetime` − time of day of `host_local`); the offsets are whole
+  hours on all 17 systems (checked 2026-11-16). No clock table (Q-D4).
+- **As of each system's data-through date:** each system is evaluated as of
+  its last data day ≤ today; data on later device days is ignored (deaths'
+  restart marks included, §9.2).
+- **The fold is CT's** `replay_system` (unchanged); the MRI wrapper sets
+  `source = 'ge_mri'` and refuses a non-`mri_` key, as CV's `as_cv_rows`.
+  It reuses CT's pure `reconcile` / `totals` / upsert from
+  `findings/run.js` and `compare_findings`, as CV does. Nothing is loaded
+  from `insight/cv/`.
+- **Modes (as CV):** `--replay` makes the system's `ge_mri` rows exactly
+  the replay; the default (incremental) run evaluates systems with data in
+  the last 7 device days, never changes an older resolved row, and reports
+  any disagreement as drift. One transaction per system; job state
+  `ge_mri_findings` with `as_of_by_system`.
+- **Rehearsal (as CV):** pass 1, pass 2 = 0 changes, a default pass after
+  the replay = 0 changes and 0 drift, incremental (replay as of today−28,
+  then default runs at −21, −14, −7, 0) identical to the replay,
+  `verify-findings` inside the transaction, rollback.
+- **Interlocks:** insight_writer only (no superuser); schema ≥ 9; derive
+  caught up (a successful `ge_mri_derive` on record, no pending days, no
+  owed codes, fact days = daily days); `--apply` refused until C1-MRI (the
+  three CT verifiers export `MRI_AWARE`).
+
+**Shared tables: no migration (confirmed 2026-11-16, read from the
+migrations):**
+- `insight.findings.source` has no CHECK (001); the PK
+  `(system_id, finding_key, opened_at)` and the one-open index
+  `(system_id, finding_key)` don't include `source`, but `mri_` keys can't
+  collide with CT or CV keys;
+- `insight.finding_catalog.finding_key` CHECK `^[a-z][a-z0-9_]*$` (005)
+  accepts `mri_…`; `category` and severities fit (above);
+- every CT and CV reader filters `source`: `api.ge_ct_systems_v` (002,
+  004), `api.ge_ct_findings_v` (008), `api.ge_cv_findings_v` and the CV
+  system summary (007); the CT and CV findings runs and verifiers read,
+  write and delete their own source only;
+- **except C1-MRI:** CT's `findings/verify.js` "catalog = registry" leaves
+  out only `cv_` rows, so the first `mri_*` catalog row fails it (§6.4).
+  CT's catalog sync only logs unknown keys, and its counts are log-only
+  (CV §11.4).
+
+### 9.5 Decisions (AGREED 2026-11-16: the recommendation in each)
+
+- **F1 Rules:** adopt rules 1–11 with the §9.2 thresholds. **Recommended.**
+- **F2 Storm residual by code category** (reliability + hardware +
+  unreviewed, minus the finding codes and the restart signatures), not CV's
+  "all minus named facts". **Recommended:** exact without CV's one-named-
+  fact assumption, and noise / service / utilization never make a storm.
+- **F3 Prescan:** leave the operator reasons out and use a floor of 15.
+  **Recommended:** at 10 the rule adds ten single days with no other sign;
+  the operator reasons don't change the list but don't belong in a fault
+  count.
+- **F4 Cooling severity:** high on a burst (≥ 50 in a day) or on any HEC
+  cryo-compressor alarm (the only cryogen signal, §3 Q7), medium
+  otherwise. **Recommended.** Alternative: medium for all, which would
+  rank SME21824's daily HEC alarms with SME21923's RF-coil airflow.
+- **F5 Image-quality warning: medium, not high.** It is GE's own wording
+  ("could significantly degrade Image Quality"), but it is on every data
+  day on both systems, so it is a standing state. **Recommended:** medium,
+  permanently open on SME02582; field service confirms (F7).
+- **F6 PM overdue: low, compliance** (§2 drafted info). **Recommended:** CT
+  uses low for its compliance findings; info is for events
+  (`tube_replaced`).
+- **F7 Field-service note** (adds to Q-M10): SME02582's IQ warning (what
+  failure, since when?), SME21824's daily HEC alarms, SME19647's coil-ID
+  comm faults and table home-switch / oscillation, SME21914's `autoview`
+  crashes and bad-image storms, and the door-sensor messages.
+  **Recommended:** a note, not code (as CV's D4).
+- **F8 Table: spike and persistent variants.** **Recommended:** without the
+  persistent one, SME19647 (197 of 199 days) and SME16342 (clutch slip)
+  get spikes only. Not chosen: a separate key, which splits one
+  subsystem's evidence.
+- **F9 Unclean restarts as rule 11 (low); long service mode as data only.**
+  **Recommended** (§9.3).
+- **F10 Stale systems:** keep CT's semantics. Findings on a system with no
+  data in the last 7 device days keep their state; the viewer shows
+  `data_through`. **Recommended.** Not chosen: resolving on staleness,
+  which would read "stopped sending" as "fixed" (offline detection stays
+  with `alert.offline_hhm_conn`).
+- **F11 Internal only:** `customer_visible = false` for every MRI v1
+  finding, as CV. **Recommended.**
+- **F12 No shared code change:** reuse CT's pure findings pieces
+  unchanged; nothing from `insight/cv/`. **Recommended** (as CV F6).
+
+### 9.6 Proposed MRI-4 exit criteria
+
+- **Locally (this phase):** the replay opens the §9.2 list on the local
+  copy, any difference explained (the as-of restart cut, new data);
+  pass 2 and a default run after the replay change nothing; the
+  incremental runs equal the replay with 0 drift; `verify-findings`
+  (`ge_mri`) equals the independent SQL at each system's as-of day; CT
+  and CV rows and catalog rows untouched (synthetic `ge_ct` / `ge_cv`
+  findings seeded locally); every suite passes; review closed.
+- **On prod (after C1-MRI and MRI-2 / MRI-3 there; the user runs it):**
+  `findings --rehearse --replay` gives the §9.2 list as of that day,
+  differences explained by new data; every medium / high finding is
+  explained by its codes and series; `--apply --replay`, then
+  `verify-findings` PASS; the CT and CV verifiers and the CT viewer
+  unchanged.

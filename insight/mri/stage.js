@@ -203,13 +203,18 @@ async function rehearse_stage(db, { log = () => {}, now = () => new Date(), on_r
         log(`before (inside the transaction): ${JSON.stringify(before)}`);
         log(`pending range: ids ${wm + 1}..${range.max_id}, ${range.n} rows, captured ${range.first_capture && range.first_capture.toISOString()} .. ${range.last_capture && range.last_capture.toISOString()}; the last GE_MRI run: ${range.last_run_rows} rows from id ${range.last_run_from}`);
 
-        const runs = [];
+        // planned: every run the rehearsal intends; runs: those executed. After
+        // a failed run the loop stops, and every check below reads only the
+        // executed runs (review MRI5-STAGE P3).
+        const planned = [];
         const max_id = range.max_id === null ? wm : Number(range.max_id);
         const last_from = range.last_run_from === null ? null : Number(range.last_run_from);
-        if (last_from !== null && last_from - 1 > wm) runs.push({ label: "run 1, catch-up (pending range before the last GE_MRI run)", to_id: last_from - 1 });
-        runs.push({ label: `run ${runs.length + 1}, typical (the last GE_MRI run's rows)`, to_id: max_id });
-        runs.push({ label: `run ${runs.length + 1}, no new rows (what most runs are)`, to_id: max_id });
-        for (const r of runs) {
+        if (last_from !== null && last_from - 1 > wm) planned.push({ label: "run 1, catch-up (pending range before the last GE_MRI run)", to_id: last_from - 1 });
+        planned.push({ label: `run ${planned.length + 1}, typical (the last GE_MRI run's rows)`, to_id: max_id });
+        planned.push({ label: `run ${planned.length + 1}, no new rows (what most runs are)`, to_id: max_id });
+        const runs = [];
+        for (const r of planned) {
+          runs.push(r);
           const res = await run_stage(t, { now: now(), run_id: crypto.randomUUID(), to_id: r.to_id });
           r.ok = res.ok; r.failed = res.failed; r.error = res.error ? res.error.message : null; r.today = res.today;
           r.watermarks = res.watermarks; r.watermarks_equal = res.watermarks_equal;
@@ -224,9 +229,12 @@ async function rehearse_stage(db, { log = () => {}, now = () => new Date(), on_r
         }
         const last = runs[runs.length - 1];
         const today = last.today;
-        const all_ok = runs.every((r) => r.ok);
+        const all_ok = runs.length === planned.length && runs.every((r) => r.ok);
+        const not_run = planned.slice(runs.length).map((r) => r.label);
+        if (not_run.length) log(`not run after the failure: ${not_run.join("; ")}`);
         const checks = {
           runs_ok: all_ok,
+          not_run,
           watermarks_equal_after_each_run: runs.every((r) => r.watermarks_equal),
           caught_up: all_ok && last.watermarks[load.JOB] === max_id,
           findings_drift: runs.reduce((n, r) => n + ((r.steps.findings && r.steps.findings.drift) || 0), 0),

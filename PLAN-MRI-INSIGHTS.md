@@ -45,9 +45,10 @@
   §11.3 recommendation. **Step 1 BUILT 2026-11-16 (§11.6):** the shared
   `insight/stage_wrapper.js` (identical to the CT and CV wrappers in 24
   harness scenarios), `insight/mri/{index,stage}.js`, `stage --rehearse`;
-  suites 340 / 340; local rehearsal and live path OK. Review handoff
-  `REVIEW-MRI5-STAGE-HANDOFF.md`. The `index.js` hook waits for the CV-5
-  close-out.
+  suites 340 / 340; local rehearsal and live path OK. **Codex review
+  MRI5-STAGE CLOSED 2026-11-17** (§11.7): one P3 (an early rehearsal
+  failure gave a TypeError), fixed with a regression test. The
+  `index.js` hook waits for the CV-5 close-out.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -2023,3 +2024,49 @@ transaction. The CT and CV suites pass unchanged.
    `insight/mri/test/stage.test.js` "stage_preflight with the real
    extract preflight: refused until C1-MRI", as it does the
    `findings.test.js` preflight case (§10.2).
+
+### 11.7 Codex review MRI5-STAGE (closed 2026-11-17): `REVIEW-MRI5-STAGE-CODEX.md`
+
+**One P3, fixed. No other findings.** The reviewer ran the six requested
+suites (143 tests), the equivalence harness (24 of 24 identical), and three
+probes of their own. They ran no CLI and connected to no database.
+
+- **P3: an early rehearsal failure gave a secondary TypeError.** The
+  rehearsal listed all its planned runs before executing them. When run 1
+  or 2 failed, the drift total read `steps` of a run that never ran, so
+  `rehearse_stage` rejected with "Cannot read properties of undefined"
+  instead of returning its failed result. The rollback and the unlock
+  still happened.
+  - **Fix** (`insight/mri/stage.js`): the planned runs and the executed
+    runs are kept apart. Every check reads only the executed runs, a run
+    not reached is listed in `checks.not_run`, and `runs_ok` requires
+    every planned run.
+  - **Regression test** (`stage.test.js`, DB-free, the reviewer's case:
+    watermark 100, pending maximum 120, the last run from 111): extract
+    fails in run 1, then in run 2. Each gives a structured failed result,
+    rolled back and unlocked, with only the executed runs. It fails the
+    old code with the reviewer's TypeError.
+  - The local rehearsal after the fix is OK (`04_reh_after_p3.log`).
+  - **The same pattern is in CV's `rehearse_stage`.** It is not changed
+    here (the freeze; `insight/cv/` is out of scope). It only matters
+    when a CV rehearsal fails early, so it is noted for MRI-5b, which
+    touches the CV wrapper anyway.
+- **Note: "off loads nothing".** The module-cache test could not prove
+  that `./stage` stays unloaded, because the suite itself loads it. A
+  fresh-process test now hooks `Module._load`: with the switch off,
+  `run_mri_insight` loads no module and logs nothing.
+- **Confirmed by the reviewer:**
+  - CT loses nothing on the shared wrapper with the right configuration:
+    `label: "insight"` (CT's exact lock and deadline texts),
+    `app_name: "insight_stage"`, `run_args` for its rules, and the
+    partition WARN text.
+  - MRI-5b must keep CT's switch check before the require, and the public
+    exports (`enabled` and the timeout constants). The thin callers are
+    reviewed when they are built.
+  - An incomplete `cfg` is rightly an ERROR, not a throw.
+  - `behind_ids` measures lag behind the source, also when the rehearsal
+    passes `to_id`.
+  - `OTHERS_SQL` covers every non-MRI row, and `ge_mri_` is 7 characters.
+  - They would ship the code-label rebuild as it is, with the 30 s WARN.
+  - The test strings are synthetic.
+- **Tests:** every suite, 342 of 342 (stage 27).

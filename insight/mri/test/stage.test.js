@@ -523,3 +523,99 @@ test("isolation: the shared wrapper loads only ./db and crypto (no modality modu
   assert.deepStrictEqual(req(WRAPPER), ["./db", "crypto"]);
   assert.deepStrictEqual(req(MRI_INDEX), ["../stage_wrapper", "./stage"]);
 });
+
+// ----------------------------------------------- review MRI5-STAGE (P3, note)
+
+// A DB-free rehearsal: watermark 100, pending max 120, the last run from 111
+// (so catch-up to 110, typical to 120, no rows); extract fails in run `fail_at`.
+function rehearsalDb({ fail_at = null } = {}) {
+  let wm = 100;
+  const calls = [];
+  const conn = {
+    one: async (q, p) => {
+      if (/pg_try_advisory_lock/.test(q)) { calls.push("lock"); return { got: true }; }
+      if (/pg_advisory_unlock/.test(q)) { calls.push("unlock"); return { ok: true }; }
+      if (q === stage.MRI_COUNTS_SQL) return { facts: 1 };
+      if (q === stage.OTHERS_SQL) return { findings: "a", finding_catalog: "b", metric_catalog: "c", job_state: "d" };
+      if (q === stage.RANGE_SQL) return { max_id: "120", n: 20, first_capture: new Date("2026-11-16T10:18:00Z"), last_capture: new Date("2026-11-16T10:48:00Z"), last_run_from: "111", last_run_rows: 10 };
+      throw new Error(`unexpected one ${q.slice(0, 40)}`);
+    },
+    any: async () => stage.JOBS.map((job_name) => ({ job_name, watermark_id: String(wm) })),
+    oneOrNone: async () => ({ p: {}, c: false }),
+    tx: async (mode, cb) => {
+      calls.push(mode.mode === stage.REHEARSAL_TX_MODE ? "tx:repeatable read" : "tx:other");
+      const saved = wm;
+      try { return await cb(conn); } finally { wm = saved; calls.push("rollback"); }
+    },
+  };
+  let n = 0;
+  const steps = {
+    extract: async (c, o) => {
+      if (++n === fail_at) throw new Error("natural-key conflict probe");
+      wm = o.to_id;
+      return { from: 0, watermark: wm, end: wm, behind_ids: 0, stats: { batches: 1, rows: 1, records: 1, duplicates: 0, facts: 1, upserted: 1, collisions: 0, skipped: {}, rule_errors: 0, unreviewed_codes: [], late: {} } };
+    },
+    derive: async () => ({ watermark: wm, pending_after: {}, stats: { daily: [], codes: {} } }),
+    findings: async () => ({ watermark: wm, stats: { drift: 0 } }),
+  };
+  return { db: { task: async (cb) => cb(conn) }, calls, steps };
+}
+
+async function withStubbedStage(steps, fn) {
+  const saved = { pre: load.preflight, job: load.read_job, ex: load.extract_step, dv: derive.derive_step, fp: frun.preflight, fs: frun.findings_step };
+  load.preflight = async () => ({ user: "insight_writer", schema_version: 9, last_partition: "p", months_left: 25 });
+  load.read_job = async () => ({ watermark_id: "100" });
+  load.extract_step = steps.extract;
+  derive.derive_step = async (c, pgp, o) => steps.derive(c, o);
+  frun.preflight = async () => {};
+  frun.findings_step = steps.findings;
+  try { return await fn(); } finally {
+    Object.assign(load, { preflight: saved.pre, read_job: saved.job, extract_step: saved.ex });
+    derive.derive_step = saved.dv;
+    Object.assign(frun, { preflight: saved.fp, findings_step: saved.fs });
+  }
+}
+
+test("review MRI5-STAGE P3: a failure in the first or the middle rehearsal run returns a structured failed result (no TypeError), rolled back and unlocked", async () => {
+  for (const [fail_at, ran] of [[1, 1], [2, 2]]) {
+    const f = rehearsalDb({ fail_at });
+    const lines = [];
+    const r = await withStubbedStage(f.steps, () => stage.rehearse_stage(f.db, { log: (s) => lines.push(s) }));
+    assert.strictEqual(r.rolled_back, true, `fail at ${fail_at}`);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.runs.length, ran, "only the executed runs");
+    assert.strictEqual(r.runs[ran - 1].failed, "extract");
+    assert.strictEqual(r.runs[ran - 1].error, "natural-key conflict probe");
+    assert.deepStrictEqual([r.checks.runs_ok, r.checks.caught_up, r.checks.findings_drift], [false, false, 0]);
+    assert.strictEqual(r.checks.not_run.length, 3 - ran);
+    assert.strictEqual(r.checks.verify, undefined, "no verify after a failed run");
+    assert.strictEqual(r.watermarks_unchanged_after_rollback, true);
+    assert.deepStrictEqual(f.calls, ["lock", "tx:repeatable read", "rollback", "unlock"]);
+    assert.ok(lines.some((l) => /FAILED at extract: natural-key conflict probe/.test(l)));
+    assert.ok(lines.some((l) => /^not run after the failure: /.test(l)));
+  }
+  // the plan: catch-up to 110, typical to 120, no rows to 120
+  const f = rehearsalDb({ fail_at: 3 });
+  const r = await withStubbedStage(f.steps, () => stage.rehearse_stage(f.db, {}));
+  assert.deepStrictEqual(r.runs.map((x) => x.to_id), [110, 120, 120]);
+  assert.deepStrictEqual(r.checks.not_run, []);
+  assert.strictEqual(r.checks.runs_ok, false);
+});
+
+test("review MRI5-STAGE note: in a fresh process, run_mri_insight with the switch off loads no module at all and logs nothing", () => {
+  const { spawnSync } = require("child_process");
+  const script = `
+    const Module = require("module");
+    const orig = Module._load;
+    const idx = require(${JSON.stringify(MRI_INDEX)});
+    const loaded = [];
+    Module._load = function (req, ...rest) { loaded.push(req); return orig.call(this, req, ...rest); };
+    const events = [];
+    delete process.env.INSIGHT_MRI_ENABLED;
+    idx.run_mri_insight({ log_events: [] }, async (...a) => events.push(a)).then((r) => {
+      process.stdout.write(JSON.stringify({ r, loaded, events: events.length }));
+    });`;
+  const out = spawnSync(process.execPath, ["-e", script], { encoding: "utf8", env: { ...process.env, INSIGHT_MRI_ENABLED: "" } });
+  assert.strictEqual(out.status, 0, out.stderr);
+  assert.deepStrictEqual(JSON.parse(out.stdout), { r: { skipped: "disabled" }, loaded: [], events: 0 });
+});

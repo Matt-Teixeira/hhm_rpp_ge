@@ -47,8 +47,11 @@
   harness scenarios), `insight/mri/{index,stage}.js`, `stage --rehearse`;
   suites 340 / 340; local rehearsal and live path OK. **Codex review
   MRI5-STAGE CLOSED 2026-11-17** (§11.7): one P3 (an early rehearsal
-  failure gave a TypeError), fixed with a regression test. The
-  `index.js` hook waits for the CV-5 close-out.
+  failure gave a TypeError), fixed with a regression test. **Step 2
+  (the `index.js` hook) BUILT 2026-11-17, uncommitted, in a worktree**
+  (§11.8; branch `mri5-hook` from 95797ea): the isolation test and the
+  hook harness pass. **Codex review MRI5-HOOK CLOSED 2026-11-17, no
+  findings** (§11.9). It lands on `dev` only after the CV-5 close-out.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -2070,3 +2073,131 @@ probes of their own. They ran no CLI and connected to no database.
   - They would ship the code-label rebuild as it is, with the 30 s WARN.
   - The test strings are synthetic.
 - **Tests:** every suite, 342 of 342 (stage 27).
+
+### 11.8 Step 2 build (2026-11-17): the `index.js` hook, in a worktree
+
+**Where:** a scratch git worktree on branch `mri5-hook` (from `dev` at
+95797ea), outside the repo directory, uncommitted; the main checkout and
+prod are unchanged. It was built before the CV-5 close-out so that the
+review is done by then; it lands on `dev` only after the close-out (the
+freeze). The diff is also saved as `~/cv_d3b_evidence/mri/mri5/hook/mri5-hook.patch`.
+
+**The hook:** 16 lines in `on_boot()`, directly after the CV hook, CV's
+shape. `if (shell_value[0] === "GE_MRI")`, `require("./insight/mri")`,
+`await run_mri_insight(run_log, addLogEvent)`, and a guarded catch that
+logs an ERROR `run_mri_insight`. It runs after the system loop and before
+the run log is written. The CT and CV blocks are unchanged.
+
+**Isolation tests** (`insight/mri/test/mri.test.js`, 23 → 24):
+- The walk "nothing outside `insight/mri` loads it" now covers CT's and
+  CV's `insight/` files only. The root `index.js` has its own test:
+  - exactly one require of `insight/mri`, `require("./insight/mri")`,
+    inside the one `GE_MRI` branch, awaited, with the guarded ERROR log;
+  - the order: the ingest loop, the CT hook, the CV hook, the MRI hook,
+    then `writeLogEvents`;
+  - the CT and CV blocks keep their requires and mention nothing of MRI;
+  - nothing else in `index.js` mentions `insight/mri`,
+    `run_mri_insight`, `stage_wrapper` or `INSIGHT_MRI`.
+- **Mutation check:** 12 breaks of the hook, each failing the test: the
+  hook under `GE_CV`; before the CV block; after `writeLogEvents`; the
+  require outside the branch; the CT branch also loading `insight/mri`;
+  a second require at the top; the wrong function name in the catch; an
+  unguarded ERROR log; the stage not awaited; MRI mentioned in the CV
+  block; the wrapper required at the top; no hook.
+
+**Hook harness** (DB-free, `~/cv_d3b_evidence/mri/mri5/hook/`:
+`hook_harness.js`, `hook_compare.sh`, `hook_compare.log`; adapted from
+CV-5's). It loads `dev`'s `index.js` and the hook's, with recorders for
+the parsers, the pool, the boot queries and the logger, and three fake
+systems. A real `insight/*/index.js` is loaded only while its switch is
+off; with a switch on it is stubbed, and the harness throws if the real
+one could run. No connection can be opened.
+
+| Scenario | vs `dev` |
+|---|---|
+| `GE_MRI`, switch unset (CT's and CV's on), `false`, `TRUE` | ingest calls, order and run-log events identical; loads `insight/mri/index.js` only; no open handles |
+| `GE_MRI`, on (stage stubbed, CT's and CV's on too) | ingest identical; the stage starts after 3 / 3 systems are ingested, before `writeLogEvents`; +1 event |
+| `GE_MRI`, on, the stage throws | +1 ERROR `run_mri_insight` (CATCH); the log is still written |
+| `GE_MRI`, on, `require("./insight/mri")` fails | +1 ERROR; the log is still written |
+| `GE_MRI`, on, the stage and the logger both throw | the log is still written (no event added) |
+| `GE_CT`, all switches on (stages stubbed) / MRI's on, CT's off | **identical** |
+| `GE_CV`, all switches on (stages stubbed) / MRI's on, CV's off | **identical** |
+
+No unhandled rejection in any scenario. **Harness self-check:** a hook
+that isn't awaited loses the stage's event from the written log, and a
+hook under `GE_CV` makes `GE_CV` differ from `dev`; both show.
+
+**The ingest's source writes are finished when the hook starts.**
+`jobs/MRI/index.js` `ge_mri_parsers` awaits every step in its loop: the
+`log.ge_mri_gesys` insert and upsert, the Redis offset update
+(`gesys_parser.js`) and `gzip_n_save`; it catches its own errors, and
+`run_job` catches too. One exception, found in review (§11.9):
+`gzip_n_save`'s `log.saved_files` insert is not awaited, so it can still
+be pending.
+
+**Overlap:** `GE_MRI` starts at :18 / :48 with `GE_CT` and `GE_CV`, as a
+separate process (§11.1). Its ingest takes 18 s (p50), 46 s (max), and the
+stage about 10 s with rows (5 min at most, by its deadline). The three
+stages have their own locks and disjoint rows (§11.3 Q2).
+
+**Tests:** every suite in the worktree: 342 pass, 1 skipped, 0 fail
+(`dev` + 1). The skip is CT's `connect()` timeout test, which needs
+`PG_SSL_PATH` from `.env`; the worktree has none. It passes in the main
+checkout.
+
+**C1-MRI together with the hook:** both patches apply cleanly to `dev`
+(they both touch `mri.test.js`, in different tests). Combined, the only
+failure is the `stage.test.js` case that flips with C1-MRI (§10.2, §11.6
+note). Its flip is written and saved as
+`~/cv_d3b_evidence/mri/c1mri/c1-mri-stage-test-flip.patch` (the live
+stage's preflight passes once the CT verifiers are MRI-aware; still
+refused as a superuser, another role or without C2-MRI). With it, every
+suite passes: 343. The C1-MRI worktree's diff is saved next to it as
+`c1-mri.patch`.
+
+**Next:**
+1. ~~The Codex review: `REVIEW-MRI5-HOOK-HANDOFF.md`~~ (closed, §11.9).
+2. After the CV-5 close-out (2026-11-19 20:18 UTC), asking first: commit
+   C1-MRI (with the flip), then the hook, on `dev`; remove both
+   worktrees. Then the prod order of §10.4 and §11.5 step 3.
+
+### 11.9 Codex review MRI5-HOOK (closed 2026-11-17): `REVIEW-MRI5-HOOK-CODEX.md`
+
+**No findings in the hook.** The reviewer read the hook, the isolation
+test, `run_mri_insight`, the wrapper, the MRI parser and the prod logger
+and enums (read only). They re-ran the harness from a copy, with extra
+assertions of their own, and the combined C1-MRI + hook + flip tree. They
+connected to no database and ran no CLI.
+
+- **A correction to the handoff (not to the hook):** "ingest is
+  finished when the hook starts" is too strong. `tooling/gzip_file.js`
+  `insert_buffer` calls `db.none(...)` for the `log.saved_files` insert
+  without `await`, so `gzip_n_save` can return before that insert
+  completes (confirmed by reading the code, and by the reviewer's DB-free
+  probe).
+  - It predates the hook, and the GE CT and GE CV ingests share it.
+  - The stage doesn't depend on it: it reads `log.ge_mri_gesys`, whose
+    insert is awaited, uses its own pool, and never closes the ingest's
+    main pool.
+  - **Not changed here.** It is a shared ingest helper, and the reviewer
+    advised against widening the hook change. §11.8 now says so. A fix
+    (await it) would be a separate ingest change for all three
+    modalities, with its own review.
+- **Confirmed by the reviewer:**
+  - switch off: only `insight/mri/index.js` loads, and it returns before
+    the wrapper, `db.js` or the stage; no event;
+  - `GE_CT` and `GE_CV` never enter the new branch, even with MRI's
+    switch on;
+  - a failed require, a stage rejection, and a failing logger on top all
+    still reach the final log write;
+  - the stage's pool is its own and closed; the prod logger's signature
+    and enum values match;
+  - overlap: the deadline starts after the 10 s connect; an overlapping
+    MRI stage skips on the lock; no cross-modality lock;
+  - **the C1-MRI test flip is right.** The refusal itself stays covered
+    by the "C1-MRI interlock" test with fake modules.
+- **Their verification:** `mri.test.js` 24 / 24, `cv.test.js` 17 / 17, CT
+  `stage.test.js` 23 + 1 skip (no `PG_SSL_PATH`). MRI `stage.test.js`
+  26 / 27: the fresh-process test can't spawn a child in their sandbox
+  (EPERM). The same check passed when they ran it directly; here it
+  passes, 27 / 27.

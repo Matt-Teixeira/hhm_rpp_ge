@@ -1,29 +1,25 @@
 # GE CV Insights — plan
 
-**Current state (2026-11-12; read this first, the history below is
+**Current state (2026-11-18; read this first, the history below is
 oldest first and its early bullets are superseded):**
-- **Live on prod:** CV-0, CV-1 (007), CV-2, CV-3, CV-4 (008). Prod
-  schema is at 8. All code is committed and pushed (dev = staging = prod
-  at a64a9a2 or later).
-- **The CV tables are a one-time load** as of 2026-11-12 15:26 UTC, with
-  the `ge_cv_extract` watermark at 474161. Nothing updates them until
-  CV-5 adds the stage.
-- **Findings:** 13 in total, 2 open: SME02412 `cv_detector_com_errors`
-  (high) and SME08640 `cv_error_storm` (medium, from 2026-11-11).
-- **Now: CV-5 (§12), proposed 2026-11-12.** Evidence is in (read-only):
-  `GE_CV` runs at :18/:48 UTC, ingest 1.5 s p50; 178 of 707 runs bring
-  rows (max 555); an incremental stage should add 2–3 s. The user
-  AGREED the design and the recommendation in each of Q1–Q7 (2026-11-12).
-  **Steps 1–2 built** (cores, stage, rehearsal; uncommitted). Every
-  suite passes, and the local rehearsal is OK (§12.6). Both Codex
-  reviews are closed (§12.7: a P3 and a note, both addressed). **Step 3
-  (the `index.js` hook) is built** (§12.8): ingest is identical with the
-  switch off, and `GE_CT` is unchanged. **CV-5 is
-  LIVE on prod since 2026-11-12 20:18 UTC** (1379d3b,
-  `INSIGHT_CV_ENABLED=true`). The prod rehearsal passed, and the first
-  live run was clean (§12.9). The CV tables now update every 30
-  minutes. **7-day monitoring until 2026-11-19 20:18 UTC**, then the
-  close-out against §12.4. Then CV-6. Then CV-6, the viewer (as CT §16.4).
+- **Live on prod:** CV-0, CV-1 (007), CV-2, CV-3, CV-4 (008) and CV-5
+  (the stage). Prod schema is at 8. All CV code is committed and pushed
+  (dev = staging = prod at 42a2f92 or later).
+- **CV-5 DONE: closed out early on 2026-11-18 (~13:00 UTC), §12.10.**
+  The stage has been live since 2026-11-12 20:18 UTC (1379d3b,
+  `INSIGHT_CV_ENABLED=true`); the CV tables update every 30 minutes.
+  The user chose to close out after 5 days 16 h instead of 7 days, with
+  the criterion "at least 5 consecutive clean days", so that the GE MRI
+  deploy can start sooner; every day was clean. All 274 `GE_CV` runs
+  were clean, and every §12.4 criterion is met.
+- **Findings:** 13 in total, 1 open: SME08640 `cv_error_storm`
+  (medium, from 2026-11-11). SME02412 `cv_detector_com_errors`
+  resolved on 2026-11-13, as the CV-4 replay predicted.
+- **Next:**
+  - CV-6, the viewer (as CT §16.4), only when the user asks.
+  - MRI-5b (`PLAN-MRI-INSIGHTS.md` §11): after 7 clean MRI days, CV
+    moves onto the shared `insight/stage_wrapper.js`, and CV's
+    `rehearse_stage` gets the early-failure fix MRI got (MRI §11.7).
 - **Waiting on others:**
   - The CV-1b sign-off waits for the first `sysError` rotation.
   - The §5.5 D4 field-service note has 5 questions; the user sends it.
@@ -2225,3 +2221,100 @@ ingest unchanged, `GE_CT` and `GE_MRI` unchanged.
     relays + 85,339 counted = 97,669); 205 codes, none unreviewed.
   - `verify-derive`: 0 diffs in all four checks; 5,378 daily rows.
   - `verify-findings`: PASS (13 = 13, 2 open).
+
+### 12.10 Close-out (2026-11-18, early)
+
+**Decision (the user, 2026-11-17):** close out after about 6 days
+instead of 7. For this window, the §12.4 criterion "7 consecutive days of
+clean runs" becomes "at least 5 consecutive clean days". Why: it lets the
+GE MRI deploy start sooner, and every day so far was clean.
+
+**Result: CV-5 DONE.** Every §12.4 criterion is met. All checks were
+read-only against prod, 12:48–12:58 UTC, over every run from the
+switch-on (2026-11-12 20:17) to 2026-11-18 12:48 UTC. That is 5 days
+16.5 h: five full UTC days (11-13 to 11-17, 48 runs each), plus 8 runs on
+11-12 and 26 on 11-18. Scripts and logs are in
+`~/cv_d3b_evidence/cv5/closeout/`, outside the repo.
+
+- **Daily checks (`cv5/daily/STATUS`):** OK on every day from 11-12 to
+  11-17. Each line ran the monitor and all six verifiers with 0 failed
+  commands.
+- **Runs (`cv5/monitor.js`, the prod run logs):**
+  - 274 `GE_CV` runs, every stage summary `ok` with the three
+    watermarks equal; not clean 0.
+  - The largest gap between runs is 30.1 min. The watermarks never go
+    backwards: 474263 → 474596, equal to the source max at the end.
+  - 435 rows staged; drift 0 in every run; `behind_ids` 0.
+  - No stage WARN or ERROR event.
+- **The DB at the end (`insight.job_state`):**
+  - `ge_cv_extract`, `ge_cv_derive` and `ge_cv_findings` all at 474596,
+    `ok`, equal to `max(id)` in `log.ge_cv_syserror`.
+  - derive `pending` is `{}` and no `codes_pending` marker is set.
+  - No `insight_cv` session left.
+- **Verifiers at the end** (12:52–12:58 UTC):
+  - CV `verify`: 17 cells, 0 diffs, to 474596, 142,558 facts. Every
+    row is accounted for (12,431 relays + 85,571 counted = 98,002).
+    205 codes, none unreviewed; catalog 9.
+  - CV `verify-derive`: 0 diffs in all four checks; 0 pending systems.
+  - CV `verify-findings`: PASS (13 = 13, catalog 5).
+  - CT `verify` (624 cells equal, catalog 39), `verify-derive` and
+    `verify-findings`: ALL PASS, at watermark 18651804.
+- **Findings in the window** (13 → 13; open 2 → 1):
+  - **Resolved: SME02412 `cv_detector_com_errors`** (high, opened
+    09-04), resolved on device day 11-13. The last storm day was 10-21
+    (1,446 detector com errors). The 7-day window held it through 10-27,
+    the last trip day; there were 0 such errors on every day since. The
+    resolution came after 14 quiet evaluated days: the device had data
+    on 10-28, 10-29, 10-30, 11-02 to 11-07 and 11-09 to 11-13. This is
+    the resolution the CV-4 replay predicted (§10).
+  - **Still open, as expected: SME08640 `cv_error_storm`** (medium,
+    opened 11-11). The burst was 11-11 (767 errors); every other day
+    since 11-04 had 1–69. The last trip day was 11-17 (the 7-day window
+    still held 11-11). From 11-18 the window no longer holds the burst,
+    so the 14-day quiet period starts. Observed residual 762 against a
+    baseline of 28.
+  - No finding opened in the window.
+- **Stage time per `GE_CV` run** (§12.4: "adds seconds, measured";
+  the estimate was 2–3 s, under 1 s with no rows):
+  - **With rows (64 runs; p50 4 rows, max 102):** p50 4.2 s, p90 8.1 s,
+    max 11.4 s.
+  - **With no rows (210 runs):** p50 1.7 s, p90 2.2 s, max 2.6 s.
+  - **The whole `GE_CV` process:** p50 3.4 s, p90 5.6 s, max 14.2 s,
+    every 30 minutes.
+  - **Above the estimate, on both counts.** With rows, derive is the
+    largest part: 6.5–9.2 s in the five slowest runs. §12.9 found the
+    code-label rebuild to be derive's main cost on prod. With no rows, findings
+    take most of it (p50 0.96 s), because findings run for every system
+    on every run (§12.3). It is still seconds, and the process ends
+    long before the next run, so no change is needed. Moving onto the
+    shared wrapper (MRI-5b) does not change this.
+- **Ingest unaffected:**
+  - Every `GE_CV` run had 0 ingest ERROR and the usual 10 WARN: 5
+    `ge_cv_sys_error` and 5 `gzip_n_save`, the pre-existing "file not
+    present" for systems without a file.
+  - Rows kept arriving in `log.ge_cv_syserror` every day from both
+    systems: 2–68 per system per day after 11-12 (1,162 on SME08640 on
+    11-12, the burst).
+  - `verify_cv1b.js --since 2026-11-06T17:24Z` passes for both systems,
+    on 97 saved snapshots each (`gzip_n_save`): 0 missing, 0
+    duplicated, 0 stray. The Redis watermark sits on a line boundary at
+    the end of the file, and `.head` is ok. There has been no rotation
+    yet, so the CV-1b sign-off is still open.
+- **CT unaffected:**
+  - 274 `GE_CT` runs, 0 ERROR events, every stage summary `ok` with the
+    watermarks equal.
+  - CT stage time is unchanged against the 6 days before CV-5, by rows
+    per run (p50s): under 50 rows 3.1 s before and after; 50–149 rows
+    4.8 / 5.2 s; 150+ rows 12.3 / 12.8 s.
+  - The one slow CT run, 41.8 s at 11-13 18:48, had 233 rows; its own
+    derive took 25.6 s. The `GE_CV` run that started at the same minute
+    took 8.3 s.
+- **The CV-5 monitor's ERROR texts** come out empty: it reads `e.err`,
+  while the logger writes `err_msg`. There was no stage ERROR to show,
+  and the counts are right. The monitor is retired with the cron line.
+- **After the close-out:**
+  - The user removes the `05 21 * * * .../cv5/daily.sh` cron line. The
+    script already stops after 11-19.
+  - The freeze on `index.js`, the shared `insight/` files and
+    `insight/cv/` ends. The GE MRI work goes ahead
+    (`PLAN-MRI-INSIGHTS.md` §10.4, §11.5).

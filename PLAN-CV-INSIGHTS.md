@@ -16,7 +16,9 @@ oldest first and its early bullets are superseded):**
   (medium, from 2026-11-11). SME02412 `cv_detector_com_errors`
   resolved on 2026-11-13, as the CV-4 replay predicted.
 - **Next:**
-  - CV-6, the viewer (as CT §16.4), only when the user asks.
+  - **CV-6, the viewer: §13 AGREED 2026-11-18** (every Q1–Q9
+    recommendation). No migration. The build starts at §13.5 step 1:
+    a shared `sme_reports/insights/` module, with CT proven unchanged.
   - MRI-5b (`PLAN-MRI-INSIGHTS.md` §11): after 7 clean MRI days, CV
     moves onto the shared `insight/stage_wrapper.js`, and CV's
     `rehearse_stage` gets the early-failure fix MRI got (MRI §11.7).
@@ -368,7 +370,7 @@ and 15,049 on 2026-10-20.
 | **CV-3 Derive** ✅ applied 2026-11-12 (§9) | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** ✅ 008 + replay applied 2026-11-12, 13 findings (§10) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** — LIVE 2026-11-12 20:18 UTC, monitoring until 11-19 (§12) | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 (§12.4) |
-| **CV-6 Viewer** | "GE CV Insights — Internal" | As CT §16.4 |
+| **CV-6 Viewer** — §13 agreed 2026-11-18; build next | "GE CV Insights — Internal" | As CT §16.4 (§13.4) |
 
 Checkpoints for the user's go-ahead: the answers to §3; before each
 migration is applied; before any `index.js` / parser change; before each
@@ -2318,3 +2320,412 @@ switch-on (2026-11-12 20:17) to 2026-11-18 12:48 UTC. That is 5 days
   - The freeze on `index.js`, the shared `insight/` files and
     `insight/cv/` ends. The GE MRI work goes ahead
     (`PLAN-MRI-INSIGHTS.md` §10.4, §11.5).
+
+## 13. CV-6: the viewer (AGREED 2026-11-18: the recommendation in each of Q1–Q9)
+
+**AGREED with the user 2026-11-18:** the §13.2 design, the recommended
+answer to every §13.3 question, the §13.4 exit criteria and the §13.5
+build order.
+
+CV-6 builds the internal viewer, "GE CV Insights — Internal" (§2 item 6,
+§3 Q4), in the shape of CT §16. It reads prod only. It changes nothing
+that the CT, CV or MRI stages load, and needs no migration (§13.1), so it
+can run during the MRI-5 monitoring window (to 2026-11-23 16:48 UTC).
+
+### 13.1 Evidence (read-only, prod, 2026-11-18 18:52 UTC)
+
+One read-only REPEATABLE READ transaction as `avantehs_admin`. Scripts
+and logs: `~/cv_d3b_evidence/cv6/` (`probe.js`, `probe2.js`, `probe3.js`,
+`labels.js`), outside the repos. They print counts, codes, keys and
+dates only.
+
+**What the views return:**
+
+| View | Rows | SME02412 | SME08640 | Notes |
+|---|---|---|---|---|
+| `ge_cv_daily_v` | 5,495 | 2,927 | 2,568 | Device days 2026-04-30 → 11-18 (a 203-day span; 168 / 185 data days). 9 / 8 metrics. `cv.error` dims are 194 / 105 codes. Every `value_*` is NULL (v1 has event metrics only). 99 `cv.error` rows have no code label (the 13 unlabeled codes) |
+| `ge_cv_capabilities_v` | 17 | 9 | 8 | SME08640 has no `cv.pib_com_loss` |
+| `ge_cv_codes_v` | 205 | | | 192 labeled. RTA 91, POS 82, DL 32 codes. Labels are at most 200 characters, 12.5k characters in all |
+| `ge_cv_findings_v` | 13 | 11 | 2 | 1 open: SME08640 `cv_error_storm`, medium, from 11-11. Evidence is 13.5 kB in all, 1.3 kB at most. Every rule stores the same top-level keys: `first`, `last`, `opened_day`, `last_trip_day`, `resolved_day`, `trip_days`, `quiet_days`, `thresholds`, `severity_history`, `rule_version` |
+| `ge_cv_system_summary_v` | 2 | | | 0.8 s (correlated subqueries over the facts). Every other read takes 20–110 ms |
+
+**Named metrics per system** (device days with events / events, all
+history):
+
+| Metric | Dims | SME02412 | SME08640 |
+|---|---|---|---|
+| `cv.error` | error code | 168 / 78,346 | 185 / 7,234 |
+| `cv.detector_com_error` | operation (5 / 1) | 27 / 40,007 | 4 / 6 |
+| `cv.anticollision_error` | axis (10 / 2) | 46 / 4,139 | 164 / 1,237 |
+| `cv.table_encoder_failure` | axis (4 / 1) | 63 / 2,934 | 34 / 41 |
+| `cv.pib_com_loss` | reset, fail | 7 / 779 | not logged |
+| `cv.positioner_collision` | lift, collimator | 163 / 2,407 | 179 / 2,628 |
+| `cv.emergency_backout` | — | 91 / 286 | 135 / 470 |
+| `cv.dose_export_rejected` | — | 143 / 566 | 170 / 761 |
+| `cv.worklist_query_failed` | network, query | 109 / 370 | 102 / 364 |
+
+**Panels supported:** both systems log at least one metric of every
+panel in §13.2 item 6. SME08640 has no PIB metric, so that chart is
+absent from its connectivity panel. "Panel hidden without its
+capability" is therefore checked on a fixture with capabilities removed,
+as CT did.
+
+**Coverage, for the fleet view:**
+- **18 GE CV/IR systems are configured for `sysError.log`**
+  (`config.acquisition.run_group` = 1, plus a `config.log` row for
+  `sysError.log`). 2 of them have rows in `log.ge_cv_syserror`.
+- **The other 16 have no rows since the table starts (2026-04-30).**
+  - Models: INNOVA 2100 ×4, INNOVA 4100 ×3, IGS 530 ×3, INNOVA 3100 ×2,
+    IGS 520, IGS 540, Discovery IGS 730 and 740 ×1 each.
+  - The DB holds no "last data" for them. Their file dates (§1.1) are on
+    prod's disk, which the viewer does not read.
+- **SME11929** (IGS 540) has an acquisition config but no `sysError`
+  entry.
+- **GE CV/IR inventory: 62.** 44 are not configured for `sysError`: 43
+  have no acquisition config, plus SME11929.
+- **Identity:** all 18 configured systems resolve to a site and a
+  customer. Neither reporting system has a `cus_sys_id`.
+
+**The clock (K1), as the views show it:**
+- At the probe, SME02412's `last_seen` in the summary view was 27 minutes
+  *after* the snapshot time (`now()`). A record can't be written in the
+  future, so that clock is at least 27 minutes fast.
+- The 108–118 minute figure (§9.4, §12) came from capture times in
+  `log.*`. No `api` view carries capture times.
+- SME08640's `last_seen` was 89 minutes before the snapshot. Both
+  systems were last captured at 17:18 UTC.
+
+**Privacy of what the page would carry:**
+- **Code labels and source files** were scanned (`labels.js`) for tokens
+  that look like an IP, host, path, email, AE title or serial:
+  - none is a host, IP, AE title or serial;
+  - `@` appears only in GE's "… error @ <source file>" wording.
+- **`sourcefile`** holds GE build paths on 87 codes: a drive letter, the
+  build tree and a version. The page shows the base file name only.
+- **Finding evidence** holds counts, codes, dims (operations, axes),
+  days and thresholds, and no text.
+
+**Is a view missing? No; CV-6 needs no migration.**
+- Every panel and column comes from the five 007 views.
+- Identity, the configured list and the inventory come from `public.*`
+  and `config.*`, as CT's viewer reads `public.*` (CT §16.2 item 3).
+- CT needed 006 for two things: local midnight (the busy-hour heatmap)
+  and capabilities. CV has no heatmap, and 007 already has the
+  capabilities view.
+- The "days view" left for CV-6 in §7.1 isn't needed. A data day is a
+  distinct `local_day` in `ge_cv_daily_v`, because every counted row has
+  a `cv.error` fact.
+
+**Size estimate:**
+- `daily_v` as compact rows: 0.47 MB.
+- Dense per-day arrays: about 0.12 MB for SME02412 with every code, and
+  0.06 MB for SME08640.
+- Codes: 0.06 MB. Findings: 13 kB.
+- **The page, with CSS, client and logo: under 1 MB** (CT: 1.31 MB for
+  34 systems). At 18 reporting systems, about 2–3 MB.
+
+**What the data means for the page:**
+- **The log is errors only (§1.2).** A day without rows means no log at
+  all (the system was off, or nothing was collected), not a clean day.
+  A quiet day has about 8–50 rows. Grey "no data" days must say so.
+- **A heavy tail.** SME02412's median is about 35 a day and its maximum
+  16,181. A linear chart flattens every normal day (Q8).
+- **One episode, several findings.** On 2026-09-11, the storm, PIB,
+  anticollision and table findings all open together. §10.2 left linking
+  them to the viewer.
+- **`observed` means something different per rule:**
+  - storm: the residual on the last storm day;
+  - detector: the count on the last trip day;
+  - anticollision: the count on the last burst day;
+  - table and PIB: the 7-day sum.
+
+### 13.2 Design (agreed)
+
+1. **One self-contained file: "GE CV Insights — Internal".**
+   - `npm run report:cv` writes
+     `sme_reports/out/Avante-GE-CV-Insights-Internal-<date>.html`.
+   - CT's app pattern: a dashboard and per-system views as inert
+     templates / JSON, a hash router, the Avante brand bar.
+   - "Internal" in the title, header and file name.
+   - Deterministic for (snapshot, as-of). The as-of day may only be the
+     snapshot's UTC day (CT review PHASE6-PAGE F2).
+   - Not emailed and not scheduled.
+2. **A new `sme_reports/cv/` directory:** `cli.js`, `data.js`,
+   `model.js`, `render.js`, `cv.client.js`, `verify.js`,
+   `tools/build_fixture.js` and `test/`.
+   - **Imported from CT, unchanged:**
+     - `ct/db.js` `open` / `close` (the read-only session check);
+     - `ct/data.js` `TX_MODE`;
+     - `ct/cli.js` `resolve_as_of`;
+     - from `ct/model.js`: the day helpers (`valid_day`, `dnum`, `dstr`,
+       `pct`), `PERIODS`, `SEVERITIES`, `STALE_DAYS`, `open_findings`
+       and `finding_view`;
+     - the shared escape helper, CSS, footer, `json_script` and logo
+       that CT imports.
+   - **Not importable without changing `ct/` (Q1):**
+     - `render.js`'s internals: formatters, finding cards and evidence
+       lists, CSS, the brand bar (its title is fixed to CT), the page
+       shell;
+     - the client, one closed IIFE: router, period bar, chart
+       primitives, tooltip;
+     - `verify.js`'s comparison helpers.
+3. **Reads.** One read-only REPEATABLE READ transaction, as
+   `avantehs_admin` with `default_transaction_read_only=on`. Every query
+   has an ORDER BY.
+   - The five `api.ge_cv_*` views. From `ge_cv_codes_v`: label, share,
+     subsystem, the source file's base name, n, first and last seen.
+   - Identity of the configured CV systems: `public.systems` → `sites`
+     → `customers`.
+   - The configured list: GE CV/IR systems in `config.acquisition`
+     (`run_group` 1) that also have a `config.log` row for
+     `sysError.log`.
+   - The inventory: GE CV/IR systems in `public.systems` that are not on
+     the configured list.
+
+   Never `insight.*` or `log.*`.
+4. **The builder aggregates; the page only draws.** The whole history is
+   embedded. Per system:
+   - dense day series for each named metric and dim;
+   - `cv.error` per day by subsystem;
+   - a day series for every code that makes any period's top list;
+   - the code tables per period, precomputed.
+5. **Fleet view.**
+   - **Groups:**
+     - *Reporting:* data in the last 7 device days (CT's window, and the
+       findings window).
+     - *Not reporting:* has data, but none in the last 7 device days. As
+       in CT, its findings show "as of" its last data.
+     - *Configured, no log data:* the 16 systems (Q5). Each shows
+       system, model and site / customer, and "no `sysError` rows since
+       the log starts (2026-04-30)", with a note that this is a
+       collection gap upstream (§1.1).
+   - **Columns:**
+     - system, model, site / customer;
+     - last data (the device day, and the newest device time);
+     - errors per data day (the 30 device days ending on the last data
+       day D);
+     - the busiest day in those 30 days (count and day);
+     - 30-day sums of detector com errors, anticollision errors, table
+       encoder failures and PIB communication loss;
+     - open findings by severity;
+     - clock.
+   - **No column re-implements a rule.** The named columns are plain
+     sums from daily, and the findings column carries the rules. The
+     method note says the rules use 7-day trips and 28-day baselines.
+   - **Order:** CT's. Highest open severity (ignoring info), then open
+     findings, then errors per data day.
+   - **Tiles:** reporting, not reporting, configured without data, open
+     findings, not configured in inventory.
+   - **Footer:** "44 GE CV/IR systems in inventory are not configured for
+     CV log collection", with the list collapsed (Q6).
+6. **System view.** A panel, or a chart inside one, appears only when
+   the system logs its metric (capabilities).
+   - **Header tiles:** last data (device day and time), errors per data
+     day (30 d), the busiest day (30 d), open findings, and the clock
+     (item 8).
+   - **Findings:** CT's cards. Open first, then resolved behind a
+     toggle. Each card shows:
+     - severity, opened / last trip / resolved day;
+     - observed, with a caption per rule (§13.1), and baseline;
+     - window, trip days, data through;
+     - the stored evidence in readable form, its codes shown with their
+       labels, the raw JSON behind a toggle, labelled "stored rule
+       evidence, not recomputed".
+   - **Errors timeline** (always: `cv.error`):
+     - errors per device day, stacked by subsystem (POS / RTA / DL);
+     - under the chart, one band per finding, from its opened day to its
+       resolved day (or the last data day), coloured by severity, so the
+       findings of one episode line up (§10.2);
+     - peaks: Q8.
+   - **Errors by code:**
+     - the top 10 codes plus "other" for the period. Columns: code,
+       subsystem, label (the masked template, with its share), source
+       file (base name), count, share, days;
+     - the period's full code list behind a toggle;
+     - a code without a label shows "no readable label".
+   - **Detector:**
+     - detector com errors per day, by operation;
+     - code 1200019 (detector offset) as its own series, because the
+       storm rule excludes it and the detector evidence reports it.
+   - **Positioner and table:**
+     - collisions (lift / collimator);
+     - anticollision errors by axis (the top 4 axes plus "other");
+     - table encoder / potentiometer failures by axis;
+     - emergency backout.
+
+     Note on the panel: collisions and backouts are everyday use, not
+     findings (§10.6 F4).
+   - **Connectivity:**
+     - PIB communication loss (reset / fail);
+     - worklist query failures (network / query);
+     - dose-export rejections.
+
+     Note on the panel: the log has no success records, so these are
+     counts, not rates. Dose export is data only until field service
+     answers (F3).
+   - **Period totals** as stat tiles in each panel.
+7. **Period selector:** 30 d / 90 d / 6 mo / all, default 90 d (Q4),
+   carried from system to system.
+8. **K1, the clock** (Q7):
+   - The method note and every clock tile say: "Times and days are the
+     device's own clock. CV has no clock correction (K1)."
+   - When a system's newest device time is after the snapshot, its tile
+     says "clock ahead by at least N min", with N = `last_seen` − the
+     snapshot time. This is a lower bound from the `api` views alone.
+   - Otherwise the tile says "no offset visible in the data", never
+     "ok".
+9. **Internal only.** The customer version is out of scope (as CT
+   Phase 7). Every CV metric and finding is `customer_visible = false`
+   in any case.
+
+### 13.3 Questions and answers (AGREED 2026-11-18: the recommendation in each)
+
+1. **Reuse of CT's page code: AGREED, (b), a shared
+   `sme_reports/insights/` module, with CT's output proven unchanged.**
+   - **(b) Chosen.** Move the generic parts out of `ct/` into
+     `sme_reports/insights/`:
+     - `page.js`: formatters, finding card and evidence list, brand bar
+       (title as a parameter), shared CSS, page shell;
+     - `client_core.js`: router, period bar, bar / line charts, no-data
+       shading, tooltip, stat / panel helpers;
+     - `verify_core.js`: `canon`, `check`, `series`.
+
+     CT imports them back. CT's panels, columns and SQL stay in `ct/`.
+     MRI-6 can use the same module.
+
+     **The proof that CT is unchanged:**
+     - the CT page built from CT's fixture is byte-identical before and
+       after, or differs only in comment text inside the inlined client,
+       shown by a diff;
+     - `ct/test` and `dev/check_ct.js` pass;
+     - `ct/verify.js` on prod: 0 differences.
+
+     Staging then adds `sme_reports/insights/**` and the changed `ct/`
+     files.
+   - **(a)** The same split inside `ct/`, with additive exports. Fewer
+     moves, but CV, and later MRI, would import "ct" modules.
+   - **(c)** Copy about 450 lines (charts, cards, CSS, compare helpers)
+     into `cv/`. CT is untouched, but there are two copies to maintain,
+     against "import, don't copy".
+2. **Migration: AGREED, none (§13.1).** Read `config.*` and
+   `public.*` directly, as CT reads `public.*`.
+   - Not chosen: an `api` view for the configured CV systems. That can
+     come with the frontend contract later.
+3. **Verification set: AGREED, both systems, every panel.**
+   `cv/verify.js` also covers every fleet column, the configured list
+   and the inventory footer.
+4. **Period: AGREED, CT's 30 d / 90 d / 6 mo / all, default 90 d.**
+   90 d covers the 09-11 episode, the 10-20 detector storm and the 11-11
+   storm.
+   - Not chosen: default "all". There are only 203 days, so 6 mo and
+     all are almost the same.
+5. **Configured systems without data: AGREED, list them** as their
+   own group, below the reporting systems (§13.2 item 5).
+   - Not chosen: a count in a tile only; reading the file dates on prod's
+     disk.
+6. **Inventory footer: AGREED, as CT,** a collapsed list of the 44
+   GE CV/IR systems not configured for CV log collection.
+7. **K1 wording: AGREED, the general statement plus the lower
+   bound from the views (§13.2 item 8).**
+   - Not chosen: a fixed "108–118 min" note for SME02412. It would go
+     stale, and nothing on the page could check it.
+   - Not chosen: an offset from `log.*` capture times. That bypasses the
+     contract and would need a view on `log.*`, which 007 rules out.
+8. **Peaks in the errors timeline: AGREED, clip the peaks by
+   default, with a "full scale" toggle.**
+   - The y axis goes to 1.5 × the period's 95th-percentile day, rounded
+     up. A taller day is drawn to the top with a mark, and its count is
+     in the tooltip.
+   - Not chosen: a log scale (hard to read for counts, and zero has no
+     place on it); linear only (every normal SME02412 day reads as zero
+     next to 16,181).
+9. **Review set and reviewer: AGREED, the user,** on the fleet view
+   and both systems, as at CT Q6. Anything about scanner behaviour goes
+   to the §5.5 D4 note / field service.
+
+### 13.4 Exit criteria (agreed, as CT §16.4)
+
+- **`dev/check_cv.js`** (no DB; the page is built from a fixture taken
+  from prod) passes:
+  - the build is deterministic, also with every input reversed;
+  - zero page errors in headless Chromium;
+  - nothing scrolls sideways at 390 px on the dashboard, or on any
+    system view in any period, with either peak scale;
+  - "Internal" in the title, header and file name;
+  - a panel or chart is hidden exactly when its capability is absent
+    (on a fixture with capabilities removed);
+  - markup in site names, catalog labels and code labels stays text;
+  - `--as-of` accepts only the snapshot's UTC day;
+  - the file holds source-file base names only, and no text field other
+    than the code labels;
+  - filter, row click, next / previous, back, the period carried across
+    systems, and a chart tooltip all work.
+- **A real build** of 10 MB or less (expected under 1 MB). The dashboard
+  is ready in 2 s or less, and the slowest system view × period in 2 s
+  or less, on the DEV VM.
+- **`cv/verify.js`** (read-only, one REPEATABLE READ snapshot) finds 0
+  differences against independent SQL:
+  - every fleet column for every system with data, the groups and the
+    order of the lists;
+  - the configured list and the inventory footer, from
+    `config.*` / `public.*`;
+  - for both systems: every per-day series, every period total, the top
+    10 plus other and the full code list per period, the labels, the
+    panels and the finding bands;
+  - all findings, field by field, including the stored evidence as
+    stored and the code labels added to it;
+  - the clock lower bound.
+
+  A mutation probe plants one error per kind, and every one is caught.
+- **CT unchanged** (if Q1 is (a) or (b)), as Q1 states.
+- **hhm_rpp_ge:** nothing changes there apart from this plan and the
+  review handoffs. Its suites (344 tests in 25 files) pass before each
+  commit.
+- **Review:** the user, with feedback recorded here.
+
+### 13.5 Build order and checkpoints (agreed)
+
+1. (Q1 (b)) `sme_reports/insights/`, CT moved onto it, and the CT proof.
+2. `cv/data.js`, `cv/model.js` and `cv/tools/build_fixture.js`, with
+   tests (`node --test sme_reports/cv/test`).
+   - The fixture covers both systems over all history.
+   - It carries codes, counts and code labels only: no message text, and
+     names replaced by placeholders.
+3. `cv/verify.js`, run read-only against prod.
+4. `cv/render.js`, `cv/cv.client.js` and `dev/check_cv.js`.
+5. A real build, with its size and timing measured. Then the Codex
+   review handoffs, in the hhm_rpp_ge root:
+   - `REVIEW-CV6-SHARED-HANDOFF.md` (step 1);
+   - `REVIEW-CV6-DATA-MODEL-HANDOFF.md` (steps 2–3);
+   - `REVIEW-CV6-PAGE-HANDOFF.md` (steps 4–5).
+6. The user's review, then fixes, then a plan status update.
+
+**Checkpoints for the user's go-ahead:**
+- agreement on this section;
+- after step 1 (CT unchanged);
+- after step 3 (numbers verified);
+- after the step 5 reviews;
+- before every commit, in either repo.
+
+There is no migration to apply.
+
+**Reports repo staging:**
+- `sme_reports/cv/**`, `sme_reports/dev/check_cv.js` and the one
+  `package.json` line (`"report:cv": "node sme_reports/cv/cli.js"`);
+- if Q1 is (b): also `sme_reports/insights/**` and the changed `ct/`
+  files.
+
+### 13.6 Handoff: where the CV-6 build starts
+
+State at 2026-11-18 ~19:00 UTC:
+- **Prod:** schema 9. The CT, CV and MRI stages run every 30 minutes
+  (:18 / :48 UTC).
+- **The MRI-5 monitoring window runs to 2026-11-23 16:48 UTC.** Until
+  then, nothing in `insight/`, the root `index.js` or `jobs/` changes,
+  and no migration is applied. CV-6 needs neither.
+- **hhm_rpp_ge:** branch `dev`. This section is committed on top of
+  e35db67.
+- **Reports repo:** branch `DEV` at e1de116, clean.
+
+The build starts at §13.5 step 1: `sme_reports/insights/`, CT moved
+onto it, and the CT proof (Q1).

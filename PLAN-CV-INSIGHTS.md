@@ -16,9 +16,14 @@ oldest first and its early bullets are superseded):**
   (medium, from 2026-11-11). SME02412 `cv_detector_com_errors`
   resolved on 2026-11-13, as the CV-4 replay predicted.
 - **Next:**
-  - **CV-6, the viewer: §13 AGREED 2026-11-18** (every Q1–Q9
-    recommendation). No migration. The build starts at §13.5 step 1:
-    a shared `sme_reports/insights/` module, with CT proven unchanged.
+  - **CV-6, the viewer: built and committed 2026-11-18** (§13; reports
+    `DEV` 20fbb9b, not pushed). "GE CV Insights — Internal",
+    `npm run report:cv`; no migration.
+    - Every §13.4 criterion is met apart from the user's own page review
+      (Q9).
+    - The three Codex reviews are closed (§13.8).
+    - CT now runs on the shared `sme_reports/insights/` module, and its
+      page is byte-identical.
   - MRI-5b (`PLAN-MRI-INSIGHTS.md` §11): after 7 clean MRI days, CV
     moves onto the shared `insight/stage_wrapper.js`, and CV's
     `rehearse_stage` gets the early-failure fix MRI got (MRI §11.7).
@@ -370,7 +375,7 @@ and 15,049 on 2026-10-20.
 | **CV-3 Derive** ✅ applied 2026-11-12 (§9) | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** ✅ 008 + replay applied 2026-11-12, 13 findings (§10) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** — LIVE 2026-11-12 20:18 UTC, monitoring until 11-19 (§12) | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 (§12.4) |
-| **CV-6 Viewer** — §13 agreed 2026-11-18; build next | "GE CV Insights — Internal" | As CT §16.4 (§13.4) |
+| **CV-6 Viewer** — built and committed 2026-11-18 (§13; reports 20fbb9b) | "GE CV Insights — Internal" | As CT §16.4 (§13.4) |
 
 Checkpoints for the user's go-ahead: the answers to §3; before each
 migration is applied; before any `index.js` / parser change; before each
@@ -2729,3 +2734,372 @@ State at 2026-11-18 ~19:00 UTC:
 
 The build starts at §13.5 step 1: `sme_reports/insights/`, CT moved
 onto it, and the CT proof (Q1).
+
+### 13.7 Build status
+
+**Step 1 done (2026-11-18, uncommitted in the reports repo): a shared
+`sme_reports/insights/` module, with CT moved onto it and proven
+unchanged.**
+- **New files:**
+  - `insights/page.js`: formatters, severity badges, the summary tile,
+    finding cards and the evidence list, the findings section, system
+    navigation, the period bar, the shared CSS, the brand bar (product
+    name as a parameter), the page shell and `assemble_client()`.
+    - A finding card takes three options, whose defaults give the CT
+      card: `after_facts` (CT's trip table), `observed_label` and
+      `display` (the readable evidence; the raw JSON is always the stored
+      evidence).
+  - `insights/client_core.js`: the generic client IIFE, with four marker
+    lines (`header`, `charts`, `panel-keys`, `panels`).
+  - `insights/verify_core.js`: `canon`, a `checker()` factory (each
+    verifier has its own list), `series`, the converters, `PERIOD_SQL`,
+    `SEV_RANK` and `report_lines`.
+  - `insights/test/page.test.js`: 5 tests. They cover the assembler,
+    including its refusals of a missing, repeated or unknown section, the
+    CT parts filling every marker, and the checker.
+- **Changed `ct/` files:**
+  - `ct/ct.client.js` is now CT's parts file (header, heatmap and prep
+    calendar, `PANELS`, `PANEL`). A one-off splitter cut it from the
+    original file by line range, so no text was retyped.
+  - `ct/render.js` keeps only CT's own code: fleet and tube / clock
+    cells, the trip table, the system header tiles and the dashboard.
+  - `ct/verify.js` uses `verify_core`.
+  - `ct/model.js`, `data.js`, `db.js` and `cli.js` are unchanged.
+- **The proof that CT is unchanged:**
+  - The CT page built from CT's fixture is **byte-identical** to the one
+    built before the move: sha256 `5c3497e6…`; 321,545 characters, 321,939 bytes as UTF-8 (corrected after review CV6-SHARED).
+  - Old and new code give byte-identical pages for 10 inputs: the
+    fixture, reversed input, markup in identity, catalog labels and
+    findings, capabilities removed, every system not reporting, findings
+    with no evidence, no findings, and one system. The old code ran from
+    a `git archive HEAD` copy.
+  - The CT model tests pass (14 ok), and so does `dev/check_ct.js`.
+  - **`ct/verify.js` on prod (read-only, 2026-11-18 19:49 UTC): 0
+    differences in 24,581 comparisons.** That covers 34 systems, 117
+    findings and 64 rule trip days.
+
+**Step 1 review handoff:** `REVIEW-CV6-SHARED-HANDOFF.md` (written
+2026-11-18), waiting for Codex. The proof scripts are in
+`~/cv_d3b_evidence/cv6/ctproof/`; `run_proof.sh` reruns the 10-input
+comparison against `git HEAD` while the step is uncommitted.
+
+**Step 2 done (2026-11-18, uncommitted): `cv/data.js`, `cv/model.js`,
+the fixture tool and the model tests.**
+- **`cv/data.js`:**
+  - One read-only REPEATABLE READ transaction through `ct/db.js` and
+    `ct/data.js` `TX_MODE` (imported). Every query has an ORDER BY.
+  - Reads the five `api.ge_cv_*` views, identity, the configured list
+    (`config.acquisition` run_group 1 ∩ `config.log` `sysError.log`) and
+    the inventory (GE CV/IR systems not configured).
+  - `sourcefile` is cut to its base name in SQL, so GE's build paths
+    never reach the builder.
+- **`cv/model.js`** (pure; imports the CT model's day helpers,
+  `PERIODS`, `STALE_DAYS`, `open_findings` and `finding_view`):
+  - **Fleet rows:**
+    - errors per data day over D−29..D, and the busiest day (ties: the
+      earlier day);
+    - 30-day sums of detector com, anticollision, table encoder and PIB,
+      null when the metric is not logged;
+    - open findings, and the clock lower bound.
+  - **Groups and order:** the CT order; then not reporting; then the
+    configured systems without data, by id.
+  - **Per system:**
+    - the data mask, `cv.error` per day by subsystem, and every named
+      metric in total and per dim (dense);
+    - the axis ranks per period for anticollision and table encoder;
+    - the 1200019 detector-offset series;
+    - code tables per period: every code as [code, n, days], top 10,
+      other and total;
+    - finding bands;
+    - the findings in CT's order.
+  - **Page level:** labels for every code the page lists, including
+    those in finding evidence.
+- **Deviations from §13.2, small:**
+  - "Errors by code" is its own panel (`codes`).
+  - There are no per-code day series: no panel draws one (§13.2 item 4
+    listed them).
+  - Code labels are held once per page, not per system.
+- **`cv/tools/build_fixture.js`** wrote `cv/test/fixtures/cv_fixture.json.gz`
+  (0.04 MB). It was read-only from prod on 2026-11-18 20:00 UTC, as of
+  2026-11-18.
+  - Contents: 2 systems, 5,498 daily rows, 17 capabilities, 13
+    findings, 205 codes, 18 configured, 44 inventory.
+  - Identity names are placeholders. Codes, counts, dims, masked labels
+    and base names only.
+  - The tool refuses a label that looks like an IP, email, drive or UNC
+    path or system id, and a source file with any path separator.
+- **`cv/test/model.test.js`: 13 of 13.** Every expected value is
+  recomputed from the fixture rows with plain loops: fleet columns,
+  order and groups, the 7-day boundary, ties, dense series, code tables,
+  ranks, bands (including the 09-11 episode: storm, PIB, anticollision
+  and table overlap), findings, panels with capabilities removed,
+  as-of, determinism and input order.
+  - **Mutation check:** 8 planted model faults, all caught. The busiest
+    tie-break and the 7-day boundary needed tests of their own, because
+    the real data has no tie and no system on the boundary.
+- **On the fixture:** the model is 0.11 MB as JSON. SME02412's clock
+  lower bound is 108 min at this snapshot, in line with K1's measured
+  108–118 min.
+
+**Step 3 done (2026-11-18, uncommitted): `cv/verify.js`, run read-only
+against prod.**
+- **The method:** one read-only REPEATABLE READ snapshot, with the model
+  built from `cv/data.js` rows and every page value recomputed with
+  separate SQL over the views, `config.*` and `public.*`.
+  - **Where the SQL takes a different route from `data.js` / the
+    model:**
+    - the subsystem comes from `ge_cv_codes_v`, not `daily_v`'s joined
+      column;
+    - the configured list starts from `config.log`;
+    - code and dim ranks use SQL `row_number()`;
+    - band clipping and the findings' page order are done in SQL;
+    - codes in finding evidence are found with
+      `jsonb_path_query('strict $.**.code')`;
+    - the source file's base name comes from `substring(...)` (`data.js`
+      uses `regexp_replace`).
+  - Default panel set: both systems (Q3).
+- **Result, 2026-11-18 20:06 UTC: ALL CHECKS PASS, 0 differences in
+  12,926 comparisons:**
+  - fleet columns, order, the configured list (18), the 16 without data
+    and the inventory (44);
+  - for both systems: day range and data mask, errors by subsystem,
+    every named metric per day in total and per dim, the detector-offset
+    series, code tables and dim ranks per period, panels, labels, bands;
+  - all 13 findings, field by field, with the stored evidence;
+  - 205 code labels.
+
+  It runs in 1.1 s.
+- **One difference on the first run, in the check, not the page:** the
+  page's code-label map lists integer-like keys in numeric order (a
+  JavaScript rule), while the SQL sorts them as text. The check now
+  compares the two key sets. The map is a lookup, so its order means
+  nothing.
+- **`--probe`:** 31 planted errors, one per kind, from fleet columns to
+  code source files. All were caught; the unmutated run had 0
+  differences (29 s, one snapshot).
+- **A known limit:** the clock lower bound is compared at whole minutes.
+  JavaScript keeps milliseconds where PostgreSQL keeps microseconds, so
+  the two could disagree only if `last_seen − now()` falls within 1 ms
+  of a whole minute.
+
+**Step 4 done (2026-11-18, uncommitted): `cv/render.js`,
+`cv/cv.client.js`, `cv/cli.js` and `dev/check_cv.js`.**
+- **`cv/render.js`** builds on `insights/page.js`.
+  - **Dashboard:**
+    - tiles: reporting, not reporting, configured without data, open
+      findings, not configured;
+    - the fleet table, with the columns in this order: system, model,
+      site / customer, last data (with the newest device time, marked
+      "device clock"), open findings, clock, errors per day, busiest
+      day, detector com, anticollision, table encoder, PIB ("not
+      logged" where the system never logs the event);
+    - the configured-without-data table (16), the inventory footer (44,
+      collapsed) and the method note, with K1, the errors-only caveat
+      and the verification statement.
+    - Open findings and clock were moved next to "last data", after a
+      look at the page: at desktop width they were scrolled out of view.
+  - **System view:**
+    - 8 tiles, including the clock ("≥ N min ahead" or "no offset visible
+      in the data", with "device time; no correction (K1)");
+    - CT's finding cards, with the observed caption per rule and code
+      labels added to the readable evidence (the raw JSON is
+      unchanged).
+- **`cv/cv.client.js`** (a parts file for the shared core):
+  - **Errors:** a stacked chart by subsystem, with peaks clipped at
+    1.5 × the period's 95th-percentile data day (marked ▲; the tooltip
+    gives the full count) and a "Full scale" toggle (Q8). Finding bands
+    sit under it on the same day axis.
+  - **Errors by code:** the top 10 plus other, and every code behind a
+    toggle. Columns: code, subsystem, label with share, source file
+    base name, entries, share, days.
+  - **Detector:** by operation, plus the 1200019 offset series.
+  - **Positioner and table:** collisions by part; anticollision and
+    table encoder as the period's top 4 axes plus other; backout.
+  - **Connectivity:** PIB, worklist, dose export.
+  - **Colours:** slots 1–8 of the dataviz reference palette in fixed
+    order. Slots 1–5 were validated adjacent on the light surface with
+    the skill's validator: CVD ΔE 9.1, normal-vision ΔE 19.6. Three
+    slots are under 3:1 contrast, so every stacked chart also names its
+    series with period totals in text.
+  - A dim keeps its colour in every period, because its slot is its
+    rank over all history.
+- **`cv/cli.js`:** `npm run report:cv` (the `package.json` line comes
+  at step 5). It uses `ct/cli.js` `resolve_as_of`, and reports size and
+  timing against the 10 MB budget.
+- **Looked at in Chromium on the fixture page (0.22 MB).** Two fixes
+  came out of it: the label column wrapped over the source file column,
+  and the open findings and clock columns were off-screen.
+- **`dev/check_cv.js` passes in 7 s.** It covers:
+  - 2 systems × 4 periods × 2 scales, with no sideways scroll at 390 px;
+  - zero page errors;
+  - "Internal" in the title, header and file name;
+  - determinism, also with reversed input;
+  - markup in identity, finding text, catalog labels, code labels and
+    source files staying text;
+  - as-of and CLI argument refusals;
+  - source-file base names, and no debug-text or encoded field names;
+  - panels hidden with capabilities removed, and the PIB chart only
+    where logged;
+  - the peak toggle cutting and restoring the peaks;
+  - filter, row click, next / previous, back, the period carried across
+    systems, and a tooltip.
+
+  **Mutation check:** 4 planted faults, all caught: a chart for a metric
+  that isn't logged, an unescaped site name, a scale toggle that doesn't
+  redraw, and a too-wide element at 390 px.
+- **Everything still passes:**
+  - `insights/test` 5, `cv/test` 13, `ct/test` 14;
+  - `dev/check_ct.js`;
+  - the CT proof: 10 of 10 pages identical.
+
+**Step 5 done (2026-11-18, uncommitted): the real build, size and
+timing, and the review handoffs.**
+- **`package.json`:** one line, `"report:cv": "node sme_reports/cv/cli.js"`,
+  after `report:ct`. No other shared file changed.
+- **Real build** (`npm run report:cv`, prod, read-only, 20:28 UTC):
+  - `sme_reports/out/Avante-GE-CV-Insights-Internal-2026-11-18.html`
+    (git-ignored), **0.22 MB** (budget 10 MB); load 0.6 s, build 0.1 s;
+  - 2 reporting, 16 configured without data, 44 not configured;
+  - 205 code labels, no source-file path, no debug-text or encoded field
+    keys, nothing IPv4-like.
+- **Timing** (`~/cv_d3b_evidence/cv6/timing.js`, headless Chromium on
+  the DEV VM; log `timing.log`):
+  - **dashboard ready in 29–93 ms** (3 loads);
+  - opening a system: 20–24 ms;
+  - **the slowest system view × period × scale: 49 ms**.
+
+  The budget is 2 s for each. 0 sideways scroll at 390 px, 0 page
+  errors.
+- **`cv/verify.js` at 20:29 UTC:** 0 differences in 12,926 comparisons.
+- **Codex review handoffs** (hhm_rpp_ge root), each waiting for its
+  review:
+  - `REVIEW-CV6-SHARED-HANDOFF.md` (step 1);
+  - `REVIEW-CV6-DATA-MODEL-HANDOFF.md` (steps 2–3);
+  - `REVIEW-CV6-PAGE-HANDOFF.md` (steps 4–5).
+- **§13.4 status:** `check_cv`, the real build within budget and
+  `verify.js` with 0 differences are met. CT is unchanged. Open: the
+  three Codex reviews, then the user's review of the page (Q9), then
+  the commits (both repos, with the user's OK).
+
+### 13.8 Codex reviews (2026-11-18): CV6-SHARED, CV6-DATA-MODEL, CV6-PAGE; every finding fixed
+
+`REVIEW-CV6-SHARED-CODEX.md`, `REVIEW-CV6-DATA-MODEL-CODEX.md`,
+`REVIEW-CV6-PAGE-CODEX.md`. Each review also re-ran the tests, the
+browser checks and the read-only verifiers: CT 0 differences in 24,581
+comparisons; CV 0 differences, 31 of 31 probes caught.
+
+**CV6-SHARED: no CT regression.** 15 comparison cases (the 10 supplied
+plus 5 of its own) were byte-identical.
+- It corrected my byte count: 321,545 is the character count; the file
+  is 321,939 bytes (§13.7 corrected).
+- **Optional hardening, taken:** `assemble_client` now refuses an empty
+  section and a marker line left in the result. 2 assertions were added
+  to `insights/test/page.test.js`. The CT output is unchanged (proof 10
+  of 10 identical).
+- **Not taken now, because each changes CT's output and would need its
+  own CT proof:** narrowing the core's `.seg` selector to
+  `.periodbar .seg`; scoping `#systems td:nth-child(7)`; the "Sep 26"
+  axis label (`Sep '26`). They go to a later shared cleanup.
+
+**CV6-DATA-MODEL:**
+- **F1 (P2): the verifier used the model's own definitions as its
+  oracle.** Codex mapped the Detector column to anticollision, and the
+  verifier passed.
+  - **Fix:** `verify.js` now holds its own `CONTRACT`, written out from
+    §13.2:
+    - the fleet column → metric mapping;
+    - the named, ranked and panel sets;
+    - the top-codes count, the offset code, the subsystems, the stale
+      window and the periods.
+
+    A contract check compares the model's constants with it, and every
+    expectation and SQL parameter uses `CONTRACT`, never `M.*`.
+  - Four definition probes now change the model's definitions before
+    the build: the Detector column reading anticollision, a named metric
+    dropped, the Detector panel keyed on PIB, anticollision not ranked.
+    Each is caught by the data checks alone (2, 816, 1 and 10
+    differences), as well as by the contract.
+- **F2 (P3): the clock bound lost microseconds** (a JS Date). It is now
+  computed in `cv/data.js` SQL at full precision (`ahead_min`) and taken
+  by the model as given. The verifier uses a different exact expression
+  (PostgreSQL 16: `extract(epoch)` is numeric). A model test covers the
+  review's example: 20:01:00.000000 against 20:00:00.000001 gives no
+  bound.
+- **F3 (P3): the fixture guard was narrower than claimed.**
+  - **Fix:** a new `cv/privacy.js`, used by the fixture tool and now
+    also by the real build (`cv/cli.js` refuses to write).
+    - **Labels and source files:** IPv4 (also masked), email, drive /
+      UNC / absolute Unix path, dotted host name, and system id (also
+      masked `SME#`).
+    - **Source files:** additionally, no path separator.
+    - **Finding evidence:** identifier keys, and string values limited
+      to days, codes, `cv.*` metric keys, severities and identifier-like
+      dims. Anything else means a rule or catalog change, which needs a
+      new review.
+  - `cv/test/privacy.test.js` (4 tests) covers the review's examples,
+    GE's own wording, and the prod fixture (clean).
+
+**CV6-PAGE:**
+- **F1 (P2): a single visible dim lost its name and colour.** A metric
+  with dims is now always drawn by dim; only a dimensionless metric is
+  one series. A single dim also gets its name in the chart title.
+- **F2 (P2): a period's leading axis past palette slot 8 folded into
+  "other".** Every selected top axis is kept, with a fallback grey and
+  its name.
+- **F3 (P2): a band label could fall outside the SVG** (a band spanning
+  the period). The label now goes right of the band, else left of it,
+  else inside the plot over the band, with a halo.
+- **F4 (P2): rates could round a half-cent tie down** (323 / 40). The
+  client's rates and shares now use `q2`, exact half-up rounding from
+  integers.
+- **Wording, as the review suggested:**
+  - "newest device timestamp … (uncorrected, in UTC)";
+  - the clock bound "vs this report's snapshot", with the snapshot time
+    in the tile and the method note, and that the bound shrinks as a
+    report is built later;
+  - the clip caption: "rounded up to an axis step".
+- **`dev/check_cv.js` gained:**
+  - `q2` against exact values;
+  - every band label inside its SVG in every view and period, plus a
+    spanning-band page where the label must go inside;
+  - a single operation keeping its name;
+  - a recent burst on the 9th-ranked axis (`l_arm`) shown by name;
+  - a single table-encoder axis (rotation) keeping its own colour.
+
+  Each of the 4 page bugs, put back on its own, fails the check.
+
+**After the fixes** (2026-11-18 20:50–20:52 UTC, read-only):
+- The fixture was rebuilt (it now carries `ahead_min`), and the guard
+  passed.
+- Tests: `insights/test` 5, `cv/test` model 13 + privacy 4, `ct/test`
+  14. `dev/check_cv.js` and `dev/check_ct.js` pass; the CT proof is 10
+  of 10 identical.
+- **`cv/verify.js`: 0 differences in 12,937 comparisons** (11 contract
+  checks added). **`--probe`: 35 of 35 caught.**
+- **Real build:** 0.22 MB, guard passed. Dashboard ready in 27–89 ms;
+  slowest view × period × scale 42 ms; 0 sideways scroll at 390 px; 0
+  page errors.
+- **Open:** the user's review of the page (Q9), then the commits (both
+  repos, with the user's OK).
+
+### 13.9 Commits (2026-11-18, the user's OK)
+
+- **Reports repo, `DEV`: 20fbb9b**, on top of e1de116 (not pushed).
+  - Staged only:
+    - `package.json`, the `report:cv` line;
+    - the three `ct/` files (`ct.client.js`, `render.js`, `verify.js`);
+    - `sme_reports/insights/**`, `sme_reports/cv/**` and
+      `sme_reports/dev/check_cv.js`.
+  - Before the commit, the rebuilt fixture was checked: identity is
+    placeholders only, and the privacy guard finds 0 problems.
+  - The tree is clean after the commit.
+- **hhm_rpp_ge, `dev`:** this plan (§13.7–13.9, the current state) and
+  the review files `REVIEW-CV6-{SHARED,DATA-MODEL,PAGE}-{HANDOFF,CODEX}.md`.
+  The 25 test files pass first (344 tests); none of them changed.
+- **Still open for CV-6:**
+  - the user's review of the page (Q9); feedback is recorded here, and
+    anything about scanner behaviour goes to the §5.5 D4 note / field
+    service;
+  - push and promote, when the user asks;
+  - the deferred shared cleanup (§13.8), each item with its own CT
+    proof.

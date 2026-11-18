@@ -346,17 +346,47 @@ test("fixture masker: hosts on word boundaries only, system ids, MAC, IP, UDI, A
 // A require of insight/mri in any form: "./mri", "../mri/x", "./insight/mri".
 const MRI_REQUIRE = /require\(\s*["'`][^"'`]*\bmri(\/[^"'`]*)?["'`]\s*\)/g;
 
-test("isolation: nothing outside insight/mri loads it (the GE CT and CV runs are unchanged)", () => {
-  const files = [path.join(INSIGHT, "..", "index.js")];
+test("isolation: nothing outside insight/mri loads it (the GE CT and CV runs are unchanged); the root index.js has its own test below", () => {
+  const files = [];
   const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);
     if (e.isDirectory()) { if (p !== MRI && e.name !== "node_modules") walk(p); } else if (e.name.endsWith(".js")) files.push(p);
   } };
   walk(INSIGHT);
-  assert.ok(files.some((f) => f.includes(`${path.sep}cv${path.sep}`)) && files.length > 40, "walked CT's and CV's insight/ files and index.js");
+  assert.ok(files.some((f) => f.includes(`${path.sep}cv${path.sep}`)) && files.length > 40, "walked CT's and CV's insight/ files");
   for (const f of files) assert.deepStrictEqual(fs.readFileSync(f, "utf8").match(MRI_REQUIRE), null, path.relative(INSIGHT, f));
   for (const ok of ['require("./mri")', "require('../mri/load')", 'require("./insight/mri")', 'require( "./insight/mri/cli" )']) assert.ok(ok.match(MRI_REQUIRE), ok);
   for (const no of ['require("./mrix")', 'require("./derive/mris")', 'require("./smri")']) assert.strictEqual(no.match(MRI_REQUIRE), null, no);
+});
+
+test("isolation: the root index.js loads insight/mri exactly once, the MRI-5 hook inside the GE_MRI branch, after CT's and CV's (plan §11.2 item 5)", () => {
+  const src = fs.readFileSync(path.join(INSIGHT, "..", "index.js"), "utf8");
+  assert.deepStrictEqual(src.match(MRI_REQUIRE), ['require("./insight/mri")']);
+  // one block per stage hook, from its `if` to the first closing brace at its indent
+  const block = (argv) => {
+    const head = `if (shell_value[0] === "${argv}") {`;
+    const from = src.indexOf(head);
+    assert.ok(from > 0 && src.indexOf(head, from + 1) < 0, `exactly one ${argv} branch`);
+    return { from, text: src.slice(from, src.indexOf("\n    }\n", from)) };
+  };
+  const ct = block("GE_CT");
+  const cv = block("GE_CV");
+  const mri = block("GE_MRI");
+  assert.ok(mri.text.includes('require("./insight/mri")'), "the require is inside the GE_MRI branch");
+  assert.match(mri.text, /const \{ run_mri_insight \} = require\("\.\/insight\/mri"\);\n\s+await run_mri_insight\(run_log, addLogEvent\);/);
+  assert.match(mri.text, /addLogEvent\(E, run_log, "run_mri_insight", cat, null, error\)/, "a failed require or a throw is logged as an ERROR");
+  assert.match(mri.text, /\} catch \(_\) \{/, "the ERROR log is guarded, so the run log is still written");
+  // after the ingest loop and the CT / CV hooks, before the run log is written
+  const write = src.indexOf("await writeLogEvents(run_log);");
+  assert.ok(src.indexOf("await run_job(job_id, system, run_log);") < ct.from && ct.from < cv.from && cv.from < mri.from && mri.from < write, "order: ingest, CT, CV, MRI, write the log");
+  // the CT and CV blocks are as before and mention nothing of MRI
+  assert.match(ct.text, /const \{ run_ct_insight \} = require\("\.\/insight"\);/);
+  assert.match(cv.text, /const \{ run_cv_insight \} = require\("\.\/insight\/cv"\);/);
+  for (const b of [ct.text, cv.text]) assert.doesNotMatch(b, /mri|MRI/);
+  // and nothing else in index.js loads the MRI stage or the shared wrapper
+  const comment = src.lastIndexOf("    // GE MRI insight stage", mri.from);
+  assert.ok(comment > cv.from && src.slice(comment, mri.from).split("\n").every((l) => !l.trim() || l.trim().startsWith("//")), "the hook's comment sits directly above it");
+  assert.doesNotMatch(src.slice(0, comment) + src.slice(mri.from + mri.text.length), /insight\/mri|run_mri_insight|stage_wrapper|INSIGHT_MRI/);
 });
 
 test("isolation: insight/mri reads shared modules but never CV's", () => {

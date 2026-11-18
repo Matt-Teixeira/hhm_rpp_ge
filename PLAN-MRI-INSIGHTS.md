@@ -52,7 +52,9 @@
   (the `index.js` hook) BUILT 2026-11-17, uncommitted, in a worktree**
   (§11.8; branch `mri5-hook` from 95797ea): the isolation test and the
   hook harness pass. **Codex review MRI5-HOOK CLOSED 2026-11-17, no
-  findings** (§11.9). It lands on `dev` only after the CV-5 close-out.
+  findings** (§11.9). **Committed on `dev` 2026-11-18** after C1-MRI
+  (end of §11.9): suites 344 / 344; the hook harness is identical to
+  11-17.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -2230,3 +2232,34 @@ connected to no database and ran no CLI.
   26 / 27: the fresh-process test can't spawn a child in their sandbox
   (EPERM). The same check passed when they ran it directly; here it
   passes, 27 / 27.
+
+**Step 2 committed on `dev` (2026-11-18):**
+
+- Applied after C1-MRI (4a626a2) from the durable patch
+  `~/cv_d3b_evidence/mri/mri5/hook/mri5-hook.patch`. It is identical to
+  the reviewed worktree diff (branch `mri5-hook`), apart from the
+  `index` lines.
+  - `index.js` has not changed on `dev` since the worktree's base
+    95797ea.
+  - `insight/mri/test/mri.test.js` has: C1-MRI changed it. The hunk
+    applies 18 lines lower.
+  - 2 files, +49 −3.
+- **Every suite passes in the main checkout: 344 of 344,** none skipped.
+- **Hook harness (`hook_compare.sh`), DB-free:**
+  - `index_head.js` was refreshed from `dev` before the patch (4a626a2;
+    byte-identical to the 11-17 copy). `index_new.js` is the patched
+    `index.js`, byte-identical to the reviewed one.
+  - `GE_CT` and `GE_CV` are identical to `dev`, with MRI's switch on and
+    off.
+  - With the switch unset, `false` or `TRUE`, `GE_MRI` only adds
+    `require ./insight/mri` (the real one), and only
+    `insight/mri/index.js` loads.
+  - With it on, the stage runs after all three systems are ingested. A
+    throw or a failed require is logged as ERROR `run_mri_insight` CATCH
+    and still reaches the final log write.
+  - Every scenario's output is identical to the 11-17 run. The 11-17
+    log's two hand-run mutation self-checks are kept in
+    `~/cv_d3b_evidence/mri/mri5/hook/run_20261117/`.
+- **Next:** remove the two worktrees, push, then the prod steps
+  (`~/cv_d3b_evidence/mri/PROD-STEPS-MRI.md`). The deploy itself is
+  recorded in §11.10.

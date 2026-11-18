@@ -272,10 +272,12 @@ async function check_clock(db) {
 
 // C1 (PLAN-CV-INSIGHTS.md §7.4): the catalog invariant counts CT rows only (GE CV's cv.* rows share the table).
 const CV_AWARE = true;
+// C1-MRI (PLAN-MRI-INSIGHTS.md §10): ... and not GE MRI's mri.* rows either.
+const MRI_AWARE = true;
 const INVARIANTS_SQL = `SELECT
       (SELECT count(*) FROM insight.ge_ct_facts f
         WHERE abs(extract(epoch FROM f.host_datetime - (f.host_local AT TIME ZONE 'UTC'))) > $1 * 3600)::int AS offset_breaks,
-      (SELECT count(*) FROM insight.metric_catalog WHERE metric_key NOT LIKE 'cv.%')::int AS catalog,
+      (SELECT count(*) FROM insight.metric_catalog WHERE metric_key NOT LIKE 'cv.%' AND metric_key NOT LIKE 'mri.%')::int AS catalog,
       (SELECT count(*) FROM insight.metric_catalog WHERE metric_key = ANY($2))::int AS derived_in_catalog`;
 
 async function check_invariants(db) {
@@ -304,4 +306,4 @@ async function run_verify(db, log = console.log) {
 }
 
 module.exports = { run_verify, check_invariants, EXPECTED_REPLACEMENTS, REPLACEMENTS_13_1, REPLACEMENTS_REVIEWED, EXPECTED_CLOCK_AHEAD,
-  RESTART_LOOP, DAILY_DIFF_SQL, EXAMS_DIFF_SQL, INVARIANTS_SQL, CV_AWARE };
+  RESTART_LOOP, DAILY_DIFF_SQL, EXAMS_DIFF_SQL, INVARIANTS_SQL, CV_AWARE, MRI_AWARE };

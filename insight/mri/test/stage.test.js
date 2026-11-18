@@ -187,13 +187,16 @@ test("stage_preflight: the extract apply preflight, schema >= 9, and an extract 
   } finally { load.preflight = saved; }
 });
 
-test("stage_preflight with the real extract preflight: refused until C1-MRI (plan §10; flips with the C1-MRI change), and as a superuser or another role", async () => {
+test("stage_preflight with the real extract preflight: passes once C1-MRI is in (plan §10), refused as a superuser, another role or without C2-MRI", async () => {
   const fake = ({ u = "insight_writer", su = false, can_read = true } = {}) => ({
     one: async (q) => (/current_user/.test(q) ? { u, su, can_read } : /schema_migrations/.test(q) ? { v: 9 } : { last: "ge_mri_facts_2028_12" }),
     oneOrNone: async () => ({ watermark_id: "5" }),
   });
   await asWriter(async () => {
-    await assert.rejects(stage.stage_preflight(fake()), /C1-MRI/);
+    // C1-MRI is done in this checkout (every CT verifier exports MRI_AWARE), so the live stage may start;
+    // the refusal itself is covered by mri.test.js "C1-MRI interlock" with fake modules.
+    const pre = await stage.stage_preflight(fake());
+    assert.strictEqual(pre.schema_version, 9);
     await assert.rejects(stage.stage_preflight(fake({ su: true })), /expected the limited/);
     await assert.rejects(stage.stage_preflight(fake({ u: "someone_else" })), /expected the limited/);
     await assert.rejects(stage.stage_preflight(fake({ can_read: false })), /C2-MRI/);

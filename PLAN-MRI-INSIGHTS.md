@@ -39,8 +39,9 @@
   in a worktree** (§10.5; branch `c1-mri-aware` from d563c75, outside the
   repo directory; the main checkout and prod unchanged). Tests and the
   local rehearsal pass. **Codex review CLOSED 2026-11-16, no findings**
-  (`REVIEW-C1-MRI-CODEX.md`, §10.6). Committed on `dev` and deployed
-  only after the CV-5 close-out (§10.4).
+  (`REVIEW-C1-MRI-CODEX.md`, §10.6). **Committed on `dev` 2026-11-18,
+  after the CV-5 close-out** (§10.7): suites 343 / 343; the CT verifiers
+  pass on prod with it. Deployed with the MRI push (§10.4).
 - **MRI-5 (the stage, shared wrapper): AGREED 2026-11-16 (§11),** every
   §11.3 recommendation. **Step 1 BUILT 2026-11-16 (§11.6):** the shared
   `insight/stage_wrapper.js` (identical to the CT and CV wrappers in 24
@@ -1672,6 +1673,34 @@ five handoff questions:
    behaviour without owning MRI's registry.
 5. **Deploy order:** sound as in §10.5 "Next"; keep 009 and the C2-MRI
    grant in the §10.4 order; C1-MRI needs no schema change.
+
+### 10.7 Committed on `dev` (2026-11-18, after the CV-5 close-out)
+
+- The CV-5 close-out was done early on 2026-11-18 (CV plan §12.10;
+  9753a86), which ended the freeze.
+- **Applied to `dev` from the durable patches:**
+  - `~/cv_d3b_evidence/mri/c1mri/c1-mri.patch`. It is byte-identical
+    to the reviewed worktree diff (branch `c1-mri-aware`), apart from
+    the `index` lines. None of its six files changed on `dev` since the
+    worktree's base d563c75.
+  - `c1-mri-stage-test-flip.patch`. In
+    `insight/mri/test/stage.test.js`, the case "refused until C1-MRI"
+    now expects the stage preflight to pass. The refusal itself stays
+    covered by the `mri.test.js` "C1-MRI interlock" test (§11.6).
+  - 7 files in total, +110 −40.
+- **Every suite passes in the main checkout:** 343 of 343, none
+  skipped (25 files).
+- **The CT verifiers with this code, read-only against prod**
+  (13:04–13:10 UTC, no MRI rows yet):
+  - `verify`: 624 cells equal, catalog 39.
+  - `verify-derive` and `verify-findings`: ALL PASS (catalog 13 =
+    registry 13).
+  - The CV verifiers also pass: `verify` ok, `verify-derive` ok,
+    `verify-findings` PASS (catalog 5).
+  - Log: `~/cv_d3b_evidence/mri/c1mri/ct_verifiers_dev_20261118T1304.log`.
+- **Next:** the MRI-5 step 2 hook (§11.8), then the push and the prod
+  steps (§10.4). On prod, C1-MRI takes effect with the pull and only
+  matters once MRI rows exist.
 
 ## 11. MRI-5: the stage (AGREED 2026-11-16: the recommendation in each of §11.3 Q1–Q7)
 

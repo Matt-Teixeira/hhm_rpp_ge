@@ -1,8 +1,9 @@
 "use strict";
 // node insight/test/cv_scope.test.js   (no DB needed)
-// C1 (PLAN-CV-INSIGHTS.md §7.4): the three CT verifiers count only CT catalog
-// rows. GE CV writes cv.* rows to insight.metric_catalog and cv_* rows to
-// insight.finding_catalog; the CT checks must ignore those and still fail on a
+// C1 (PLAN-CV-INSIGHTS.md §7.4) and C1-MRI (PLAN-MRI-INSIGHTS.md §10): the
+// three CT verifiers count only CT catalog rows. GE CV writes cv.* rows to
+// insight.metric_catalog and cv_* rows to insight.finding_catalog, GE MRI
+// mri.* and mri_* rows; the CT checks must ignore those and still fail on a
 // wrong CT catalog.
 //
 // The fake DB below holds the catalog tables in memory and applies every
@@ -15,9 +16,10 @@
 // No filter may contain a backslash: how PostgreSQL reads a backslash in a
 // string literal depends on standard_conforming_strings (review CV-C1 P2).
 //
-// CT code must not load insight/cv (cv.test.js "isolation"), so the CV rows
-// here are copies of the CV registry's keys (as of 2026-11-10); cv.test.js
-// checks the real CV registries against these filters.
+// CT code must not load insight/cv or insight/mri (the isolation tests in
+// cv.test.js and mri.test.js), so the CV and MRI rows here are copies of
+// their registries' keys (CV as of 2026-11-10, MRI as of 2026-11-16);
+// cv.test.js and mri.test.js check the real registries against these filters.
 const test = require("node:test");
 const assert = require("node:assert");
 const { rules } = require("../rules/ge_ct");
@@ -79,6 +81,16 @@ const CT_FINDING = finding_catalog_rows();
 const CV_FINDING = ["cv_error_storm", "cv_detector_com_errors", "cv_anticollision_burst", "cv_table_encoder_fault", "cv_pib_com_loss"]
   .map((finding_key) => ({ finding_key, label: `GE CV ${finding_key}`, description: "CV", category: "reliability", default_severity: "medium",
     rule_version: 1, customer_visible: false }));
+const MRI_METRIC = ["mri.error", "mri.scans_ok", "mri.scans_failed", "mri.exam_started", "mri.sw_start", "mri.sw_stop", "mri.tps_reset",
+  "mri.tps_reset_failed", "mri.process_death", "mri.prescan_failed", "mri.autoshim_inconclusive", "mri.coil_invalid", "mri.coil_fault",
+  "mri.cooling_fault", "mri.rf_amp_fault", "mri.gradient_fault", "mri.receiver_fault", "mri.table_fault", "mri.door_sensor_fault",
+  "mri.service_mode", "mri.pm_overdue", "mri.iq_warning", "mri.system_up"].map((metric_key) => ({ metric_key }));
+const MRI_FINDING = ["mri_failed_scans_high", "mri_cooling_fault", "mri_tps_reset_failures", "mri_process_crash_loop", "mri_prescan_failures",
+  "mri_coil_fault", "mri_table_fault", "mri_image_quality_warning", "mri_pm_overdue", "mri_error_storm", "mri_unclean_restarts"]
+  .map((finding_key) => ({ finding_key, label: `GE MRI ${finding_key}`, description: "MRI", category: "reliability", default_severity: "medium",
+    rule_version: 1, customer_visible: false }));
+const OTHER_METRIC = [...CV_METRIC, ...MRI_METRIC];
+const OTHER_FINDING = [...CV_FINDING, ...MRI_FINDING];
 const quiet = () => {};
 
 const run_facts = async (metric) => (await facts.verify_facts(fake_db({ metric }), 100)).ok;
@@ -97,25 +109,44 @@ test("fake LIKE follows PostgreSQL: % and _ are wildcards, \\_ is a literal unde
   // the prefix form drops exactly the cv_ keys
   const drop = excluded_by("WHERE left(finding_key, 3) <> 'cv_'", "finding_key")[0];
   assert.ok(drop("cv_error_storm") && !drop("cva") && !drop("cvx_error") && !drop("cv") && !drop("tube_replaced"));
+  // C1-MRI: '.' is literal in LIKE; the 4-character prefix drops exactly the mri_ keys
+  assert.ok(like_re("mri.%").test("mri.error") && !like_re("mri.%").test("mrix.error") && !like_re("mri.%").test("mri_error"));
+  const mri = excluded_by("WHERE left(finding_key, 4) <> 'mri_'", "finding_key")[0];
+  assert.ok(mri("mri_cooling_fault") && !mri("mria") && !mri("mrix_unknown") && !mri("mri") && !mri("tube_replaced"));
 });
 
-test("C1: the three CT verifiers declare CV_AWARE (the GE CV --apply interlock reads it)", () => {
-  for (const m of [facts, derive_verify, findings_verify]) assert.strictEqual(m.CV_AWARE, true);
+test("C1 / C1-MRI: the three CT verifiers declare CV_AWARE and MRI_AWARE (the GE CV and GE MRI --apply interlocks read them)", () => {
+  for (const m of [facts, derive_verify, findings_verify]) {
+    assert.strictEqual(m.CV_AWARE, true);
+    assert.strictEqual(m.MRI_AWARE, true);
+  }
 });
 
 test("the filters, as the SQL text sees them", () => {
-  assert.match(facts.CATALOG_SQL, /FROM insight\.metric_catalog\s+WHERE metric_key NOT LIKE 'cv\.%'/);
-  assert.match(derive_verify.INVARIANTS_SQL, /\(SELECT count\(\*\) FROM insight\.metric_catalog WHERE metric_key NOT LIKE 'cv\.%'\)::int AS catalog/);
-  assert.ok(findings_verify.CATALOG_SQL.endsWith("FROM insight.finding_catalog WHERE left(finding_key, 3) <> 'cv_'"));
+  assert.match(facts.CATALOG_SQL, /FROM insight\.metric_catalog\s+WHERE metric_key NOT LIKE 'cv\.%' AND metric_key NOT LIKE 'mri\.%'$/);
+  assert.match(derive_verify.INVARIANTS_SQL,
+    /\(SELECT count\(\*\) FROM insight\.metric_catalog WHERE metric_key NOT LIKE 'cv\.%' AND metric_key NOT LIKE 'mri\.%'\)::int AS catalog/);
+  assert.ok(findings_verify.CATALOG_SQL.endsWith("FROM insight.finding_catalog WHERE left(finding_key, 3) <> 'cv_' AND left(finding_key, 4) <> 'mri_'"));
+  // exactly two exclusions per statement, and nothing else filters the catalog rows
+  assert.strictEqual(excluded_by(facts.CATALOG_SQL, "metric_key").length, 2);
+  assert.strictEqual(excluded_by(findings_verify.CATALOG_SQL, "finding_key").length, 2);
   // no backslash anywhere: the result can't depend on standard_conforming_strings (review CV-C1 P2)
   for (const s of [facts.CATALOG_SQL, derive_verify.INVARIANTS_SQL, findings_verify.CATALOG_SQL]) assert.ok(!s.includes("\\"), s.slice(0, 60));
-  // no CT key starts with "cv", so the filters can never drop a CT row
-  assert.ok(!CT_METRIC.some((r) => /^cv/.test(r.metric_key)) && !CT_FINDING.some((r) => /^cv/.test(r.finding_key)));
+  // no CT key starts with "cv" or "mri", so the filters can never drop a CT row
+  assert.ok(!CT_METRIC.some((r) => /^(cv|mri)/.test(r.metric_key)) && !CT_FINDING.some((r) => /^(cv|mri)/.test(r.finding_key)));
+  // and every copied CV / MRI key is dropped
+  assert.deepStrictEqual(keep(OTHER_METRIC, facts.CATALOG_SQL, "metric_key"), []);
+  assert.deepStrictEqual(keep(OTHER_FINDING, findings_verify.CATALOG_SQL, "finding_key"), []);
 });
 
-test("verify_facts: CT catalog passes with or without cv.* rows; a wrong CT catalog fails", async () => {
+test("verify_facts: CT catalog passes with or without cv.* / mri.* rows; a wrong CT catalog fails", async () => {
   assert.strictEqual(await run_facts(CT_METRIC), true);
   assert.strictEqual(await run_facts([...CT_METRIC, ...CV_METRIC]), true);
+  assert.strictEqual(await run_facts([...CT_METRIC, ...MRI_METRIC]), true);
+  assert.strictEqual(await run_facts([...CT_METRIC, ...OTHER_METRIC]), true);
+  assert.strictEqual(await run_facts([...CT_METRIC.slice(1), ...OTHER_METRIC]), false, "a CT row missing, with CV and MRI rows");
+  assert.strictEqual(await run_facts([...CT_METRIC, { metric_key: "mrix.not_mri" }, ...OTHER_METRIC]), false, "mrix.* is not MRI");
+  assert.strictEqual(await run_facts([...CT_METRIC, { metric_key: "mri_x" }, ...OTHER_METRIC]), false, "mri_x is not mri.*");
   // before derive has run: per-row rules only, still exact
   const per_row = CT_METRIC.filter((r) => !DERIVED_KEYS.includes(r.metric_key));
   assert.strictEqual(await run_facts([...per_row, ...CV_METRIC]), true);
@@ -126,19 +157,28 @@ test("verify_facts: CT catalog passes with or without cv.* rows; a wrong CT cata
   assert.strictEqual(await run_facts([...per_row.slice(1), CT_METRIC.find((r) => r.metric_key === DERIVED_KEYS[0]), ...CV_METRIC]), false, "one derived row only");
 });
 
-test("verify-derive invariants: CT catalog passes with or without cv.* rows; a wrong CT catalog fails", async () => {
+test("verify-derive invariants: CT catalog passes with or without cv.* / mri.* rows; a wrong CT catalog fails", async () => {
   assert.strictEqual(await run_invariants(CT_METRIC), true);
   assert.strictEqual(await run_invariants([...CT_METRIC, ...CV_METRIC]), true);
+  assert.strictEqual(await run_invariants([...CT_METRIC, ...OTHER_METRIC]), true);
+  assert.strictEqual(await run_invariants([...CT_METRIC.slice(1), ...OTHER_METRIC]), false, "a CT row missing, with CV and MRI rows");
+  assert.strictEqual(await run_invariants([...CT_METRIC, { metric_key: "mrix.not_mri" }, ...OTHER_METRIC]), false, "mrix.* is not MRI");
   assert.strictEqual(await run_invariants([...CT_METRIC.slice(1), ...CV_METRIC]), false, "a CT row missing");
   assert.strictEqual(await run_invariants([...CT_METRIC, { metric_key: "tube.extra_metric" }, ...CV_METRIC]), false, "an extra CT row");
   assert.strictEqual(await run_invariants([...CT_METRIC.filter((r) => r.metric_key !== DERIVED_KEYS[0]), ...CV_METRIC]), false, "a derived row missing");
-  const out = await derive_verify.check_invariants(fake_db({ metric: [...CT_METRIC, ...CV_METRIC] }));
+  const out = await derive_verify.check_invariants(fake_db({ metric: [...CT_METRIC, ...OTHER_METRIC] }));
   assert.match(out.lines[1], new RegExp(`catalog rows: ${CT_METRIC.length} \\(expected ${CT_METRIC.length}:`));
 });
 
-test("verify-findings catalog = registry: passes with or without cv_* rows; a wrong CT row fails", async () => {
+test("verify-findings catalog = registry: passes with or without cv_* / mri_* rows; a wrong CT row fails", async () => {
   assert.strictEqual(await run_findings(CT_FINDING), true);
   assert.strictEqual(await run_findings([...CT_FINDING, ...CV_FINDING]), true);
+  assert.strictEqual(await run_findings([...CT_FINDING, ...MRI_FINDING]), true);
+  assert.strictEqual(await run_findings([...CT_FINDING, ...OTHER_FINDING]), true);
+  assert.strictEqual(await run_findings([...CT_FINDING.slice(1), ...OTHER_FINDING]), false, "a CT row missing, with CV and MRI rows");
+  for (const k of ["mrix_unknown", "mria", "mri"]) {
+    assert.strictEqual(await run_findings([...CT_FINDING, { ...CT_FINDING[0], finding_key: k }, ...OTHER_FINDING]), false, `${k} is not MRI`);
+  }
   const relabel = CT_FINDING.map((r, i) => (i === 0 ? { ...r, label: `${r.label} (changed)` } : r));
   assert.strictEqual(await run_findings([...relabel, ...CV_FINDING]), false, "a CT row differs");
   assert.strictEqual(await run_findings([...CT_FINDING.slice(1), ...CV_FINDING]), false, "a CT row missing");
@@ -147,13 +187,16 @@ test("verify-findings catalog = registry: passes with or without cv_* rows; a wr
   assert.strictEqual(await run_findings([...CT_FINDING, cvx, ...CV_FINDING]), false, "cvx_* is not CV");
 });
 
-test("unchanged when no CV rows exist: the same CT inputs give the same results as the filter-free count", async () => {
-  // the pre-C1 statements (no filter) on CT-only data agree with the C1 statements
-  const old_facts = facts.CATALOG_SQL.replace(/\s+WHERE metric_key NOT LIKE 'cv\.%'/, "");
+test("unchanged when no CV / MRI rows exist: the same CT inputs give the same results as the filter-free count", async () => {
+  // the pre-C1 statements (no filter) on CT-only data agree with the C1 / C1-MRI statements
+  const old_facts = facts.CATALOG_SQL.replace(/\s+WHERE metric_key NOT LIKE 'cv\.%' AND metric_key NOT LIKE 'mri\.%'/, "");
   assert.notStrictEqual(old_facts, facts.CATALOG_SQL);
   for (const metric of [CT_METRIC, CT_METRIC.slice(1)]) {
     assert.deepStrictEqual(keep(metric, old_facts, "metric_key"), keep(metric, facts.CATALOG_SQL, "metric_key"));
   }
-  // and with CV rows the pre-C1 count is what failed
+  // and with CV rows the pre-C1 count is what failed, as the C1-only statement does with MRI rows
   assert.strictEqual(keep([...CT_METRIC, ...CV_METRIC], old_facts, "metric_key").length, CT_METRIC.length + CV_METRIC.length);
+  const c1_only = facts.CATALOG_SQL.replace(/ AND metric_key NOT LIKE 'mri\.%'/, "");
+  assert.notStrictEqual(c1_only, facts.CATALOG_SQL);
+  assert.strictEqual(keep([...CT_METRIC, ...OTHER_METRIC], c1_only, "metric_key").length, CT_METRIC.length + MRI_METRIC.length);
 });

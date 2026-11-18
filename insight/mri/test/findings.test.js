@@ -324,7 +324,7 @@ test("as_mri_rows: relabels the fold's rows as ge_mri and refuses a non-MRI key"
   assert.throws(() => as_mri_rows([{ finding_key: "tube_replaced", source: "ge_ct" }]), /not an MRI finding key/);
 });
 
-test("preflight refusals: limited user, schema 9, derive caught up; --apply refused until C1-MRI", async () => {
+test("preflight refusals: limited user, schema 9, derive caught up; --apply passes once C1-MRI is in", async () => {
   process.env.INSIGHT_PG_USER = "insight_writer";
   const fake = ({ user = "insight_writer", su = false, v = 9, derive = { s: "ok", p: {}, c: null }, inv = [] } = {}) => ({
     one: async (sql) => (/current_user/.test(sql) ? { u: user, su } : { v }),
@@ -341,9 +341,9 @@ test("preflight refusals: limited user, schema 9, derive caught up; --apply refu
   await assert.rejects(preflight(fake({ inv: [{ system_id: "SME00001", day: "2026-11-09", kind: "facts_only" }, { system_id: "SME00001", day: "2026-11-10", kind: "facts_only" }] }), { mode: "rehearse" }),
     /ge_mri_daily disagree.*SME00001 facts_only: 2 days \(2026-11-09\.\.2026-11-10\)/);
   assert.deepStrictEqual(await preflight(fake(), { mode: "rehearse" }), { user: "insight_writer", schema_version: 9 });
-  // C1-MRI is not done in this checkout: the CT verifiers don't export MRI_AWARE (plan §6.4).
-  // The C1-MRI change flips this, with the "C1-MRI interlock" test in mri.test.js.
-  await assert.rejects(preflight(fake(), { mode: "apply" }), /refusing --apply: CT verifiers not yet scoped to CT keys \(plan §6.4 C1-MRI\): \.\.\/verify_facts, \.\.\/derive\/verify, \.\.\/findings\/verify/);
+  // C1-MRI is done in this checkout (every CT verifier exports MRI_AWARE, plan §10), so --apply passes the interlock;
+  // the refusal itself is covered by mri.test.js "C1-MRI interlock" with fake modules.
+  assert.deepStrictEqual(await preflight(fake(), { mode: "apply" }), { user: "insight_writer", schema_version: 9 });
 });
 
 test("mri_ key filters are plain prefix tests (no LIKE with a backslash); every statement keeps to source ge_mri", () => {

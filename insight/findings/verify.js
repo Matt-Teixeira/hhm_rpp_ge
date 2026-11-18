@@ -7,8 +7,8 @@
 //   1. findings: every row of insight.findings (source ge_ct) equals the row
 //      re-derived by the independent SQL (findings/verify_sql.js), field by
 //      field; none missing, none extra.
-//   2. catalog: insight.finding_catalog (CT rows: GE CV's cv_* rows share
-//      the table and are left out) equals the registry.
+//   2. catalog: insight.finding_catalog (CT rows: GE CV's cv_* and GE MRI's
+//      mri_* rows share the table and are left out) equals the registry.
 //   3. invariants: rule_version = registry; an open finding's data_through is
 //      its system's last data day; resolved_at > opened_at; no unknown keys.
 const { FINDINGS_SQL } = require("./verify_sql");
@@ -16,8 +16,10 @@ const { finding_rules, catalog_rows } = require("./rules");
 
 // C1 (PLAN-CV-INSIGHTS.md §7.4): "catalog = registry" ignores cv_* rows; the GE CV --apply interlock reads this.
 const CV_AWARE = true;
-// A plain prefix test, not LIKE 'cv\_%': the backslash escape depends on standard_conforming_strings (review CV-C1 P2).
-const CATALOG_SQL = "SELECT finding_key, label, description, category, default_severity, rule_version, customer_visible FROM insight.finding_catalog WHERE left(finding_key, 3) <> 'cv_'";
+// C1-MRI (PLAN-MRI-INSIGHTS.md §10): ... and mri_* rows; the GE MRI --apply interlock reads this.
+const MRI_AWARE = true;
+// Plain prefix tests, not LIKE 'cv\_%': the backslash escape depends on standard_conforming_strings (review CV-C1 P2).
+const CATALOG_SQL = "SELECT finding_key, label, description, category, default_severity, rule_version, customer_visible FROM insight.finding_catalog WHERE left(finding_key, 3) <> 'cv_' AND left(finding_key, 4) <> 'mri_'";
 
 const iso = (t) => (t === null || t === undefined ? null : new Date(t).toISOString());
 const num_eq = (a, b) => (a === null || a === undefined ? b === null || b === undefined : b !== null && b !== undefined && Math.abs(Number(a) - Number(b)) < 1e-6);
@@ -139,4 +141,4 @@ async function run_verify(t, { today, as_of_by_system = {}, log = console.log, r
   return { ok: results.every((r) => r.ok), results };
 }
 
-module.exports = { run_verify, compare_findings, invariants, STORED_SQL, CATALOG_SQL, CV_AWARE };
+module.exports = { run_verify, compare_findings, invariants, STORED_SQL, CATALOG_SQL, CV_AWARE, MRI_AWARE };

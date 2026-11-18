@@ -265,9 +265,27 @@ test("C1-MRI interlock: --apply needs every CT verifier to declare MRI_AWARE", (
   assert.deepStrictEqual(ct_verifiers_not_mri_aware(() => ({ MRI_AWARE: true })), []);
   assert.strictEqual(ct_verifiers_not_mri_aware(() => ({ CV_AWARE: true })).length, 3, "CV_AWARE alone is not enough");
   assert.strictEqual(ct_verifiers_not_mri_aware(() => ({ MRI_AWARE: "yes" })).length, 3, "only the boolean true counts");
-  // Today (before the C1-MRI CT change) the real CT verifiers are not MRI-aware, so --apply is refused.
-  // The C1-MRI change updates this assertion.
-  assert.deepStrictEqual(ct_verifiers_not_mri_aware(), ["../verify_facts", "../derive/verify", "../findings/verify"]);
+  // After the C1-MRI CT change (plan §10) the real CT verifiers are MRI-aware, so --apply is allowed; any one missing is named.
+  assert.deepStrictEqual(ct_verifiers_not_mri_aware(), []);
+  assert.deepStrictEqual(ct_verifiers_not_mri_aware((m) => (m === "../derive/verify" ? { CV_AWARE: true } : { MRI_AWARE: true })), ["../derive/verify"]);
+});
+
+test("C1-MRI: every real MRI catalog row is one the CT verifiers' filters leave out (and no CT row is)", () => {
+  const { CATALOG_SQL: FACTS_CATALOG_SQL } = require("../../verify_facts");
+  const { INVARIANTS_SQL } = require("../../derive/verify");
+  const { CATALOG_SQL: FINDINGS_CATALOG_SQL } = require("../../findings/verify");
+  const { mri_catalog_rows: mri_finding_rows } = require("../findings/rules");
+  const { catalog_rows: ct_finding_rows } = require("../../findings/rules");
+  const { catalog_rows: ct_metric_rows } = require("../../rules/engine");
+  // as SQL receives them: LIKE 'mri.%' ('.' literal, no '_'), and a plain 4-character prefix test; no backslash
+  for (const s of [FACTS_CATALOG_SQL, INVARIANTS_SQL]) assert.match(s, /metric_key NOT LIKE 'mri\.%'/);
+  assert.ok(FINDINGS_CATALOG_SQL.includes("left(finding_key, 4) <> 'mri_'"));
+  for (const s of [FACTS_CATALOG_SQL, INVARIANTS_SQL, FINDINGS_CATALOG_SQL]) assert.ok(!s.includes("\\"));
+  assert.ok(mri_catalog_rows().length === 23 && mri_catalog_rows().every((r) => r.metric_key.startsWith("mri.")));
+  assert.ok(mri_finding_rows().length === 11 && mri_finding_rows().every((r) => r.finding_key.slice(0, 4) === "mri_"));
+  const ct_metric = [...ct_metric_rows(require("../../rules/ge_ct").rules), ...ct_metric_rows(require("../../rules/ge_ct_derived").derived_rules)];
+  assert.ok(ct_metric.length > 0 && !ct_metric.some((r) => r.metric_key.startsWith("mri.")));
+  assert.ok(!ct_finding_rows().some((r) => r.finding_key.slice(0, 4) === "mri_"));
 });
 
 test("independent SQL covers exactly the registry and pins every named code", () => {

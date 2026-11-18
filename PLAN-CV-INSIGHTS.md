@@ -16,11 +16,11 @@ oldest first and its early bullets are superseded):**
   (medium, from 2026-11-11). SME02412 `cv_detector_com_errors`
   resolved on 2026-11-13, as the CV-4 replay predicted.
 - **Next:**
-  - **CV-6, the viewer: built and committed 2026-11-18** (§13; reports
-    `DEV` 20fbb9b, not pushed). "GE CV Insights — Internal",
+  - **CV-6, the viewer: DONE 2026-11-18** (§13; reports `DEV` 20fbb9b,
+    pushed and promoted). "GE CV Insights — Internal",
     `npm run report:cv`; no migration.
-    - Every §13.4 criterion is met apart from the user's own page review
-      (Q9).
+    - Every §13.4 criterion is met. The user reviewed the page on
+      2026-11-18: "looks good for now", no changes (Q9).
     - The three Codex reviews are closed (§13.8).
     - CT now runs on the shared `sme_reports/insights/` module, and its
       page is byte-identical.
@@ -375,7 +375,7 @@ and 15,049 on 2026-10-20.
 | **CV-3 Derive** ✅ applied 2026-11-12 (§9) | Daily, capabilities, clock offsets, code labels | Independent SQL equal |
 | **CV-4 Findings** ✅ 008 + replay applied 2026-11-12, 13 findings (§10) | Rules, replay, `verify-findings` for `ge_cv` | Independent SQL equal; findings reviewed with evidence |
 | **CV-5 Prod** — LIVE 2026-11-12 20:18 UTC, monitoring until 11-19 (§12) | Stage after `ge_cv_parsers`, kill switch, rehearsal, deploy, 7-day monitoring | As CT §15.4 (§12.4) |
-| **CV-6 Viewer** — built and committed 2026-11-18 (§13; reports 20fbb9b) | "GE CV Insights — Internal" | As CT §16.4 (§13.4) |
+| **CV-6 Viewer** ✅ DONE 2026-11-18 (§13; reports 20fbb9b) | "GE CV Insights — Internal" | As CT §16.4 (§13.4) |
 
 Checkpoints for the user's go-ahead: the answers to §3; before each
 migration is applied; before any `index.js` / parser change; before each
@@ -3096,10 +3096,20 @@ plus 5 of its own) were byte-identical.
 - **hhm_rpp_ge, `dev`:** this plan (§13.7–13.9, the current state) and
   the review files `REVIEW-CV6-{SHARED,DATA-MODEL,PAGE}-{HANDOFF,CODEX}.md`.
   The 25 test files pass first (344 tests); none of them changed.
-- **Still open for CV-6:**
-  - the user's review of the page (Q9); feedback is recorded here, and
-    anything about scanner behaviour goes to the §5.5 D4 note / field
-    service;
-  - push and promote, when the user asks;
+- **The user's review of the page (Q9), 2026-11-18: "looks good for
+  now"; no changes asked. CV-6 is DONE:** every §13.4 criterion is met.
+  Later feedback is recorded here; anything about scanner behaviour goes
+  to the §5.5 D4 note / field service.
+- **After CV-6:**
+  - ~~push and promote~~: **pushed and promoted 2026-11-18 at the
+    user's request**, fast-forward, no force:
+    - reports: `DEV`, `STAGING` and `PROD` at 20fbb9b;
+    - hhm_rpp_ge: `dev`, `staging` and `prod` at d2557bc (this plan and
+      the review files only; no code).
+
+    The report is built on demand (`npm run report:cv`). Nothing
+    schedules it, and nothing on prod has been pulled; pulling is the
+    user's step. The hhm_rpp_ge change is documentation only, so the
+    MRI-5 window is unaffected.
   - the deferred shared cleanup (§13.8), each item with its own CT
     proof.

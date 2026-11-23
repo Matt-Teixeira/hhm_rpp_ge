@@ -1,6 +1,6 @@
 # GE MRI Insights — plan
 
-**Current state (2026-11-18; read this first):**
+**Current state (2026-11-23; read this first):**
 - **MRI-0 (decide): AGREED 2026-11-13.** The user took the
   recommendation in each of Q1–Q7 (§3) and the §2 design. The evidence
   (§1) is read-only and was gathered against prod on 2026-11-13. Nothing
@@ -60,9 +60,15 @@
   findings, 28 open); the stage rehearsal OK; the user set
   `INSIGHT_MRI_ENABLED=true`. The first live run (`GE_MRI` 16:48) was
   clean: 162 rows, 13.7 s, the watermarks equal at the source max. The
-  CT and CV stages and all nine verifiers pass. **Monitoring: 5 days,
-  to 2026-11-23 16:48 UTC** (§11.4), then the close-out. Code 2227004
-  (1 row) stays unreviewed until after the window.
+  CT and CV stages and all nine verifiers pass.
+- **MRI-5 DONE: closed out early on 2026-11-23** (§11.11), at the
+  user's decision, after 4 days 20.5 h instead of 5 days. All 234
+  `GE_MRI` runs were clean, and all nine verifiers pass. Findings are
+  unchanged (71, 28 open), and no unreviewed code arrived in the window.
+  CT and CV are unaffected. The daily cron line is removed. Found: the
+  monitor skipped gzipped run logs (fix before MRI-5b). Next, proposed
+  and not started: review code 2227004, MRI-5b, the `gzip_file.js`
+  await.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -340,7 +346,7 @@ The CV path, on CT's architecture:
 | **MRI-2 Extract** | `insight/mri/` rules + extract + backfill CLI (dry run, rehearse, apply), as CV-2 | dry run equals independent SQL per system × metric; review closed | built 2026-11-13 (§7); written to prod after 009, C1-MRI, C2-MRI |
 | **MRI-3 Derive** | daily, capabilities, sessions, inventory; `verify_derive` | verifiers pass; review closed | built 2026-11-13 (§8); prod after MRI-2's backfill |
 | **MRI-4 Findings** | replay the history, propose rules with evidence, agree, build, `verify-findings` | replay drift 0; review closed | after MRI-3 |
-| **MRI-5 Stage** (LIVE 2026-11-18, §11.10) | `run_mri_insight` after `GE_MRI`, shared wrapper, `INSIGHT_MRI_ENABLED` | as CV §12.4: 5 days clean (§11.4), CT and CV unchanged | window to 2026-11-23 16:48 UTC |
+| **MRI-5 Stage** (LIVE 2026-11-18, §11.10; **DONE 2026-11-23**, §11.11) | `run_mri_insight` after `GE_MRI`, shared wrapper, `INSIGHT_MRI_ENABLED` | as CV §12.4: 5 days clean (§11.4), CT and CV unchanged | closed early 2026-11-23 13:27 UTC (4 d 20.5 h, the user's decision) |
 | **MRI-6 Viewer** | "GE MRI Insights — Internal" report | as CT §16.4 | after MRI-5, or after CV-6 |
 
 **Build order now (within the freeze):**
@@ -2387,3 +2393,133 @@ Times are UTC.
   - MRI-5b;
   - the `gzip_file.js insert_buffer` await (§11.9);
   - whether MRI-5b's 3-day watch (§11.5) should be 5.
+
+### 11.11 Close-out (2026-11-23, early)
+
+**Decision (the user, 2026-11-23 13:27 UTC):** close out now, 3 h 21 min
+before the 5-day window ends (16:48), as CV-5 closed early (CV §12.10).
+Why: every run so far was clean and every verifier passed; the 7 runs
+left would not change the picture.
+
+**Result: MRI-5 DONE.** Every §11.4 criterion is met. All checks were
+read-only against prod, 13:10–13:27 UTC, over every run from the first
+live run (2026-11-18 16:48) to the 2026-11-23 13:18 run: 4 days 20.5 h,
+**234 `GE_MRI` runs** (15 on 11-18, 48 on each of 11-19 to 11-22, 27 on
+11-23). Scripts and logs are in `~/cv_d3b_evidence/mri/mri5/closeout/`,
+outside the repo (`closeout_runs.js`, `closeout_db.js`, `loose.js`,
+`saved_files_span.js`; `runs_final_1318.log`, `db_*.log`,
+`verifiers_*.log`).
+
+- **A gap in the monitoring, found at the close-out:** the prod logger
+  directory gzips older run logs (`*.gz`). `monitor.js` (and the CV-5
+  one before it) reads only plain JSON and skips the rest silently, so
+  each daily STATUS line covered only the runs not yet compressed: 10,
+  43, 35, 35 and 35 runs, against 48 a day. The STATUS lines were OK
+  for what they read; they did not cover every run. The close-out script
+  reads both, and every run in the window is in it. Fix the monitor
+  (read `.gz` too, and count the runs it expects) before the MRI-5b
+  watch reuses it.
+- **Daily checks (`mri5/daily/STATUS`):** OK on days 0–4 (11-18 to
+  11-22), 0 failed commands each. Day 5 (11-23 21:25) did not run: the
+  cron line was removed at the close-out.
+- **Runs (the prod run logs, plain and gzipped):**
+  - 234 `GE_MRI` runs, every one with a stage summary `ok` and the three
+    watermarks equal; no run without stage events.
+  - Stage events: no WARN and no ERROR; no stage warnings (no lock or
+    preflight skip, no derive over 30 s, no backlog).
+  - The watermarks: 5128617 at the switch-on → 5131286 after the 13:18
+    run, equal to `max(id)` in `log.ge_mri_gesys`. They never went
+    backwards, and each run with rows started from the last run's
+    watermark (no ids skipped).
+  - 2,669 rows staged in 129 runs (p50 13 rows, max 162); 105 runs had
+    no rows. Drift 0 in every run; `behind_ids` 0; derive pending after
+    every run empty.
+  - The largest gap between runs is 30.1 min. Every 30-minute slot has
+    exactly one `GE_MRI`, one `GE_CT` and one `GE_CV` run.
+- **The DB at the end (13:18 run):**
+  - `ge_mri_extract`, `ge_mri_derive` and `ge_mri_findings` all at
+    5131286, `ok`, equal to the source max.
+  - derive `pending` is `{}` and no `codes_pending` marker is set.
+  - No `insight%` session left.
+- **Verifiers at the end** (13:19–13:26 UTC, checkout fb5943d, the
+  same code as prod's 886c0e5): 0 failed commands.
+  - MRI `verify`: to 5131286, 447,803 facts; 303 capability cells, 0
+    differences; 824 codes, 0 differences against the source; label
+    leaks 0 (361 labels); the only unreviewed code is 2227004.
+  - MRI `verify-derive`: ok, 0 differences. MRI `verify-findings`: PASS
+    (71 = 71).
+  - CT `verify` (625 cells, all equal), `verify-derive` and
+    `verify-findings` (117 = 117): ALL PASS, at watermark 18677207.
+  - CV `verify` (17 cells), `verify-derive` ok, `verify-findings` PASS
+    (13 = 13).
+- **Findings in the window** (71 → 71; open 28 → 28):
+  - No finding opened, resolved or deleted: the findings step inserted 0
+    and deleted 0 in all 234 runs. Its updates (0–10 a run) are the open
+    findings' last data day moving forward.
+  - No severity changed: the per-rule counts, open counts and severities
+    in `verify-findings` are identical on day 0 and at the end.
+  - **SME02582 `mri_coil_fault` (medium, opened 2026-11-17) is still
+    open:** window 11-12..11-19, observed 8, last evaluated 11-23. It
+    is evaluated every run, and resolves when the rule's quiet period
+    has passed.
+- **Unreviewed codes in the window: none.** No extract event had
+  `unreviewed_codes`, and the 2,669 rows staged since the backfill hold
+  129 codes, all reviewed. 2227004 (1 row, SME19647, device day 11-17)
+  came before the window and is still the only unreviewed code.
+- **Stage time per `GE_MRI` run** (§11.4 expected 10–15 s with rows, 2–4
+  s without):
+  - **With rows (129 runs):** p50 13.7 s, p90 15.1 s, max 23.4 s. Within
+    the estimate at the p50 and p90. Derive is the largest part: p50
+    8.8 s (the code-label rebuild), extract 0.4 s, findings 4.1 s.
+  - **With no rows (105 runs):** p50 5.0 s, p90 5.2 s, max 6.1 s. Above
+    the estimate, as the rehearsal showed (§11.10: findings takes about 4
+    s every run, re-checking the 6 current systems); derive and extract
+    take 0.3 s.
+  - **The slowest runs** (stage 19.7–23.4 s) had derive at 13.9–17.9 s.
+    The slowest, 11-20 17:48, is also the window's slowest `GE_CT` (60.2
+    s) and `GE_CV` (11.9 s) run: the three stages started in the same
+    minute and shared the database. The derive WARN threshold is 30 s;
+    none came near it.
+  - **The code-label rebuild did not grow:** derive with rows had a p50
+    of 8.7–9.0 s on every day from 11-18 to 11-23, and the code count
+    stayed at 824 (463 without a label).
+  - **The whole `GE_MRI` process:** p50 19.4 s before (240 runs, 11-13
+    13:18 to 11-18 13:18) → 33.4 s after; p90 27.1 → 47.6 s; max 38.6 →
+    68.2 s. The stage adds the difference; the process still ends long
+    before the next run.
+- **Ingest unaffected:**
+  - Every `GE_MRI` run, before and after, had 0 ingest ERROR, 296 INFO
+    and 49–55 WARN, all from the three ingest functions. The WARN
+    spread is the same before and after.
+  - Rows kept arriving in `log.ge_mri_gesys` from all 6 current systems:
+    5,560 rows from 11-13 to the switch-on, 2,532 after. The weekends
+    (11-14/15 and 11-21/22) have rows from 1–2 systems only, before and
+    after alike.
+  - `log.saved_files` keeps only the last 48 hours (55,142 rows, 193
+    systems, from 11-21 13:18), so it can't compare before and after.
+    Within it, the MRI systems have 288 files a day (6 systems × 48
+    runs) on the full day 11-22. The Redis offsets were not read; the
+    ingest events above are the evidence for them.
+- **CT and CV unaffected** (240 runs before against 234 after):
+  - `GE_CT` and `GE_CV`: 0 ERROR events, every stage summary `ok` with
+    the watermarks equal, no stage WARN or ERROR, before and after.
+  - CT stage time by rows per run (p50 before / after): under 50 rows
+    3.0 / 2.3 s; 50–149 rows 5.3 / 4.0 s; 150+ rows 12.8 / 11.9 s. The
+    whole `GE_CT` run: p50 30.8 / 33.0 s, max 71.0 / 60.2 s.
+  - CV stage time (p50 before / after): no rows 1.7 / 1.6 s; with rows
+    4.3 / 4.3 s. The whole `GE_CV` run: p50 3.4 / 3.4 s, max 14.2 /
+    11.9 s.
+- **One slip in the checks:** the DB query (`closeout_db.js`) started
+  at 13:18:50, inside the :18 minute the ground rules avoid. It was one
+  read-only transaction of about 1 s, after the three MRI jobs had
+  finished (13:18:38). Nothing failed.
+- **After the close-out:**
+  - The `25 21 * * * .../mri5/daily.sh` cron line was removed by Claude
+    at the user's request (13:27 UTC). The crontab was backed up first,
+    mode 600, in `mri5/closeout/`. The monitor retires with it until
+    MRI-5b.
+  - Next, proposed to the user, not started: the review of code
+    2227004; MRI-5b (CT and CV onto the shared wrapper, with the CV
+    `rehearse_stage` early-failure fix, and its watch at 5 days by the
+    standing rule); the `tooling/gzip_file.js` `insert_buffer` await
+    (§11.9). MRI-6 and the collection gap wait for the user.

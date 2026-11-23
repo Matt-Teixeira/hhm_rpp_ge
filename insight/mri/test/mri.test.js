@@ -16,7 +16,7 @@ const {
 } = require("../load");
 const { COND, STORABLE, RECONCILE_SQL, COVERAGE_SQL, CONFLICTS_SQL, IDENTITY_SQL } = require("../reconcile_sql");
 const { compare, stale_versions } = require("../verify");
-const { REVIEWED_CODES } = require("../codes_reviewed");
+const { REVIEWED_CODES, CODE_CATEGORY } = require("../codes_reviewed");
 const { args, confirm } = require("../cli");
 const { masker } = require("../tools/build_fixtures");
 
@@ -39,7 +39,8 @@ test("registry: valid, mri.* only, the 22 agreed metrics + mri.error, 84 codes, 
   assert.deepStrictEqual(NAMED_KEYS, AGREED_KEYS, "Q-M1: the agreed named metrics, in order");
   assert.deepStrictEqual(rules.map((r) => r.key), ["mri.error", ...AGREED_KEYS]);
   assert.strictEqual(NAMED_CODES.length, 84, "§5.2: 84 codes behind the named metrics");
-  assert.strictEqual(REVIEWED_CODES.size, 823, "Q-M7: the reviewed set is the whole 2026-11-13 inventory");
+  assert.strictEqual(REVIEWED_CODES.size, 824, "Q-M7: the whole 2026-11-13 inventory (823) + 2227004 (2026-11-23, long tail)");
+  assert.ok(REVIEWED_CODES.has(2227004) && !CODE_CATEGORY.has(2227004), "2227004: reviewed, long tail (no category, so no label)");
   for (const c of NAMED_CODES) assert.ok(REVIEWED_CODES.has(c), `named code ${c} not reviewed`);
   assert.deepStrictEqual(SHARED_CODES, { 2218650: ["mri.scans_ok", "mri.scans_failed"] });
   assert.strictEqual(MAX_FACTS_PER_ROW, 3);

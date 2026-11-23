@@ -66,9 +66,10 @@
   `GE_MRI` runs were clean, and all nine verifiers pass. Findings are
   unchanged (71, 28 open), and no unreviewed code arrived in the window.
   CT and CV are unaffected. The daily cron line is removed. Found: the
-  monitor skipped gzipped run logs (fix before MRI-5b). Next, proposed
-  and not started: review code 2227004, MRI-5b, the `gzip_file.js`
-  await.
+  monitor skipped gzipped run logs (fix before MRI-5b).
+- **Code 2227004 reviewed 2026-11-23** (§11.12): long tail, `mri.error`
+  only, no label. Next, proposed and not started: MRI-5b, the
+  `gzip_file.js` await.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
 - **Found while building MRI-1 (§6.4): the CT verifiers are not
@@ -2523,3 +2524,44 @@ outside the repo (`closeout_runs.js`, `closeout_db.js`, `loose.js`,
     `rehearse_stage` early-failure fix, and its watch at 5 days by the
     standing rule); the `tooling/gzip_file.js` `insert_buffer` await
     (§11.9). MRI-6 and the collection gap wait for the user.
+
+### 11.12 Code 2227004 reviewed (2026-11-23): long tail, `mri.error` only
+
+**Decision (the user, 2026-11-23): the recommendation, long tail.**
+2227004 joins the reviewed set with no category and no label, as the
+agreed cut (`PLAN-MRI-INSIGHTS-CODES.md` §3 Q3: 3 or more systems or 100
+or more rows) puts a 1-row code. It stays counted in `mri.error` only.
+
+- **The evidence** (read-only, prod, 13:31 UTC; script and log in
+  `~/cv_d3b_evidence/mri/mri5/code_2227004/`, outside the repo):
+  - 1 row in all time: SME19647, device time 2026-11-17 15:43, process
+    `scn`, no coil, psd or scan field; 1 fact, `mri.error` only.
+  - Its masked template is an operator prescription advisory (field of
+    view or receive bandwidth for the current prescription). It is a
+    scan-setup prompt, not a device fault. Like every long-tail code, it
+    has no label here.
+  - Its neighbors 2227005 and 2227008 (1 row each, `scn`, 2026-05-14)
+    are already in the long tail (§7).
+  - The same system ±30 min: routine `ifcc` noise, then 2227004 alone;
+    5–8 min later two hardware codes (103453, and 103428, the
+    `mri.coil_fault` coil-ID code), then a normal scan summary.
+    2227004 plays no part in SME19647's open `mri_coil_fault` finding.
+- **The change:**
+  - `insight/mri/codes_reviewed.js`: 2227004 added to `REVIEWED_CODES`
+    (824 codes), not to any category.
+  - `insight/mri/test/mri.test.js`: the size 823 → 824, and 2227004
+    asserted reviewed with no category, so no label.
+  - `PLAN-MRI-INSIGHTS-CODES.md` §7: 2227004 added to the `scn` list.
+
+  Labels and categories come only from `CODE_CATEGORY`
+  (`insight/mri/derive.js` `build_codes`), so no message text is stored.
+  Facts, the daily rows, the code catalog and findings are unchanged;
+  only the "unreviewed" note in extract and `verify` goes away.
+- **Checks:** suites 344 / 344 in 25 files. The MRI `verify` (303
+  cells, 824 codes, `unreviewed_codes` []), `verify-derive` (labels
+  361, `unreviewed_labelled` 0) and `verify-findings` (71 = 71) pass
+  read-only on prod with the changed code. CT and CV don't load
+  `codes_reviewed.js`.
+- **Deploy:** a pull on prod. The `GE_MRI` stage picks it up on the
+  next run; no migration, and no rehearsal is needed, because no
+  stored data changes.

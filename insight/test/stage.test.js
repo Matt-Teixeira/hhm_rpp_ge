@@ -430,3 +430,106 @@ test("hook F2: a stage within the deadline is unaffected; connect failure is log
   assert.deepStrictEqual(d2.calls, ["end"]);
   assert.deepStrictEqual(l2.events.map((e) => `${e.type}:${e.note.step}`), ["ERROR:stage"]);
 });
+
+// ------------------------------------------- MRI-5b: the rehearsal early failure
+
+// A DB-free rehearsal: watermark 100, pending max 120, the last run from 111
+// (so catch-up to 110, typical to 120, the daily pass); extract fails in run
+// `fail_at`. The case of MRI's review MRI5-STAGE P3 (PLAN-MRI-INSIGHTS.md
+// §11.7), found in CT too (§12.1, §12.2 item 3).
+function rehearsalDb({ fail_at = null, abort = false } = {}) {
+  let wm = 100;
+  const calls = [];
+  // abort: the failing extract is an SQL error outside a savepoint, which aborts the
+  // transaction: every later query fails with 25P02 until the rollback (review MRI5B P3).
+  let aborted = false;
+  const seen = { aborted_queries: 0 };
+  const guard = () => {
+    if (!aborted) return;
+    seen.aborted_queries++;
+    throw Object.assign(new Error("current transaction is aborted, commands ignored until end of transaction block"), { code: "25P02" });
+  };
+  const conn = {
+    one: async (q) => {
+      guard();
+      if (/pg_try_advisory_lock/.test(q)) { calls.push("lock"); return { got: true }; }
+      if (/pg_advisory_unlock/.test(q)) { calls.push("unlock"); return { ok: true }; }
+      if (/current_user AS u/.test(q)) return { u: process.env.INSIGHT_PG_USER, su: false };
+      if (/schema_migrations/.test(q)) return { v: 9 };
+      if (/pg_inherits/.test(q)) return { last: "ge_ct_facts_2028_12" };
+      if (/^WITH p AS/.test(q.trim())) return { max_id: "120", n: 20, first_capture: new Date("2026-11-16T10:18:00Z"), last_capture: new Date("2026-11-16T10:48:00Z"), last_run_from: "111", last_run_rows: 10 };
+      return { n: 0 }; // the derive / findings counts
+    },
+    any: async () => { guard(); return ["ge_ct_extract", "ge_ct_derive", "ge_ct_findings"].map((job_name) => ({ job_name, watermark_id: String(wm) })); },
+    oneOrNone: async () => { guard(); return ({ p: {} }); },
+    tx: async (cb) => {
+      calls.push("tx");
+      const saved = wm;
+      try { return await cb(conn); } finally { wm = saved; aborted = false; calls.push("rollback"); }
+    },
+  };
+  let n = 0;
+  const steps = {
+    extract: async (c, o) => {
+      if (++n === fail_at) {
+        if (abort) { aborted = true; throw Object.assign(new Error("canceling statement due to statement timeout"), { code: "57014" }); }
+        throw new Error("natural-key conflict probe");
+      }
+      wm = o.to_id;
+      return { from: 0, watermark: wm, behind_ids: 0, stats: { batches: 1, rows: 1, facts: 1, upserted: 1, collisions: 0, rule_errors: 0, skipped: {}, late: { rows: 0, facts: 0, inserted: 0, systems: [], rule_errors: 0 } } };
+    },
+    derive: async () => ({ watermark: wm, systems: [], days: 0, full_rebuilds: 0, per_system_ms: {}, stats: { derived_inserted: 0, derived_updated: 0, derived_deleted: 0, daily_inserted: 0, exams_inserted: 0, clock: {} } }),
+    findings: async () => ({ watermark: wm, mode: "touched", systems: [], skipped_stale: 0, drift_detail: [], stats: { evaluated: 0, inserted: 0, updated: 0, deleted: 0, drift: 0, findings: 0, open: 0 } }),
+  };
+  return { db: { task: async (cb) => cb(conn) }, calls, steps, seen };
+}
+
+async function withSteps(steps, fn) {
+  const saved = { ...stage.STEPS };
+  Object.assign(stage.STEPS, steps);
+  try { return await fn(); } finally { Object.assign(stage.STEPS, saved); }
+}
+
+test("MRI-5b: a failure in the first or the middle rehearsal run returns a structured failed result (no TypeError), rolled back and unlocked", async () => {
+  for (const [fail_at, ran] of [[1, 1], [2, 2]]) {
+    const f = rehearsalDb({ fail_at });
+    const lines = [];
+    const r = await withSteps(f.steps, () => stage.rehearse_stage(f.db, { rules, log: (s) => lines.push(s) }));
+    assert.strictEqual(r.rolled_back, true, `fail at ${fail_at}`);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.runs.length, ran, "only the executed runs");
+    assert.strictEqual(r.runs[ran - 1].failed, "extract");
+    assert.strictEqual(r.runs[ran - 1].error, "natural-key conflict probe");
+    assert.deepStrictEqual([r.checks.runs_ok, r.checks.caught_up, r.checks.findings_drift], [false, false, 0]);
+    assert.strictEqual(r.checks.not_run.length, 3 - ran);
+    assert.strictEqual(r.checks.verify, undefined, "no verify after a failed run");
+    assert.deepStrictEqual(f.calls, ["lock", "tx", "rollback", "unlock"]);
+    assert.ok(lines.some((l) => /FAILED at extract: natural-key conflict probe/.test(l)));
+    assert.ok(lines.some((l) => /^not run after the failure: /.test(l)));
+  }
+  // the plan: catch-up to 110, typical to 120, the daily pass to 120
+  const f = rehearsalDb({ fail_at: 3 });
+  const r = await withSteps(f.steps, () => stage.rehearse_stage(f.db, { rules }));
+  assert.deepStrictEqual(r.runs.map((x) => [x.to_id, !!x.force_daily]), [[110, false], [120, false], [120, true]]);
+  assert.deepStrictEqual(r.checks.not_run, []);
+  assert.strictEqual(r.checks.runs_ok, false);
+});
+
+test("review MRI5B P3: an SQL failure that aborts the rehearsal transaction returns the original failure (no 25P02), rolled back and unlocked", async () => {
+  for (const [fail_at, ran] of [[1, 1], [2, 2], [3, 3]]) {
+    const f = rehearsalDb({ fail_at, abort: true });
+    const lines = [];
+    const r = await withSteps(f.steps, () => stage.rehearse_stage(f.db, { rules, log: (s) => lines.push(s) }));
+    assert.strictEqual(r.rolled_back, true, `fail at ${fail_at}`);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.runs.length, ran, "only the executed runs");
+    assert.strictEqual(r.runs[ran - 1].failed, "extract");
+    assert.strictEqual(r.runs[ran - 1].error, "canceling statement due to statement timeout", "the original error, not 25P02");
+    assert.strictEqual(r.checks.not_run.length, 3 - ran);
+    assert.strictEqual(r.checks.stopped_after_failure, true);
+    assert.strictEqual(r.checks.verify, undefined);
+    assert.strictEqual(f.seen.aborted_queries, 1, "only run_stage's own watermark read meets the aborted transaction");
+    assert.deepStrictEqual(f.calls, ["lock", "tx", "rollback", "unlock"]);
+    assert.ok(lines.some((l) => /stopped at the failed run/.test(l)));
+  }
+});

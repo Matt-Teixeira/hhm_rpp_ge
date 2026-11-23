@@ -68,7 +68,15 @@
   CT and CV are unaffected. The daily cron line is removed. Found: the
   monitor skipped gzipped run logs (fix before MRI-5b).
 - **Code 2227004 reviewed 2026-11-23** (§11.12): long tail, `mri.error`
-  only, no label. Next, proposed and not started: MRI-5b, the
+  only, no label. Deployed: the 14:18 run lists no unreviewed code.
+- **MRI-5b (CT and CV onto the shared wrapper): AGREED 2026-11-23 (§12),**
+  with a 3-day watch (the user's exception to the 5-day rule). Built
+  (§12.6): the 3-stage monitor, the thin callers, and the rehearsal fix.
+  Old and new give identical results in 26 scenarios, the suites pass
+  349 / 349, and the nine verifiers pass. **Codex review MRI5B CLOSED
+  (§12.7):** one P3 (an aborted rehearsal transaction masked the
+  failure), fixed in CT, CV and MRI with regression tests. Next: commit,
+  push, then the pull and the CT and CV rehearsals on prod. Then the
   `gzip_file.js` await.
 - MRI-2's first prod write only after
   009, C1-MRI and C2-MRI (§7.5).
@@ -2565,3 +2573,260 @@ or more rows) puts a 1-row code. It stays counted in `mri.error` only.
 - **Deploy:** a pull on prod. The `GE_MRI` stage picks it up on the
   next run; no migration, and no rehearsal is needed, because no
   stored data changes.
+
+## 12. MRI-5b: CT and CV onto the shared stage wrapper (AGREED 2026-11-23)
+
+MRI-5b turns the live CT and CV stage wrappers into thin callers of
+`insight/stage_wrapper.js`, as agreed in §11.3 Q1, now that MRI-5 is
+done (§11.11). Nothing in the stages themselves changes, apart from the
+rehearsal fix (item 3).
+
+### 12.1 Evidence (read-only, 2026-11-23)
+
+- **The two live wrappers are copies of the shared one.**
+  `insight/index.js` (CT, 149 lines) and `insight/cv/index.js` (CV, 143
+  lines) differ only in what §11.2 item 1 turned into `cfg`: the switch,
+  `func`, `app_name`, the label in two texts, CT's rules (`run_args`)
+  and CT's partition WARN (`preflight_warnings`).
+  - The shared wrapper builds its lock and deadline texts from `label`.
+    `label: "insight"` gives CT's exact texts, and `"GE CV insight"`
+    gives CV's.
+  - `~/cv_d3b_evidence/mri/mri5/equiv.js` (§11.6) ran the live CT and CV
+    wrappers against the shared wrapper configured as each: **24 of 24
+    scenarios identical** (return values, run-log events, connection
+    calls, `run_stage` options). Mutations of the label, the
+    `app_name` and the partition text are caught. The Codex review
+    MRI5-STAGE confirmed CT loses nothing with that `cfg` (§11.7).
+- **The existing CT and CV wrapper tests can stay as they are.**
+  `insight/test/stage.test.js` and `insight/cv/test/stage.test.js` inject
+  `connect`, `stage`, `rules` and `deadline_ms`, the same `deps` the
+  shared wrapper reads. Kept unchanged, they become the regression suite
+  for the thin callers. That includes "loads no module at require
+  time": the caller keeps every `require` inside the function, after the
+  switch check.
+- **The shared wrapper on prod:** 234 MRI runs in 5 days with no stage
+  WARN or ERROR (§11.11). Its lock-skip, preflight-skip, deadline and
+  throwing-logger paths have not happened live. They are covered by the
+  tests and the harness, as for CT and CV.
+- **The rehearsal bug is in CT too, not only CV** (§11.7 named CV only).
+  After a failed run, `rehearse_stage` stops (`break`), and then reads
+  `r.steps` of the runs not reached, in `findings_drift`. It rejects
+  with a TypeError instead of returning its failed result; the rollback
+  and the unlock still happen. CT: `insight/stage.js`; CV:
+  `insight/cv/stage.js`. Only `stage --rehearse` runs this code; the live
+  `run_stage` never does.
+- **The monitors miss gzipped run logs** (§11.11). The prod logger
+  directory gzips older run logs, and `mri5/monitor.js` (like the CV-5
+  one) reads plain JSON only. The close-out script
+  `mri5/closeout/closeout_runs.js` reads both.
+
+### 12.2 Design (agreed)
+
+1. **Thin callers.** `insight/index.js` `run_ct_insight` and
+   `insight/cv/index.js` `run_cv_insight` keep:
+   - their switch check first, before any `require`
+     (`INSIGHT_ENABLED` / `INSIGHT_CV_ENABLED`); off returns
+     `{ skipped: "disabled" }` and loads nothing;
+   - their exports: the function, `enabled`, and the four timeout
+     constants, re-exported from the shared wrapper;
+   - their `deps` for the tests.
+
+   On, each calls `run_insight_stage` with its `cfg`, as
+   `insight/mri/index.js` does:
+   - CT: `func: "run_ct_insight"`, `app_name: "insight_stage"`,
+     `label: "insight"`, `load_stage: () => require("./stage")`,
+     `run_args: (deps) => ({ rules: deps.rules ||
+     require("./rules/ge_ct").rules })`, and `preflight_warnings` with
+     CT's exact partition text;
+   - CV: `func: "run_cv_insight"`, `app_name: "insight_cv_stage"`,
+     `label: "GE CV insight"`, `load_stage: () => require("./stage")`.
+
+   A failed `require` of the wrapper is logged as `ERROR` `step:
+   "stage"`, as MRI does. `index.js` and its CT and CV hooks don't
+   change.
+2. **The shared wrapper's header** says that CT, CV and MRI use it; the
+   "nothing in the CT or CV run loads this file" note goes.
+3. **The rehearsal fix in CT and CV,** as MRI's (§11.7): the planned
+   runs and the executed runs are kept apart; every check reads only the
+   executed runs; a run not reached is listed in `checks.not_run`; and
+   `runs_ok` requires every planned run. Each gets a DB-free regression
+   test that fails the old code with the TypeError.
+4. **Proof that nothing changes:**
+   - `equiv.js` rerun, with the old CT and CV wrappers from git (886c0e5)
+     against the new thin callers, on the same 24 scenarios: identical.
+   - The hook harness (`mri5/hook/`): a `GE_CT` and a `GE_CV` run,
+     identical before and after.
+   - The existing CT, CV and MRI tests, unchanged, plus the two
+     regression tests; every suite.
+   - The CT, CV and MRI verifiers, read-only, on prod.
+5. **Monitoring:** one read-only monitor for the three stages, from
+   `mri5/monitor.js`, outside the repo:
+   - it reads plain and gzipped run logs;
+   - it counts every expected 30-minute slot, so a missing run shows;
+   - it checks every `GE_CT`, `GE_CV` and `GE_MRI` run as `mri5`
+     checks MRI, against each one's baseline;
+   - a daily script for your crontab, as `mri5/daily.sh`, with the nine
+     verifiers, for the 3-day window.
+6. **No new switch.** The move is live once you pull. Rollback is `git
+   revert` and a pull: the old wrappers come back whole, and no stored
+   data depends on which wrapper ran.
+
+### 12.3 Questions and answers (AGREED 2026-11-23: the recommendation in Q1, Q2 and Q4; Q3: 3 days)
+
+1. **One change for CT and CV, or two? Recommended: one.** The two
+   callers are the same five lines with a different `cfg`. They are
+   proven by one harness, one review and one deploy, and watched in one
+   window. Not chosen: CV first, then CT, which is two reviews and two
+   5-day windows for the same move.
+2. **The rehearsal fix: in this change, for CT and CV? Recommended:
+   yes.** Only the `stage --rehearse` CLI runs that code, and MRI-5b's
+   own checkpoints include both rehearsals. A failing rehearsal should
+   then report the failure, not a TypeError. Not chosen: CV only (as
+   §11.7 said), which leaves CT's copy of the bug.
+3. **The watch: 5 days or 3? Recommended: 5,** by your standing rule
+   for monitoring windows (§11.4).
+   - **The user's answer: 3 days,** as §11.5 planned for MRI-5b. It is
+     an exception to the 5-day rule for this window only; the rule
+     stands for other windows.
+4. **The monitor: fix it first, for all three stages? Recommended:
+   yes,** before the deploy. The new monitor's first run then shows the
+   5 days before the move as its baseline, with every run counted.
+
+### 12.4 Exit criteria (as §11.4)
+
+- `equiv.js` identical in every scenario, with the old wrappers from git.
+  The hook harness is identical for `GE_CT` and `GE_CV`, and every suite
+  passes.
+- The CT and CV stage rehearsals pass on prod, with the fixed rehearsal.
+- **3 consecutive days of clean runs** (§12.3 Q3) for `GE_CT`, `GE_CV` and
+  `GE_MRI`: every summary `ok`, the watermarks equal and advancing,
+  `behind_ids` 0, 0 drift, no stage WARN or ERROR left unexplained, and
+  every 30-minute slot present.
+- The nine verifiers pass at the end. Stage times are unchanged by row
+  band against the 5 days before the move.
+
+### 12.5 Build order and checkpoints
+
+1. The monitor (item 5), checked over the last 5 days as the baseline.
+2. The code (items 1–3), the tests, `equiv.js` and the hook harness.
+   Then the Codex handoff `REVIEW-MRI5B-HANDOFF.md`.
+3. After the review closes: commit (I ask first), and push (I ask).
+4. You pull on prod, avoiding :18 / :48. I check the next `GE_CT` and
+   `GE_CV` runs against the runs before the pull.
+5. You run `node insight/cli.js stage --rehearse` and `node
+   insight/cv/cli.js stage --rehearse` on prod, avoiding :18 / :48.
+6. 3 days of monitoring (§12.3 Q3), then the close-out against §12.4.
+
+Checkpoints for your go-ahead: the answers to §12.3, before each commit,
+the push, the pull, and each rehearsal.
+
+### 12.6 Build (2026-11-23), uncommitted, awaiting the Codex review
+
+**Step 1, the monitor** (`~/cv_d3b_evidence/mri/mri5b/`, outside the repo):
+- `monitor.js`: every `GE_CT`, `GE_CV` and `GE_MRI` run since a time,
+  from the plain **and gzipped** run logs. Every 30-minute slot must hold
+  exactly one run of each kind. Each run is checked for ingest against its
+  baseline and for a clean stage (as `mri5`). Stage WARN events are listed
+  for an explanation. It reports stage time by rows, the watermarks, and
+  the read-only DB state of each kind.
+- **Ingest baselines,** measured over 235 runs of each kind (11-18 16:43
+  to 11-23 13:48, `baseline_20261123.log`): 0 ERROR for all three.
+  - CT: INFO 740–759, WARN 195–214, from 5 functions. They move with the
+    data, so the band is ± 5.
+  - CV: INFO 68–70 (± 2), WARN exactly 10.
+  - MRI: INFO 296, WARN 49–55.
+- **The 5 days before the move** (`before_move_20261123.log`): 235 runs
+  of each kind, every slot present, 0 not clean, 0 stage WARN, 0
+  unreadable logs; the DB state consistent for all three.
+- `monitor_selftest.js` (synthetic plain and gzipped logs, a log still
+  being written, a broken `.gz`, a missing and a duplicated slot, a stage
+  WARN, a not-clean run, an out-of-baseline ingest): PASS. It catches 5
+  mutations: `.gz` reading, ingest ERROR, missing slots, drift, and
+  unexpected WARN functions.
+
+**Step 2, the code** (§12.2 items 1–3), uncommitted on `dev`:
+- `insight/index.js` and `insight/cv/index.js` are thin callers of the
+  shared wrapper with the `cfg` of §12.2 item 1. The timeout constants are
+  re-exported as lazy getters, so requiring the file still loads nothing.
+- `insight/stage_wrapper.js`: the header comment only.
+- `rehearse_stage` in `insight/stage.js` (CT) and `insight/cv/stage.js`
+  (CV): the planned and executed runs are kept apart, and `not_run` is
+  listed. In CT, the verifications now run only when every run passed, as
+  in CV and MRI.
+- Tests: the existing CT (24) and CV (27) stage tests pass unchanged
+  against the thin callers. One regression test each for the rehearsal;
+  each fails the old code with the TypeError.
+- **Suites: 346 / 346 in 25 files** (344 + 2).
+- **Old vs new** (`mri5b/equiv/run.sh`; the old wrappers from git
+  886c0e5): 26 scenarios, the 24 of §11.6 plus "off" for each, all
+  **identical**. Six mutations of the new `cfg` are caught.
+- **The root `index.js` harness** (`mri5b/hook/`, old tree = `git
+  archive HEAD`): `GE_CT` and `GE_CV` off (the real callers) and on
+  (stubbed), and `GE_MRI` off, all **identical**. Off, `GE_CT` loads only
+  `insight/index.js`, and leaves no open handle.
+- **The Codex handoff:** `REVIEW-MRI5B-HANDOFF.md`, awaiting
+  `REVIEW-MRI5B-CODEX.md`.
+- **The nine verifiers,** read-only on prod with the working tree
+  (14:21–14:28 UTC, `mri5b/verifiers_build_20261123T1421.log`): 0
+  failed. MRI `verify` 303 cells, 824 codes, no unreviewed code;
+  `verify-derive` ok; `verify-findings` 71 = 71. CT `verify` 625 cells,
+  all equal; `verify-derive` and `verify-findings` (117 = 117) ALL PASS.
+  CV `verify` 17 cells, `verify-derive` ok, `verify-findings` 13 = 13.
+
+### 12.7 Codex review MRI5B (closed 2026-11-23): `REVIEW-MRI5B-CODEX.md`
+
+**One P3, fixed. No live-path finding.** The reviewer:
+- reran the equivalence harness: 26 of 26 identical, the 6 mutations
+  caught, and the old copies checked byte for byte against git 886c0e5;
+- reran the root `index.js` harness: identical;
+- compared old and new CT rehearsals in 12 success and check-failure
+  cases: the same results, apart from the new `not_run` field;
+- probed the lazy getters: enumerating the exports loads nothing, and
+  spreading them loads only the dependency-free wrapper;
+- found no change to the ingest, its duration or its run log.
+
+Their run of the suites had one failure: the MRI fresh-process test
+(`insight/mri/test/stage.test.js`), because their sandbox's `spawnSync`
+returns `EPERM`. It is environmental; the same probe passed when run
+directly, and the test passes here.
+
+- **P3: a rehearsal whose failed run aborted the transaction still
+  rejected, with `25P02`.**
+  - An SQL error outside a savepoint (for example, a statement timeout on
+    extract's source max-id read, which runs on the rehearsal's outer
+    transaction) aborts that transaction.
+  - The first-round fix stopped at the failed run, but then read more in
+    the same transaction: CT `read_derive_pending`; CV `derive_state`
+    and the CT fingerprint and count reads. Those failed with "current
+    transaction is aborted", which replaced the structured result.
+  - **The same pattern was in MRI's `rehearse_stage`** (§11.7's fix, the
+    model for this one: `derive_state`, `OTHERS_SQL`), so it is fixed
+    there too.
+- **Fix, in all three** (`insight/stage.js`, `insight/cv/stage.js`,
+  `insight/mri/stage.js`):
+  - After a failed run, no more SQL runs in the transaction. The result
+    is built from what the executed runs captured (`runs`, `not_run`,
+    `stopped_after_failure: true`, and in CV and MRI `after: null`), and
+    the rehearsal rolls back.
+  - CV and MRI still read the watermarks again after the rollback.
+  - In CT, this early exit replaces the first round's `if (all_ok)`
+    block, so CT's verifications are back exactly as they were.
+- **Regression tests,** one per stage. The fakes now model an aborted
+  transaction: after a failure with `abort`, every query fails with
+  `25P02` until the rollback.
+  - Failures in run 1, 2 and 3 each return the original error ("canceling
+    statement due to statement timeout"), the executed runs, `not_run`,
+    and `stopped_after_failure`.
+  - The only query that meets the aborted transaction is `run_stage`'s
+    own watermark read. The calls are lock → tx → rollback → unlock, and
+    CV and MRI's watermarks are unchanged after the rollback.
+  - **Each fails without the fix with `25P02`** (a scratch copy without
+    the early exit).
+- **After the fix:**
+  - suites 349 / 349 in 25 files (346 + 3);
+  - `equiv` 26 of 26 identical, the 6 mutations caught;
+  - `git diff --check` clean.
+
+  The live paths (`run_stage`, the wrappers) are unchanged by the fix.
+- **Next (§12.5 step 3):** commit (ask), push (ask), then the pull and
+  the two stage rehearsals on prod.

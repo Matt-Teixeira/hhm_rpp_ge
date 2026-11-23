@@ -2,9 +2,10 @@
 // The shared insight stage wrapper (PLAN-MRI-INSIGHTS.md §11.2 item 1),
 // factored out of CT's insight/index.js run_ct_insight and its CV copy
 // insight/cv/index.js run_cv_insight, with their differences as cfg.
-// GE MRI's run_mri_insight (insight/mri/index.js) uses it from MRI-5; CT and
-// CV move onto it later (MRI-5b, plan §11.3 Q1), so until then nothing in
-// the GE CT or GE CV run loads this file.
+// GE MRI's run_mri_insight (insight/mri/index.js) uses it from MRI-5, and CT's
+// run_ct_insight (insight/index.js) and CV's run_cv_insight
+// (insight/cv/index.js) from MRI-5b (PLAN-MRI-INSIGHTS.md §12): each is a
+// thin caller that checks its own switch before loading this file.
 //
 //   await run_insight_stage(cfg, run_log, addLogEvent, deps)
 //

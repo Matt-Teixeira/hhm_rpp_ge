@@ -7,143 +7,63 @@
 // - Off unless INSIGHT_ENABLED=true. Off, it returns at once: it loads no
 //   module, opens no connection and logs nothing, so the ge_ct run is
 //   exactly what it was before (§15.3 Q1).
-// - Never rejects. Every failure goes to run_log as an ERROR event and the
-//   ge_ct run carries on; the next run catches up from the watermarks.
-// - Its own pool as insight_writer (insight/db.js), closed at the end, with
-//   bounded connect / statement / lock / query times and a 5-minute deadline
-//   for the whole stage, so it can't keep the ge_ct process waiting.
-// - One advisory lock (load.js LOCK_KEY) for the whole stage. If it is held
-//   (a manual cli.js run, or an overlapping stage), the stage skips.
-// - Preflight: the writer role, schema version >= 5; otherwise log and skip.
+// - On: the shared wrapper (./stage_wrapper.js, since MRI-5b,
+//   PLAN-MRI-INSIGHTS.md §12) runs ./stage.js with CT's cfg below. The
+//   wrapper never rejects (every failure is an ERROR event in run_log and
+//   the ge_ct run carries on; the next run catches up from the watermarks),
+//   opens its own insight_writer pool with bounded connect / statement /
+//   query times and a 5-minute deadline for the whole stage, takes one
+//   advisory lock (load.js LOCK_KEY; held = skip) and skips on a preflight
+//   failure (the writer role, schema version >= 5) with a WARN.
 // - The steps (insight/stage.js): extract (late-commit re-read + at most one
 //   50k batch) -> derive (touched days) -> findings (touched systems; all
 //   systems on the first run of a new UTC date). Each step's counts and ms
 //   go to run_log.
+//
+// The cfg reproduces the wrapper this file held until MRI-5b exactly: the
+// application name, "insight" in the lock and deadline texts, the rules
+// registry loaded before connecting, and the partition WARN text
+// (~/cv_d3b_evidence/mri/mri5b/equiv: identical in every scenario).
 
 const FUNC = "run_ct_insight";
-// Values of utils/logger/enums.js (gitignored; identical in dev and prod).
-const INFO = "INFO";
-const WARN = "WARN";
-const ERROR = "ERROR";
-const DETAILS = "DETAILS";
-const CATCH = "CATCH";
-const STATEMENT_TIMEOUT_MS = 120000;
-// review PHASE5-STAGE F2: bounded connect, and a client-side backstop a
-// little above the server's statement_timeout (fires only if the server
-// never answers).
-const CONNECT_TIMEOUT_MS = 10000;
-const QUERY_TIMEOUT_MS = STATEMENT_TIMEOUT_MS + 15000;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const APP_NAME = "insight_stage";
+const LABEL = "insight";
+// Typical run ~9 s, catch-up ~21 s, full rebuild of all systems ~28 s (§15
+// rehearsal); the wrapper's deadline is 5 minutes.
 
 const enabled = () => process.env.INSIGHT_ENABLED === "true";
 
-// Whole-stage deadline (review PHASE5-HOOK F2). Per-query limits bound one
-// statement, not a sequence of them. At the deadline the stage's connection
-// is killed: the in-flight transaction rolls back (each batch / system is
-// its own transaction and its pending work stays recorded), the session's
-// advisory lock is released, and the next run catches up. Typical run ~9 s,
-// catch-up ~21 s, full rebuild of all systems ~28 s (§15 rehearsal).
-const STAGE_DEADLINE_MS = 5 * 60 * 1000;
+// WARN texts from the stage preflight result (the run goes on).
+function preflight_warnings(pre) {
+  return pre && pre.partition_warning
+    ? [`insight.ge_ct_facts partitions end at ${pre.last_partition} (${pre.months_left} months left): add partitions`]
+    : [];
+}
 
-// deps (tests only): { connect, stage, rules, deadline_ms }
+// deps (tests only): { connect, stage, rules, deadline_ms, wrapper }
 async function run_ct_insight(run_log, addLogEvent, deps = {}) {
   if (!enabled()) return { skipped: "disabled" };
-  const t0 = Date.now();
-  let closed = false; // after the deadline, the abandoned stage must not log any more
-  const ev = async (type, note, err = null) => {
-    if (closed) return;
+  try {
+    const { run_insight_stage } = deps.wrapper || require("./stage_wrapper");
+    return await run_insight_stage({ func: FUNC, app_name: APP_NAME, label: LABEL, load_stage: () => require("./stage"), run_args, preflight_warnings },
+      run_log, addLogEvent, deps);
+  } catch (e) {
+    // only a failed require of the wrapper gets here (it never rejects)
     try {
-      await addLogEvent(type, run_log, FUNC, type === ERROR ? CATCH : DETAILS, note, err);
+      await addLogEvent("ERROR", run_log, FUNC, "CATCH", { step: "stage" }, e);
     } catch (_) {
       // logging must never fail the ge_ct run
     }
-  };
-  let db = null;
-  let sco = null;
-  let timer = null;
-  try {
-    const connect = deps.connect || require("./db").connect;
-    const stage = deps.stage || require("./stage");
-    const rules = deps.rules || require("./rules/ge_ct").rules;
-    const deadline_ms = deps.deadline_ms || STAGE_DEADLINE_MS;
-    const run_id = run_log && UUID_RE.test(run_log.run_id || "") ? run_log.run_id : require("crypto").randomUUID();
-    db = connect("writer", { statementTimeoutMs: STATEMENT_TIMEOUT_MS, connectTimeoutMs: CONNECT_TIMEOUT_MS,
-      queryTimeoutMs: QUERY_TIMEOUT_MS, applicationName: "insight_stage" });
-    // one dedicated connection (bounded by the connect timeout), so the
-    // deadline can kill it; transactions on it work as in a task
-    sco = await db.connect();
-    const conn = sco;
-
-    const work = (async () => {
-      const { got } = await conn.one("SELECT pg_try_advisory_lock(hashtext($1)) AS got", [stage.LOCK_KEY]);
-      if (!got) {
-        await ev(INFO, { step: "lock", skipped: "another insight run holds the lock; the next run catches up" });
-        return { skipped: "lock" };
-      }
-      try {
-        let pre;
-        try {
-          pre = await stage.stage_preflight(conn);
-        } catch (e) {
-          await ev(WARN, { step: "preflight", skipped: e.message });
-          return { skipped: "preflight", reason: e.message };
-        }
-        if (pre.partition_warning) {
-          await ev(WARN, { step: "preflight", warning: `insight.ge_ct_facts partitions end at ${pre.last_partition} (${pre.months_left} months left): add partitions` });
-        }
-        const r = await stage.run_stage(conn, { rules, now: new Date(), run_id });
-        for (const [name, s] of Object.entries(r.steps)) {
-          if (s.error) {
-            await ev(ERROR, { step: name, ms: s.ms }, r.error);
-            continue;
-          }
-          const warnings = stage.step_warnings(name, s);
-          await ev(warnings.length ? WARN : INFO, { step: name, ...stage.summarize(name, s), ...(warnings.length ? { warnings } : {}) });
-        }
-        if (r.failed === "watermarks") await ev(ERROR, { step: "watermarks" }, r.error);
-        await ev(r.ok && r.watermarks_equal ? INFO : WARN,
-          { step: "summary", ok: r.ok, failed: r.failed, today: r.today, ms: Date.now() - t0, watermarks: r.watermarks, watermarks_equal: r.watermarks_equal });
-        return { ok: r.ok, failed: r.failed, watermarks: r.watermarks, watermarks_equal: r.watermarks_equal };
-      } finally {
-        if (!closed) await conn.one("SELECT pg_advisory_unlock(hashtext($1)) AS ok", [stage.LOCK_KEY]).catch(() => {});
-      }
-    })();
-    work.catch(() => {}); // if abandoned at the deadline, its later rejection is expected, never unhandled
-
-    const expired = new Promise((resolve) => { timer = setTimeout(() => resolve(true), deadline_ms); });
-    const r = await Promise.race([work, expired]);
-    if (r !== true) return r;
-
-    await ev(ERROR, { step: "deadline", ms: Date.now() - t0 },
-      new Error(`insight stage exceeded ${deadline_ms} ms: connection closed, its open transaction rolls back; the next run catches up`));
-    closed = true;
-    try {
-      sco.done(true); // kill: closes the socket, the in-flight query fails
-    } catch (_) {
-      // already gone
-    }
-    sco = null;
-    return { error: "deadline" };
-  } catch (e) {
-    await ev(ERROR, { step: "stage", ms: Date.now() - t0 }, e);
     return { error: e.message };
-  } finally {
-    clearTimeout(timer);
-    if (sco) {
-      try {
-        sco.done();
-      } catch (_) {
-        // already released
-      }
-    }
-    if (db) {
-      try {
-        await db.$pool.end();
-      } catch (_) {
-        // already closed
-      }
-    }
   }
 }
 
-module.exports = { run_ct_insight, enabled, STATEMENT_TIMEOUT_MS, CONNECT_TIMEOUT_MS, QUERY_TIMEOUT_MS, STAGE_DEADLINE_MS };
+// CT's rules registry, loaded before the connection (deps.rules in tests).
+// Below run_ct_insight, which only calls it once the switch is on.
+const run_args = (deps) => ({ rules: deps.rules || require("./rules/ge_ct").rules });
+
+// The timeout constants, as before MRI-5b: read from the wrapper only when asked,
+// so requiring this file still loads nothing.
+const CONSTANTS = ["STATEMENT_TIMEOUT_MS", "CONNECT_TIMEOUT_MS", "QUERY_TIMEOUT_MS", "STAGE_DEADLINE_MS"];
+module.exports = { run_ct_insight, enabled, preflight_warnings, run_args, FUNC, APP_NAME, LABEL };
+for (const k of CONSTANTS) Object.defineProperty(module.exports, k, { enumerable: true, get: () => require("./stage_wrapper")[k] });

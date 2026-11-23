@@ -157,13 +157,18 @@ async function rehearse_stage(db, { rules, log = () => {} }) {
         log(`before (inside the transaction): ${JSON.stringify(before)}`);
         log(`pending range: ids ${wm + 1}..${range.max_id}, ${range.n} rows, captured ${range.first_capture && range.first_capture.toISOString()} .. ${range.last_capture && range.last_capture.toISOString()}; the last ge_ct run: ${range.last_run_rows} rows from id ${range.last_run_from}`);
 
-        const runs = [];
+        // planned: every run the rehearsal intends; runs: those executed. After
+        // a failed run the loop stops, and every check below reads only the
+        // executed runs (MRI-5b, as MRI's fix for review MRI5-STAGE P3).
+        const planned = [];
         const max_id = range.max_id === null ? wm : Number(range.max_id);
         const last_from = range.last_run_from === null ? null : Number(range.last_run_from);
-        if (last_from !== null && last_from - 1 > wm) runs.push({ label: "run 1, catch-up (pending range before the last ge_ct run)", to_id: last_from - 1 });
-        runs.push({ label: `run ${runs.length + 1}, typical (the last ge_ct run's rows)`, to_id: max_id });
-        runs.push({ label: `run ${runs.length + 1}, daily pass (no new rows; findings for all systems)`, to_id: max_id, force_daily: true });
-        for (const r of runs) {
+        if (last_from !== null && last_from - 1 > wm) planned.push({ label: "run 1, catch-up (pending range before the last ge_ct run)", to_id: last_from - 1 });
+        planned.push({ label: `run ${planned.length + 1}, typical (the last ge_ct run's rows)`, to_id: max_id });
+        planned.push({ label: `run ${planned.length + 1}, daily pass (no new rows; findings for all systems)`, to_id: max_id, force_daily: true });
+        const runs = [];
+        for (const r of planned) {
+          runs.push(r);
           const res = await run_stage(t, { rules, now: new Date(), run_id: crypto.randomUUID(), to_id: r.to_id, force_daily: !!r.force_daily });
           r.ok = res.ok; r.failed = res.failed; r.error = res.error ? res.error.message : null; r.today = res.today;
           r.watermarks = res.watermarks; r.watermarks_equal = res.watermarks_equal;
@@ -175,11 +180,25 @@ async function rehearse_stage(db, { rules, log = () => {} }) {
           for (const w of r.warnings) log(`  WARNING: ${w}`);
           if (!r.ok) break;
         }
-        const today = runs[runs.length - 1].today;
+        const last = runs[runs.length - 1];
+        const today = last.today;
+        const all_ok = runs.length === planned.length && runs.every((r) => r.ok);
+        const not_run = planned.slice(runs.length).map((r) => r.label);
+        if (not_run.length) log(`not run after the failure: ${not_run.join("; ")}`);
+        if (!all_ok) {
+          // A failed run may have left this transaction aborted (an SQL error
+          // outside a savepoint): no more SQL in it. Return what the executed
+          // runs captured, and roll back (review MRI5B P3).
+          log("stopped at the failed run: no further checks in this transaction");
+          const checks = { runs_ok: false, not_run, watermarks_equal_after_each_run: runs.every((r) => r.watermarks_equal), caught_up: false,
+            findings_drift: runs.reduce((n, r) => n + ((r.steps.findings && r.steps.findings.drift) || 0), 0), stopped_after_failure: true };
+          throw Object.assign(new Error("ROLLBACK (rehearsal)"), { rehearsal: { preflight: pre, before, range, runs, checks, ok: false } });
+        }
         const checks = {
-          runs_ok: runs.every((r) => r.ok),
+          runs_ok: all_ok,
+          not_run,
           watermarks_equal_after_each_run: runs.every((r) => r.watermarks_equal),
-          caught_up: runs.every((r) => r.ok) && runs[runs.length - 1].watermarks.ge_ct_extract === max_id,
+          caught_up: all_ok && last.watermarks.ge_ct_extract === max_id,
           findings_drift: runs.reduce((n, r) => n + ((r.steps.findings && r.steps.findings.drift) || 0), 0),
           derive_pending_left: pending_summary(await read_derive_pending(t)),
         };
@@ -220,7 +239,7 @@ async function rehearse_stage(db, { rules, log = () => {} }) {
         checks.findings_default_eq_replay = { same: fp_default.md5 === fp_replay.md5 && !replay_changes, findings: fp_default.n, replay_findings: fp_replay.n, replay_changes, replay_ms: Date.now() - t2 };
         log(`findings default vs replay as of ${today} (${fsys.length} systems, ${Date.now() - t2} ms): ${checks.findings_default_eq_replay.same ? "identical" : "DIFFER"} (${fp_default.n} vs ${fp_replay.n} findings; replay changed ${replay_changes})`);
 
-        const ok = checks.runs_ok && checks.watermarks_equal_after_each_run && checks.caught_up && !checks.findings_drift && !checks.derive_pending_left.systems
+        const ok = all_ok && checks.watermarks_equal_after_each_run && checks.caught_up && !checks.findings_drift && !checks.derive_pending_left.systems
           && checks.verify.ok && checks.verify_derive && checks.verify_findings && checks.derive_touched_eq_full.same && checks.findings_default_eq_replay.same;
         throw Object.assign(new Error("ROLLBACK (rehearsal)"), { rehearsal: { preflight: pre, before, range, runs, checks, ok } });
       }).catch((e) => {

@@ -232,6 +232,16 @@ async function rehearse_stage(db, { log = () => {}, now = () => new Date(), on_r
         const all_ok = runs.length === planned.length && runs.every((r) => r.ok);
         const not_run = planned.slice(runs.length).map((r) => r.label);
         if (not_run.length) log(`not run after the failure: ${not_run.join("; ")}`);
+        if (!all_ok) {
+          // A failed run may have left this transaction aborted (an SQL error
+          // outside a savepoint): no more SQL in it. Return what the executed
+          // runs captured, and roll back; the watermarks are read again after
+          // the rollback (review MRI5B P3).
+          log("stopped at the failed run: no further checks in this transaction");
+          const checks = { runs_ok: false, not_run, watermarks_equal_after_each_run: runs.every((r) => r.watermarks_equal), caught_up: false,
+            findings_drift: runs.reduce((n, r) => n + ((r.steps.findings && r.steps.findings.drift) || 0), 0), stopped_after_failure: true };
+          throw Object.assign(new Error("ROLLBACK (rehearsal)"), { rehearsal: { preflight: pre, before, after: null, range, runs, checks, ok: false } });
+        }
         const checks = {
           runs_ok: all_ok,
           not_run,

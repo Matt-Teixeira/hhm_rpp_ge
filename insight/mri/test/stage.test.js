@@ -531,11 +531,21 @@ test("isolation: the shared wrapper loads only ./db and crypto (no modality modu
 
 // A DB-free rehearsal: watermark 100, pending max 120, the last run from 111
 // (so catch-up to 110, typical to 120, no rows); extract fails in run `fail_at`.
-function rehearsalDb({ fail_at = null } = {}) {
+function rehearsalDb({ fail_at = null, abort = false } = {}) {
   let wm = 100;
   const calls = [];
+  // abort: the failing extract is an SQL error outside a savepoint, which aborts the
+  // transaction: every later query fails with 25P02 until the rollback (review MRI5B P3).
+  let aborted = false;
+  const seen = { aborted_queries: 0 };
+  const guard = () => {
+    if (!aborted) return;
+    seen.aborted_queries++;
+    throw Object.assign(new Error("current transaction is aborted, commands ignored until end of transaction block"), { code: "25P02" });
+  };
   const conn = {
     one: async (q, p) => {
+      guard();
       if (/pg_try_advisory_lock/.test(q)) { calls.push("lock"); return { got: true }; }
       if (/pg_advisory_unlock/.test(q)) { calls.push("unlock"); return { ok: true }; }
       if (q === stage.MRI_COUNTS_SQL) return { facts: 1 };
@@ -543,25 +553,28 @@ function rehearsalDb({ fail_at = null } = {}) {
       if (q === stage.RANGE_SQL) return { max_id: "120", n: 20, first_capture: new Date("2026-11-16T10:18:00Z"), last_capture: new Date("2026-11-16T10:48:00Z"), last_run_from: "111", last_run_rows: 10 };
       throw new Error(`unexpected one ${q.slice(0, 40)}`);
     },
-    any: async () => stage.JOBS.map((job_name) => ({ job_name, watermark_id: String(wm) })),
-    oneOrNone: async () => ({ p: {}, c: false }),
+    any: async () => { guard(); return stage.JOBS.map((job_name) => ({ job_name, watermark_id: String(wm) })); },
+    oneOrNone: async () => { guard(); return ({ p: {}, c: false }); },
     tx: async (mode, cb) => {
       calls.push(mode.mode === stage.REHEARSAL_TX_MODE ? "tx:repeatable read" : "tx:other");
       const saved = wm;
-      try { return await cb(conn); } finally { wm = saved; calls.push("rollback"); }
+      try { return await cb(conn); } finally { wm = saved; aborted = false; calls.push("rollback"); }
     },
   };
   let n = 0;
   const steps = {
     extract: async (c, o) => {
-      if (++n === fail_at) throw new Error("natural-key conflict probe");
+      if (++n === fail_at) {
+        if (abort) { aborted = true; throw Object.assign(new Error("canceling statement due to statement timeout"), { code: "57014" }); }
+        throw new Error("natural-key conflict probe");
+      }
       wm = o.to_id;
       return { from: 0, watermark: wm, end: wm, behind_ids: 0, stats: { batches: 1, rows: 1, records: 1, duplicates: 0, facts: 1, upserted: 1, collisions: 0, skipped: {}, rule_errors: 0, unreviewed_codes: [], late: {} } };
     },
     derive: async () => ({ watermark: wm, pending_after: {}, stats: { daily: [], codes: {} } }),
     findings: async () => ({ watermark: wm, stats: { drift: 0 } }),
   };
-  return { db: { task: async (cb) => cb(conn) }, calls, steps };
+  return { db: { task: async (cb) => cb(conn) }, calls, steps, seen };
 }
 
 async function withStubbedStage(steps, fn) {
@@ -621,4 +634,25 @@ test("review MRI5-STAGE note: in a fresh process, run_mri_insight with the switc
   const out = spawnSync(process.execPath, ["-e", script], { encoding: "utf8", env: { ...process.env, INSIGHT_MRI_ENABLED: "" } });
   assert.strictEqual(out.status, 0, out.stderr);
   assert.deepStrictEqual(JSON.parse(out.stdout), { r: { skipped: "disabled" }, loaded: [], events: 0 });
+});
+
+test("review MRI5B P3: an SQL failure that aborts the rehearsal transaction returns the original failure (no 25P02), rolled back, re-read and unlocked", async () => {
+  for (const [fail_at, ran] of [[1, 1], [2, 2], [3, 3]]) {
+    const f = rehearsalDb({ fail_at, abort: true });
+    const lines = [];
+    const r = await withStubbedStage(f.steps, () => stage.rehearse_stage(f.db, { log: (s) => lines.push(s) }));
+    assert.strictEqual(r.rolled_back, true, `fail at ${fail_at}`);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.runs.length, ran, "only the executed runs");
+    assert.strictEqual(r.runs[ran - 1].failed, "extract");
+    assert.strictEqual(r.runs[ran - 1].error, "canceling statement due to statement timeout", "the original error, not 25P02");
+    assert.strictEqual(r.checks.not_run.length, 3 - ran);
+    assert.strictEqual(r.checks.stopped_after_failure, true);
+    assert.strictEqual(r.checks.verify, undefined);
+    assert.strictEqual(r.after, null);
+    assert.strictEqual(r.watermarks_unchanged_after_rollback, true, "the watermarks are re-read after the rollback");
+    assert.strictEqual(f.seen.aborted_queries, 1, "only run_stage's own watermark read meets the aborted transaction");
+    assert.deepStrictEqual(f.calls, ["lock", "tx:repeatable read", "rollback", "unlock"]);
+    assert.ok(lines.some((l) => /stopped at the failed run/.test(l)));
+  }
 });
